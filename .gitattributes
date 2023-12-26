@@ -1,0 +1,43 @@
+# Exclude test files from git archive (used when creating tags/releases)
+**/*_test.go export-ignore
+**/*_bench_test.go export-ignore
+
+# Exclude documentation files
+*.md export-ignore
+**/README.md export-ignore
+**/USAGE.md export-ignore
+docs/ export-ignore
+
+# Exclude example and demo directories
+examples/ export-ignore
+demos/ export-ignore
+samples/ export-ignore
+
+# Exclude CI/CD configuration
+.github/ export-ignore
+.gitlab-ci.yml export-ignore
+.travis.yml export-ignore
+.circleci/ export-ignore
+Jenkinsfile export-ignore
+
+# Exclude development tools configuration
+.vscode/ export-ignore
+.idea/ export-ignore
+.editorconfig export-ignore
+
+# Exclude git files
+.gitignore export-ignore
+.gitattributes export-ignore
+.gitmodules export-ignore
+
+# Exclude development dependencies
+go.work export-ignore
+go.work.sum export-ignore
+Makefile export-ignore
+.env export-ignore
+.env.* export-ignore
+
+# Exclude license files (optional, comment out if you want to keep)
+LICENSE export-ignore
+CONTRIBUTING.md export-ignore
+CODE_OF_CONDUCT.md export-ignore
