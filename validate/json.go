@@ -48,6 +48,14 @@ func IsJSONColumnType(dbType string) bool {
 	return dbType == "json" || dbType == "jsonb"
 }
 
+// IsJSONSpace 判断字节是否是 JSON 空白字符
+//
+// 根据 RFC 8259，JSON 中合法的空白字符为：空格(0x20)、水平制表符(0x09)、
+// 换行符(0x0A)、回车符(0x0D)
+func IsJSONSpace(c byte) bool {
+	return c == ' ' || c == '\t' || c == '\n' || c == '\r'
+}
+
 // ValidateJSONWithData 校验 JSON 并返回反序列化数据
 func ValidateJSONWithData(body []byte) (any, error) {
 	var data any

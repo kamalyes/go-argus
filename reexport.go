@@ -427,6 +427,25 @@ func ScanJSONValueEnd(data []byte, start int) (int, error) {
 }
 
 // ────────────────────────────────────────
+// JSON 数字字符串转换（validate/json_numeric）
+// ────────────────────────────────────────
+
+// ConvertNumericStrings 递归遍历 JSON 数据，将数字字符串自动转换为 json.Number 类型
+func ConvertNumericStrings(data []byte) ([]byte, error) {
+	return validate.ConvertNumericStrings(data)
+}
+
+// ContainsQuotedNumber 使用零分配字节扫描快速判断 JSON 中是否存在引号包裹的数字
+func ContainsQuotedNumber(data []byte) bool {
+	return validate.ContainsQuotedNumber(data)
+}
+
+// IsNumStart 判断字节是否是数字字符串的起始字符（数字或正负号）
+func IsNumStart(c byte) bool {
+	return validate.IsNumStart(c)
+}
+
+// ────────────────────────────────────────
 // 正则缓存（validate/format）
 // ────────────────────────────────────────
 
