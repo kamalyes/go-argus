@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-06 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2026-05-17 01:58:16
+ * @LastEditTime: 2026-05-17 02:28:05
  * @FilePath: \go-argus\rules.go
  * @Description: 根包内置字段规则，负责单字段格式、长度、数值和枚举校验
  *
@@ -466,18 +466,26 @@ func hasHostAfterScheme(s string, colonIdx int) bool {
 		return false
 	}
 	for i := hostStart; i < len(s); i++ {
-		c := s[i]
-		if c == '/' || c == '?' || c == '#' {
+		if isHostTerminator(s[i]) {
 			break
 		}
-		if c == ':' || c == '@' {
-			continue
-		}
-		if hostStart == i && (c == '.' || c == '-') {
+		if !isValidHostChar(s, hostStart, i) {
 			return false
 		}
 	}
 	return true
+}
+
+func isHostTerminator(c byte) bool {
+	return c == '/' || c == '?' || c == '#'
+}
+
+func isValidHostChar(s string, hostStart, i int) bool {
+	c := s[i]
+	if c == ':' || c == '@' {
+		return true
+	}
+	return !(hostStart == i && (c == '.' || c == '-'))
 }
 
 func ruleURLEncoded(field reflect.Value, _ string, _ bool) bool {
@@ -599,37 +607,49 @@ func ruleUnique(field reflect.Value, _ string, _ bool) bool {
 	}
 	switch field.Kind() {
 	case reflect.String:
-		seen := make(map[rune]struct{}, utf8.RuneCountInString(field.String()))
-		for _, r := range field.String() {
-			if _, ok := seen[r]; ok {
-				return false
-			}
-			seen[r] = struct{}{}
-		}
-		return true
+		return isUniqueRunes(field.String())
 	case reflect.Slice, reflect.Array:
-		seen := make(map[string]struct{}, field.Len())
-		for i := 0; i < field.Len(); i++ {
-			key := toStringValue(derefValue(field.Index(i)))
-			if _, ok := seen[key]; ok {
-				return false
-			}
-			seen[key] = struct{}{}
-		}
-		return true
+		return isUniqueSlice(field)
 	case reflect.Map:
-		seen := make(map[string]struct{}, field.Len())
-		for _, key := range field.MapKeys() {
-			valueKey := toStringValue(derefValue(field.MapIndex(key)))
-			if _, ok := seen[valueKey]; ok {
-				return false
-			}
-			seen[valueKey] = struct{}{}
-		}
-		return true
+		return isUniqueMap(field)
 	default:
 		return false
 	}
+}
+
+func isUniqueRunes(s string) bool {
+	seen := make(map[rune]struct{}, utf8.RuneCountInString(s))
+	for _, r := range s {
+		if _, ok := seen[r]; ok {
+			return false
+		}
+		seen[r] = struct{}{}
+	}
+	return true
+}
+
+func isUniqueSlice(field reflect.Value) bool {
+	seen := make(map[string]struct{}, field.Len())
+	for i := 0; i < field.Len(); i++ {
+		key := toStringValue(derefValue(field.Index(i)))
+		if _, ok := seen[key]; ok {
+			return false
+		}
+		seen[key] = struct{}{}
+	}
+	return true
+}
+
+func isUniqueMap(field reflect.Value) bool {
+	seen := make(map[string]struct{}, field.Len())
+	for _, key := range field.MapKeys() {
+		valueKey := toStringValue(derefValue(field.MapIndex(key)))
+		if _, ok := seen[valueKey]; ok {
+			return false
+		}
+		seen[valueKey] = struct{}{}
+	}
+	return true
 }
 
 func ruleStartsWith(field reflect.Value, param string, _ bool) bool {
@@ -831,16 +851,21 @@ func ruleLuhnChecksum(field reflect.Value, _ string, _ bool) bool {
 		}
 		n := int(r - '0')
 		if double {
-			n *= 2
-			if n > 9 {
-				n -= 9
-			}
+			n = luhnDouble(n)
 		}
 		sum += n
 		double = !double
 		digits++
 	}
 	return digits > 0 && sum%10 == 0
+}
+
+func luhnDouble(n int) int {
+	n *= 2
+	if n > 9 {
+		n -= 9
+	}
+	return n
 }
 
 func ruleDNSRFC1035Label(field reflect.Value, _ string, _ bool) bool {
@@ -859,25 +884,35 @@ const (
 )
 
 func compareLengthOrNumber(field reflect.Value, expect float64, op cmpOp) bool {
+	actual, ok := resolveFieldValue(field)
+	if !ok {
+		return false
+	}
+	return compareOp(actual, expect, op)
+}
+
+func resolveFieldValue(field reflect.Value) (float64, bool) {
 	field = derefValue(field)
 	if !field.IsValid() {
-		return false
+		return 0, false
 	}
-	var actual float64
 	switch field.Kind() {
 	case reflect.String:
-		actual = float64(utf8.RuneCountInString(field.String()))
+		return float64(utf8.RuneCountInString(field.String())), true
 	case reflect.Slice, reflect.Array, reflect.Map:
-		actual = float64(field.Len())
+		return float64(field.Len()), true
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		actual = float64(field.Int())
+		return float64(field.Int()), true
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
-		actual = float64(field.Uint())
+		return float64(field.Uint()), true
 	case reflect.Float32, reflect.Float64:
-		actual = field.Float()
+		return field.Float(), true
 	default:
-		return false
+		return 0, false
 	}
+}
+
+func compareOp(actual, expect float64, op cmpOp) bool {
 	switch op {
 	case cmpGTE:
 		return actual >= expect
@@ -999,19 +1034,121 @@ func trimSpaceIfNeeded(s string) string {
 	return s
 }
 
-var (
-	semverRegex  = regexp.MustCompile(`^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$`)
-	bicRegex     = regexp.MustCompile(`^[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}(?:[A-Z0-9]{3})?$`)
-	ethAddrRegex = regexp.MustCompile(`^0x[0-9a-fA-F]{40}$`)
-	btcAddrRegex = regexp.MustCompile(`^[13][a-km-zA-HJ-NP-Z1-9]{25,34}$|^[bc1q][a-z0-9]{39,59}$`)
-	bcp47Regex   = regexp.MustCompile(`^[a-zA-Z]{2,3}(?:-[a-zA-Z]{4})?(?:-(?:[a-zA-Z]{2}|\d{3}))?(?:-[a-zA-Z0-9]{5,8})*(?:-[a-zA-Z0-9]{1,8})*$`)
-	cronFieldRe  = regexp.MustCompile(`^\S+$`)
-	datauriRegex = regexp.MustCompile(`^data:([^;,]*)?(;[^;,]*)*;?(base64,)?,`)
-)
-
 func ruleSemver(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	return ok && semverRegex.MatchString(s)
+	if !ok {
+		return false
+	}
+	i := 0
+	if i < len(s) && s[i] == 'v' {
+		i++
+	}
+	if !parseSemverNum(s, &i) || i >= len(s) || s[i] != '.' {
+		return false
+	}
+	i++
+	if !parseSemverNum(s, &i) || i >= len(s) || s[i] != '.' {
+		return false
+	}
+	i++
+	if !parseSemverNum(s, &i) {
+		return false
+	}
+	if !parseSemverPreRelease(s, &i) {
+		return false
+	}
+	if !parseSemverBuildMeta(s, &i) {
+		return false
+	}
+	return i == len(s)
+}
+
+func parseSemverPreRelease(s string, i *int) bool {
+	if *i >= len(s) || s[*i] != '-' {
+		return true
+	}
+	*i++
+	if !parseSemverIdent(s, i) {
+		return false
+	}
+	for *i < len(s) && s[*i] == '.' {
+		*i++
+		if !parseSemverIdent(s, i) {
+			return false
+		}
+	}
+	return true
+}
+
+func parseSemverBuildMeta(s string, i *int) bool {
+	if *i >= len(s) || s[*i] != '+' {
+		return true
+	}
+	*i++
+	if !parseSemverBuild(s, i) {
+		return false
+	}
+	for *i < len(s) && s[*i] == '.' {
+		*i++
+		if !parseSemverBuild(s, i) {
+			return false
+		}
+	}
+	return true
+}
+
+func parseSemverNum(s string, pos *int) bool {
+	if *pos >= len(s) || s[*pos] < '0' || s[*pos] > '9' {
+		return false
+	}
+	if s[*pos] == '0' {
+		*pos++
+		return true
+	}
+	for *pos < len(s) && s[*pos] >= '0' && s[*pos] <= '9' {
+		*pos++
+	}
+	return true
+}
+
+func parseSemverIdent(s string, pos *int) bool {
+	start := *pos
+	for *pos < len(s) && s[*pos] != '.' && s[*pos] != '+' {
+		if !isSemverIdentChar(s[*pos]) {
+			return false
+		}
+		*pos++
+	}
+	if *pos == start {
+		return false
+	}
+	return hasNonZeroAlphaNum(s, start, *pos)
+}
+
+func isSemverIdentChar(c byte) bool {
+	return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '-'
+}
+
+func hasNonZeroAlphaNum(s string, start, end int) bool {
+	for j := start; j < end; j++ {
+		if s[j] != '-' && s[j] != '0' {
+			return true
+		}
+	}
+	return end-start <= 1
+}
+
+func parseSemverBuild(s string, pos *int) bool {
+	if *pos >= len(s) {
+		return false
+	}
+	for *pos < len(s) && s[*pos] != '.' && s[*pos] != '+' {
+		if !isSemverIdentChar(s[*pos]) {
+			return false
+		}
+		*pos++
+	}
+	return *pos > 0 && s[*pos-1] != '.' && s[*pos-1] != '-'
 }
 
 func ruleISBN10(field reflect.Value, _ string, _ bool) bool {
@@ -1019,23 +1156,33 @@ func ruleISBN10(field reflect.Value, _ string, _ bool) bool {
 	if !ok {
 		return false
 	}
-	s = strings.ReplaceAll(s, "-", "")
-	s = strings.ReplaceAll(s, " ", "")
-	if len(s) != 10 {
-		return false
-	}
+	digits := 0
 	sum := 0
-	for i := 0; i < 9; i++ {
-		if s[i] < '0' || s[i] > '9' {
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c == '-' || c == ' ' {
+			continue
+		}
+		digits++
+		if digits > 10 {
 			return false
 		}
-		sum += int(s[i]-'0') * (10 - i)
+		if digits == 10 {
+			return isISBN10CheckDigit(c, sum)
+		}
+		if c < '0' || c > '9' {
+			return false
+		}
+		sum += int(c-'0') * (11 - digits)
 	}
-	last := s[9]
-	if last == 'X' || last == 'x' {
+	return false
+}
+
+func isISBN10CheckDigit(c byte, sum int) bool {
+	if c == 'X' || c == 'x' {
 		sum += 10
-	} else if last >= '0' && last <= '9' {
-		sum += int(last - '0')
+	} else if c >= '0' && c <= '9' {
+		sum += int(c - '0')
 	} else {
 		return false
 	}
@@ -1047,24 +1194,33 @@ func ruleISBN13(field reflect.Value, _ string, _ bool) bool {
 	if !ok {
 		return false
 	}
-	s = strings.ReplaceAll(s, "-", "")
-	s = strings.ReplaceAll(s, " ", "")
-	if len(s) != 13 {
-		return false
-	}
+	digits := 0
 	sum := 0
-	for i := 0; i < 12; i++ {
-		if s[i] < '0' || s[i] > '9' {
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c == '-' || c == ' ' {
+			continue
+		}
+		if c < '0' || c > '9' {
 			return false
 		}
-		weight := 1
-		if i%2 == 1 {
-			weight = 3
+		digits++
+		if digits > 13 {
+			return false
 		}
-		sum += int(s[i]-'0') * weight
+		if digits < 13 {
+			weight := 1
+			if digits%2 == 0 {
+				weight = 3
+			}
+			sum += int(c-'0') * weight
+		}
+	}
+	if digits != 13 {
+		return false
 	}
 	check := (10 - sum%10) % 10
-	return s[12] >= '0' && s[12] <= '9' && int(s[12]-'0') == check
+	return int(s[len(s)-1]-'0') == check
 }
 
 func ruleISSN(field reflect.Value, _ string, _ bool) bool {
@@ -1072,32 +1228,60 @@ func ruleISSN(field reflect.Value, _ string, _ bool) bool {
 	if !ok {
 		return false
 	}
-	s = strings.ReplaceAll(s, "-", "")
-	if len(s) != 8 {
-		return false
-	}
+	digits := 0
 	sum := 0
-	for i := 0; i < 7; i++ {
-		if s[i] < '0' || s[i] > '9' {
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c == '-' {
+			continue
+		}
+		digits++
+		if digits > 8 {
 			return false
 		}
-		sum += int(s[i]-'0') * (8 - i)
+		if digits == 8 {
+			if c == 'X' || c == 'x' {
+				return sum%11 == 10
+			}
+			if c < '0' || c > '9' {
+				return false
+			}
+			return sum%11 == int(c-'0')
+		}
+		if c < '0' || c > '9' {
+			return false
+		}
+		sum += int(c-'0') * (9 - digits)
 	}
-	last := s[7]
-	var check int
-	if last == 'X' || last == 'x' {
-		check = 10
-	} else if last >= '0' && last <= '9' {
-		check = int(last - '0')
-	} else {
-		return false
-	}
-	return sum%11 == check
+	return false
 }
 
 func ruleBIC(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	return ok && bicRegex.MatchString(s)
+	if !ok {
+		return false
+	}
+	n := len(s)
+	if n != 8 && n != 11 {
+		return false
+	}
+	for i := 0; i < 4; i++ {
+		if s[i] < 'A' || s[i] > 'Z' {
+			return false
+		}
+	}
+	for i := 4; i < 6; i++ {
+		if s[i] < 'A' || s[i] > 'Z' {
+			return false
+		}
+	}
+	for i := 6; i < n; i++ {
+		c := s[i]
+		if !((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) {
+			return false
+		}
+	}
+	return true
 }
 
 func ruleCron(field reflect.Value, _ string, _ bool) bool {
@@ -1105,47 +1289,48 @@ func ruleCron(field reflect.Value, _ string, _ bool) bool {
 	if !ok {
 		return false
 	}
-	fields := strings.Fields(s)
-	if len(fields) != 5 && len(fields) != 6 {
-		return false
-	}
-	for _, f := range fields {
-		if !isValidCronField(f) {
-			return false
+	count := 0
+	start := 0
+	for i := 0; i <= len(s); i++ {
+		if i == len(s) || s[i] == ' ' || s[i] == '\t' {
+			if i > start {
+				count++
+				if !isValidCronFieldZeroAlloc(s[start:i]) {
+					return false
+				}
+			}
+			start = i + 1
 		}
 	}
-	return true
+	return count == 5 || count == 6
 }
 
-func isValidCronField(field string) bool {
-	parts := strings.Split(field, ",")
-	for _, part := range parts {
-		stepParts := strings.SplitN(part, "/", 2)
-		base := stepParts[0]
-		if len(stepParts) == 2 {
-			step := stepParts[1]
-			if step == "" {
+func isValidCronFieldZeroAlloc(field string) bool {
+	inRange := false
+	inStep := false
+	for i := 0; i < len(field); i++ {
+		c := field[i]
+		switch {
+		case c == ',':
+			inRange = false
+			inStep = false
+		case c == '/':
+			if inStep {
 				return false
 			}
-			for _, c := range step {
-				if c != '*' && (c < '0' || c > '9') {
-					return false
-				}
-			}
-		}
-		if base == "*" {
-			continue
-		}
-		rangeParts := strings.SplitN(base, "-", 2)
-		for _, rp := range rangeParts {
-			if rp == "" {
+			inStep = true
+		case c == '-':
+			if inRange {
 				return false
 			}
-			for _, c := range rp {
-				if c < '0' || c > '9' {
-					return false
-				}
+			inRange = true
+		case c == '*':
+			if i > 0 && field[i-1] != ',' && field[i-1] != '/' {
+				return false
 			}
+		case c >= '0' && c <= '9':
+		default:
+			return false
 		}
 	}
 	return true
@@ -1153,23 +1338,226 @@ func isValidCronField(field string) bool {
 
 func ruleDataURI(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	if !ok || !strings.HasPrefix(s, "data:") {
+	if !ok || len(s) < 6 || !hasDataPrefix(s) {
 		return false
 	}
-	return datauriRegex.MatchString(s)
+	i := 5
+	i = skipDataURIMimeType(s, i)
+	i = skipDataURIParams(s, i)
+	return i < len(s) && s[i] == ','
+}
+
+func hasDataPrefix(s string) bool {
+	return s[0] == 'd' && s[1] == 'a' && s[2] == 't' && s[3] == 'a' && s[4] == ':'
+}
+
+func skipDataURIMimeType(s string, i int) int {
+	for i < len(s) && s[i] != ';' && s[i] != ',' {
+		if s[i] < ' ' || s[i] > '~' {
+			return len(s)
+		}
+		i++
+	}
+	return i
+}
+
+func skipDataURIParams(s string, i int) int {
+	for i < len(s) && s[i] == ';' {
+		i++
+		i = skipBase64IfPresent(s, i)
+		for i < len(s) && s[i] != ';' && s[i] != ',' {
+			if s[i] < ' ' || s[i] > '~' {
+				return len(s)
+			}
+			i++
+		}
+	}
+	return i
+}
+
+func skipBase64IfPresent(s string, i int) int {
+	if i+6 <= len(s) && s[i] == 'b' && s[i+1] == 'a' && s[i+2] == 's' && s[i+3] == 'e' && s[i+4] == '6' && s[i+5] == '4' {
+		return i + 6
+	}
+	return i
 }
 
 func ruleBCP47(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	return ok && bcp47Regex.MatchString(s)
+	if !ok || len(s) < 2 {
+		return false
+	}
+	i := 0
+	if !isAlpha(s, &i, 2, 3) {
+		return false
+	}
+	i = parseBCP47ExtLang(s, i)
+	i = parseBCP47Script(s, i)
+	i = parseBCP47Region(s, i)
+	return parseBCP47Variants(s, i) == len(s)
+}
+
+func parseBCP47ExtLang(s string, i int) int {
+	if i >= len(s) || s[i] != '-' {
+		return i
+	}
+	i++
+	if i < len(s) && isAlphaAt(s, i, 4) {
+		i += 4
+		if i < len(s) && s[i] == '-' {
+			i++
+		}
+	}
+	return i
+}
+
+func parseBCP47Script(s string, i int) int {
+	if i < len(s) && isAlphaAt(s, i, 2) {
+		return i + 2
+	}
+	return i
+}
+
+func parseBCP47Region(s string, i int) int {
+	if i < len(s) && isDigitAt(s, i, 3) {
+		return i + 3
+	}
+	return i
+}
+
+func parseBCP47Variants(s string, i int) int {
+	for i < len(s) && s[i] == '-' {
+		i++
+		start := i
+		for i < len(s) && s[i] != '-' {
+			if !isAlphanum(s[i]) {
+				return -1
+			}
+			i++
+		}
+		if i == start || i-start > 8 {
+			return -1
+		}
+	}
+	return i
+}
+
+func isAlphanum(c byte) bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
+}
+
+func isAlpha(s string, pos *int, minLen, maxLen int) bool {
+	start := *pos
+	for *pos < len(s) && *pos-start < maxLen {
+		c := s[*pos]
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) {
+			break
+		}
+		*pos++
+	}
+	return *pos-start >= minLen && *pos-start <= maxLen
+}
+
+func isAlphaAt(s string, pos, length int) bool {
+	if pos+length > len(s) {
+		return false
+	}
+	for j := 0; j < length; j++ {
+		c := s[pos+j]
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) {
+			return false
+		}
+	}
+	return true
+}
+
+func isDigitAt(s string, pos, length int) bool {
+	if pos+length > len(s) {
+		return false
+	}
+	for j := 0; j < length; j++ {
+		c := s[pos+j]
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func ruleEthAddr(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	return ok && ethAddrRegex.MatchString(s)
+	if !ok || len(s) != 42 {
+		return false
+	}
+	if s[0] != '0' || (s[1] != 'x' && s[1] != 'X') {
+		return false
+	}
+	for i := 2; i < 42; i++ {
+		c := s[i]
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			return false
+		}
+	}
+	return true
 }
 
 func ruleBtcAddr(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	return ok && btcAddrRegex.MatchString(s)
+	if !ok {
+		return false
+	}
+	n := len(s)
+	if n < 26 || n > 62 {
+		return false
+	}
+	if s[0] == '1' || s[0] == '3' {
+		return isBtcLegacyAddr(s, n)
+	}
+	return isBtcBech32Addr(s, n)
+}
+
+func isBtcLegacyAddr(s string, n int) bool {
+	if n < 26 || n > 35 {
+		return false
+	}
+	for i := 1; i < n; i++ {
+		if !isBase58Char(s[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+func isBtcBech32Addr(s string, n int) bool {
+	if n < 42 || n > 62 || len(s) < 4 || s[0] != 'b' || s[1] != 'c' || s[2] != '1' || s[3] != 'q' {
+		return false
+	}
+	for i := 4; i < n; i++ {
+		if !((s[i] >= 'a' && s[i] <= 'z') || (s[i] >= '0' && s[i] <= '9')) {
+			return false
+		}
+	}
+	return true
+}
+
+func isBase58Char(c byte) bool {
+	if c >= '1' && c <= '9' {
+		return true
+	}
+	if c >= 'A' && c <= 'H' {
+		return true
+	}
+	if c >= 'J' && c <= 'N' {
+		return true
+	}
+	if c >= 'P' && c <= 'Z' {
+		return true
+	}
+	if c >= 'a' && c <= 'k' {
+		return true
+	}
+	if c >= 'm' && c <= 'z' {
+		return true
+	}
+	return false
 }

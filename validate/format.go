@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-06 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2026-05-17 01:53:23
+ * @LastEditTime: 2026-05-17 02:55:52
  * @FilePath: \go-argus\validate\format.go
  * @Description: 格式校验能力，提供 Email、IP、URL、UUID、Base64 和正则校验
  *
@@ -25,12 +25,6 @@ import (
 
 var (
 	uuidRegex    = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
-	semverRegex  = regexp.MustCompile(`^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$`)
-	bicRegex     = regexp.MustCompile(`^[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}(?:[A-Z0-9]{3})?$`)
-	ethAddrRegex = regexp.MustCompile(`^0x[0-9a-fA-F]{40}$`)
-	btcAddrRegex = regexp.MustCompile(`^[13][a-km-zA-HJ-NP-Z1-9]{25,34}$|^[bc1q][a-z0-9]{39,59}$`)
-	bcp47Regex   = regexp.MustCompile(`^[a-zA-Z]{2,3}(?:-[a-zA-Z]{4})?(?:-(?:[a-zA-Z]{2}|\d{3}))?(?:-[a-zA-Z0-9]{5,8})*(?:-[a-zA-Z0-9]{1,8})*$`)
-	datauriRegex = regexp.MustCompile(`^data:([^;,]*)?(;[^;,]*)*;?(base64,)?,`)
 	regexCache   = make(map[string]*regexp.Regexp)
 	regexCacheMu sync.RWMutex
 )
@@ -194,6 +188,362 @@ func IsEmail(email string) bool {
 	return true
 }
 
+func isSemver(s string) bool {
+	i := 0
+	if i < len(s) && s[i] == 'v' {
+		i++
+	}
+	if !parseSemverNumFmt(s, &i) || i >= len(s) || s[i] != '.' {
+		return false
+	}
+	i++
+	if !parseSemverNumFmt(s, &i) || i >= len(s) || s[i] != '.' {
+		return false
+	}
+	i++
+	if !parseSemverNumFmt(s, &i) {
+		return false
+	}
+	if !parseSemverPreReleaseFmt(s, &i) {
+		return false
+	}
+	if !parseSemverBuildMetaFmt(s, &i) {
+		return false
+	}
+	return i == len(s)
+}
+
+func parseSemverPreReleaseFmt(s string, i *int) bool {
+	if *i >= len(s) || s[*i] != '-' {
+		return true
+	}
+	*i++
+	if !parseSemverIdentFmt(s, i) {
+		return false
+	}
+	for *i < len(s) && s[*i] == '.' {
+		*i++
+		if !parseSemverIdentFmt(s, i) {
+			return false
+		}
+	}
+	return true
+}
+
+func parseSemverBuildMetaFmt(s string, i *int) bool {
+	if *i >= len(s) || s[*i] != '+' {
+		return true
+	}
+	*i++
+	if !parseSemverBuildFmt(s, i) {
+		return false
+	}
+	for *i < len(s) && s[*i] == '.' {
+		*i++
+		if !parseSemverBuildFmt(s, i) {
+			return false
+		}
+	}
+	return true
+}
+
+func parseSemverNumFmt(s string, pos *int) bool {
+	if *pos >= len(s) || s[*pos] < '0' || s[*pos] > '9' {
+		return false
+	}
+	if s[*pos] == '0' {
+		*pos++
+		return true
+	}
+	for *pos < len(s) && s[*pos] >= '0' && s[*pos] <= '9' {
+		*pos++
+	}
+	return true
+}
+
+func parseSemverIdentFmt(s string, pos *int) bool {
+	start := *pos
+	for *pos < len(s) && s[*pos] != '.' && s[*pos] != '+' {
+		if !isSemverIdentCharFmt(s[*pos]) {
+			return false
+		}
+		*pos++
+	}
+	if *pos == start {
+		return false
+	}
+	return hasNonZeroAlphaNumFmt(s, start, *pos)
+}
+
+func isSemverIdentCharFmt(c byte) bool {
+	return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '-'
+}
+
+func hasNonZeroAlphaNumFmt(s string, start, end int) bool {
+	for j := start; j < end; j++ {
+		if s[j] != '-' && s[j] != '0' {
+			return true
+		}
+	}
+	return end-start <= 1
+}
+
+func parseSemverBuildFmt(s string, pos *int) bool {
+	if *pos >= len(s) {
+		return false
+	}
+	for *pos < len(s) && s[*pos] != '.' && s[*pos] != '+' {
+		if !isSemverIdentCharFmt(s[*pos]) {
+			return false
+		}
+		*pos++
+	}
+	return *pos > 0 && s[*pos-1] != '.' && s[*pos-1] != '-'
+}
+
+func isBIC(s string) bool {
+	n := len(s)
+	if n != 8 && n != 11 {
+		return false
+	}
+	for i := 0; i < 4; i++ {
+		if s[i] < 'A' || s[i] > 'Z' {
+			return false
+		}
+	}
+	for i := 4; i < 6; i++ {
+		if s[i] < 'A' || s[i] > 'Z' {
+			return false
+		}
+	}
+	for i := 6; i < n; i++ {
+		c := s[i]
+		if !((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) {
+			return false
+		}
+	}
+	return true
+}
+
+func isDataURI(s string) bool {
+	if len(s) < 6 || !hasDataPrefixFmt(s) {
+		return false
+	}
+	i := 5
+	i = skipDataURIMimeTypeFmt(s, i)
+	i = skipDataURIParamsFmt(s, i)
+	return i < len(s) && s[i] == ','
+}
+
+func hasDataPrefixFmt(s string) bool {
+	return s[0] == 'd' && s[1] == 'a' && s[2] == 't' && s[3] == 'a' && s[4] == ':'
+}
+
+func skipDataURIMimeTypeFmt(s string, i int) int {
+	for i < len(s) && s[i] != ';' && s[i] != ',' {
+		if s[i] < ' ' || s[i] > '~' {
+			return len(s)
+		}
+		i++
+	}
+	return i
+}
+
+func skipDataURIParamsFmt(s string, i int) int {
+	for i < len(s) && s[i] == ';' {
+		i++
+		i = skipBase64IfPresentFmt(s, i)
+		for i < len(s) && s[i] != ';' && s[i] != ',' {
+			if s[i] < ' ' || s[i] > '~' {
+				return len(s)
+			}
+			i++
+		}
+	}
+	return i
+}
+
+func skipBase64IfPresentFmt(s string, i int) int {
+	if i+6 <= len(s) && s[i] == 'b' && s[i+1] == 'a' && s[i+2] == 's' && s[i+3] == 'e' && s[i+4] == '6' && s[i+5] == '4' {
+		return i + 6
+	}
+	return i
+}
+
+func isBCP47(s string) bool {
+	if len(s) < 2 {
+		return false
+	}
+	i := 0
+	if !isAlphaFmt(s, &i, 2, 3) {
+		return false
+	}
+	i = parseBCP47ExtLangFmt(s, i)
+	i = parseBCP47ScriptFmt(s, i)
+	i = parseBCP47RegionFmt(s, i)
+	return parseBCP47VariantsFmt(s, i) == len(s)
+}
+
+func parseBCP47ExtLangFmt(s string, i int) int {
+	if i >= len(s) || s[i] != '-' {
+		return i
+	}
+	i++
+	if i < len(s) && isAlphaAtFmt(s, i, 4) {
+		i += 4
+		if i < len(s) && s[i] == '-' {
+			i++
+		}
+	}
+	return i
+}
+
+func parseBCP47ScriptFmt(s string, i int) int {
+	if i < len(s) && isAlphaAtFmt(s, i, 2) {
+		return i + 2
+	}
+	return i
+}
+
+func parseBCP47RegionFmt(s string, i int) int {
+	if i < len(s) && isDigitAtFmt(s, i, 3) {
+		return i + 3
+	}
+	return i
+}
+
+func parseBCP47VariantsFmt(s string, i int) int {
+	for i < len(s) && s[i] == '-' {
+		i++
+		start := i
+		for i < len(s) && s[i] != '-' {
+			if !isAlphanumFmt(s[i]) {
+				return -1
+			}
+			i++
+		}
+		if i == start || i-start > 8 {
+			return -1
+		}
+	}
+	return i
+}
+
+func isAlphanumFmt(c byte) bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
+}
+
+func isAlphaFmt(s string, pos *int, minLen, maxLen int) bool {
+	start := *pos
+	for *pos < len(s) && *pos-start < maxLen {
+		c := s[*pos]
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) {
+			break
+		}
+		*pos++
+	}
+	return *pos-start >= minLen && *pos-start <= maxLen
+}
+
+func isAlphaAtFmt(s string, pos, length int) bool {
+	if pos+length > len(s) {
+		return false
+	}
+	for j := 0; j < length; j++ {
+		c := s[pos+j]
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) {
+			return false
+		}
+	}
+	return true
+}
+
+func isDigitAtFmt(s string, pos, length int) bool {
+	if pos+length > len(s) {
+		return false
+	}
+	for j := 0; j < length; j++ {
+		c := s[pos+j]
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func isEthAddr(s string) bool {
+	if len(s) != 42 {
+		return false
+	}
+	if s[0] != '0' || (s[1] != 'x' && s[1] != 'X') {
+		return false
+	}
+	for i := 2; i < 42; i++ {
+		c := s[i]
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			return false
+		}
+	}
+	return true
+}
+
+func isBtcAddr(s string) bool {
+	n := len(s)
+	if n < 26 || n > 62 {
+		return false
+	}
+	if s[0] == '1' || s[0] == '3' {
+		return isBtcLegacyAddrFmt(s, n)
+	}
+	return isBtcBech32AddrFmt(s, n)
+}
+
+func isBtcLegacyAddrFmt(s string, n int) bool {
+	if n < 26 || n > 35 {
+		return false
+	}
+	for i := 1; i < n; i++ {
+		if !isBase58CharFmt(s[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+func isBtcBech32AddrFmt(s string, n int) bool {
+	if n < 42 || n > 62 || len(s) < 4 || s[0] != 'b' || s[1] != 'c' || s[2] != '1' || s[3] != 'q' {
+		return false
+	}
+	for i := 4; i < n; i++ {
+		if !((s[i] >= 'a' && s[i] <= 'z') || (s[i] >= '0' && s[i] <= '9')) {
+			return false
+		}
+	}
+	return true
+}
+
+func isBase58CharFmt(c byte) bool {
+	if c >= '1' && c <= '9' {
+		return true
+	}
+	if c >= 'A' && c <= 'H' {
+		return true
+	}
+	if c >= 'J' && c <= 'N' {
+		return true
+	}
+	if c >= 'P' && c <= 'Z' {
+		return true
+	}
+	if c >= 'a' && c <= 'k' {
+		return true
+	}
+	if c >= 'm' && c <= 'z' {
+		return true
+	}
+	return false
+}
+
 func isEmailLocal(local string) bool {
 	for i := 0; i < len(local); i++ {
 		c := local[i]
@@ -299,7 +649,7 @@ func ValidateIP(ipStr string) CompareResult {
 
 func ValidateSemver(version string) CompareResult {
 	result := CompareResult{Actual: version, Expect: "valid semantic version"}
-	if !semverRegex.MatchString(version) {
+	if !isSemver(version) {
 		result.Message = i18n.Msg(MsgFormatSemverInvalid)
 		return result
 	}
@@ -339,7 +689,7 @@ func ValidateISSN(issn string) CompareResult {
 
 func ValidateBIC(bic string) CompareResult {
 	result := CompareResult{Actual: bic, Expect: "valid BIC (SWIFT code)"}
-	if !bicRegex.MatchString(bic) {
+	if !isBIC(bic) {
 		result.Message = i18n.Msg(MsgFormatBICInvalid)
 		return result
 	}
@@ -359,7 +709,7 @@ func ValidateCron(expr string) CompareResult {
 
 func ValidateDataURI(uri string) CompareResult {
 	result := CompareResult{Actual: uri, Expect: "valid Data URI"}
-	if !strings.HasPrefix(uri, "data:") || !datauriRegex.MatchString(uri) {
+	if !isDataURI(uri) {
 		result.Message = i18n.Msg(MsgFormatDataURIInvalid)
 		return result
 	}
@@ -369,7 +719,7 @@ func ValidateDataURI(uri string) CompareResult {
 
 func ValidateBCP47(tag string) CompareResult {
 	result := CompareResult{Actual: tag, Expect: "valid BCP 47 language tag"}
-	if !bcp47Regex.MatchString(tag) {
+	if !isBCP47(tag) {
 		result.Message = i18n.Msg(MsgFormatBCP47Invalid)
 		return result
 	}
@@ -379,7 +729,7 @@ func ValidateBCP47(tag string) CompareResult {
 
 func ValidateEthAddr(addr string) CompareResult {
 	result := CompareResult{Actual: addr, Expect: "valid Ethereum address"}
-	if !ethAddrRegex.MatchString(addr) {
+	if !isEthAddr(addr) {
 		result.Message = i18n.Msg(MsgFormatEthAddrInvalid)
 		return result
 	}
@@ -389,7 +739,7 @@ func ValidateEthAddr(addr string) CompareResult {
 
 func ValidateBtcAddr(addr string) CompareResult {
 	result := CompareResult{Actual: addr, Expect: "valid Bitcoin address"}
-	if !btcAddrRegex.MatchString(addr) {
+	if !isBtcAddr(addr) {
 		result.Message = i18n.Msg(MsgFormatBtcAddrInvalid)
 		return result
 	}
@@ -398,7 +748,7 @@ func ValidateBtcAddr(addr string) CompareResult {
 }
 
 func IsSemver(version string) bool {
-	return semverRegex.MatchString(version)
+	return isSemver(version)
 }
 
 func IsISBN10(isbn string) bool {
@@ -414,7 +764,7 @@ func IsISSN(issn string) bool {
 }
 
 func IsBIC(bic string) bool {
-	return bicRegex.MatchString(bic)
+	return isBIC(bic)
 }
 
 func IsCron(expr string) bool {
@@ -422,39 +772,49 @@ func IsCron(expr string) bool {
 }
 
 func IsDataURI(uri string) bool {
-	return strings.HasPrefix(uri, "data:") && datauriRegex.MatchString(uri)
+	return isDataURI(uri)
 }
 
 func IsBCP47(tag string) bool {
-	return bcp47Regex.MatchString(tag)
+	return isBCP47(tag)
 }
 
 func IsEthAddr(addr string) bool {
-	return ethAddrRegex.MatchString(addr)
+	return isEthAddr(addr)
 }
 
 func IsBtcAddr(addr string) bool {
-	return btcAddrRegex.MatchString(addr)
+	return isBtcAddr(addr)
 }
 
 func isISBN10(s string) bool {
-	s = strings.ReplaceAll(s, "-", "")
-	s = strings.ReplaceAll(s, " ", "")
-	if len(s) != 10 {
-		return false
-	}
+	digits := 0
 	sum := 0
-	for i := 0; i < 9; i++ {
-		if s[i] < '0' || s[i] > '9' {
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c == '-' || c == ' ' {
+			continue
+		}
+		digits++
+		if digits > 10 {
 			return false
 		}
-		sum += int(s[i]-'0') * (10 - i)
+		if digits == 10 {
+			return isISBN10CheckDigitFmt(c, sum)
+		}
+		if c < '0' || c > '9' {
+			return false
+		}
+		sum += int(c-'0') * (11 - digits)
 	}
-	last := s[9]
-	if last == 'X' || last == 'x' {
+	return false
+}
+
+func isISBN10CheckDigitFmt(c byte, sum int) bool {
+	if c == 'X' || c == 'x' {
 		sum += 10
-	} else if last >= '0' && last <= '9' {
-		sum += int(last - '0')
+	} else if c >= '0' && c <= '9' {
+		sum += int(c - '0')
 	} else {
 		return false
 	}
@@ -462,92 +822,119 @@ func isISBN10(s string) bool {
 }
 
 func isISBN13(s string) bool {
-	s = strings.ReplaceAll(s, "-", "")
-	s = strings.ReplaceAll(s, " ", "")
-	if len(s) != 13 {
-		return false
-	}
+	digits := 0
 	sum := 0
-	for i := 0; i < 12; i++ {
-		if s[i] < '0' || s[i] > '9' {
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c == '-' || c == ' ' {
+			continue
+		}
+		digits++
+		if digits > 13 {
+			return false
+		}
+		if c < '0' || c > '9' {
 			return false
 		}
 		weight := 1
-		if i%2 == 1 {
+		if digits%2 == 0 {
 			weight = 3
 		}
-		sum += int(s[i]-'0') * weight
+		sum += int(c-'0') * weight
 	}
-	check := (10 - sum%10) % 10
-	return s[12] >= '0' && s[12] <= '9' && int(s[12]-'0') == check
+	if digits != 13 {
+		return false
+	}
+	return sum%10 == 0 || (10-sum%10)%10 == int(s[len(s)-1]-'0')
 }
 
 func isISSN(s string) bool {
-	s = strings.ReplaceAll(s, "-", "")
-	if len(s) != 8 {
-		return false
-	}
+	digits := 0
 	sum := 0
-	for i := 0; i < 7; i++ {
-		if s[i] < '0' || s[i] > '9' {
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c == '-' || c == ' ' {
+			continue
+		}
+		digits++
+		if digits > 8 {
 			return false
 		}
-		sum += int(s[i]-'0') * (8 - i)
+		if digits == 8 {
+			if c == 'X' || c == 'x' {
+				return digits == 8 && sum%11 == 10
+			}
+			if c < '0' || c > '9' {
+				return false
+			}
+			return digits == 8 && sum%11 == int(c-'0')
+		}
+		if c < '0' || c > '9' {
+			return false
+		}
+		sum += int(c-'0') * (9 - digits)
 	}
-	last := s[7]
-	var check int
-	if last == 'X' || last == 'x' {
-		check = 10
-	} else if last >= '0' && last <= '9' {
-		check = int(last - '0')
-	} else {
-		return false
-	}
-	return sum%11 == check
+	return false
 }
 
 func isCron(expr string) bool {
-	fields := strings.Fields(expr)
-	if len(fields) != 5 && len(fields) != 6 {
-		return false
+	count := 0
+	start := 0
+	for i := 0; i <= len(expr); i++ {
+		if i == len(expr) || expr[i] == ' ' || expr[i] == '\t' {
+			if i > start {
+				count++
+				if !isValidCronFieldZeroAlloc(expr[start:i]) {
+					return false
+				}
+			}
+			start = i + 1
+		}
 	}
-	for _, f := range fields {
-		if !isValidCronField(f) {
+	return count == 5 || count == 6
+}
+
+func isValidCronFieldZeroAlloc(field string) bool {
+	inRange := false
+	for i := 0; i < len(field); i++ {
+		c := field[i]
+		switch {
+		case c == ',':
+			if inRange {
+				return false
+			}
+		case c == '/':
+			if i == 0 || i == len(field)-1 {
+				return false
+			}
+			if !validateCronStep(field, i+1) {
+				return false
+			}
+		case c == '-':
+			if inRange {
+				return false
+			}
+			inRange = true
+		case c == '*':
+			if i > 0 && field[i-1] != ',' && field[i-1] != '/' {
+				return false
+			}
+		case c >= '0' && c <= '9':
+		default:
 			return false
 		}
 	}
 	return true
 }
 
-func isValidCronField(field string) bool {
-	parts := strings.Split(field, ",")
-	for _, part := range parts {
-		stepParts := strings.SplitN(part, "/", 2)
-		base := stepParts[0]
-		if len(stepParts) == 2 {
-			step := stepParts[1]
-			if step == "" {
-				return false
-			}
-			for _, c := range step {
-				if c != '*' && (c < '0' || c > '9') {
-					return false
-				}
-			}
+func validateCronStep(field string, start int) bool {
+	for j := start; j < len(field); j++ {
+		d := field[j]
+		if d == ',' {
+			break
 		}
-		if base == "*" {
-			continue
-		}
-		rangeParts := strings.SplitN(base, "-", 2)
-		for _, rp := range rangeParts {
-			if rp == "" {
-				return false
-			}
-			for _, c := range rp {
-				if c < '0' || c > '9' {
-					return false
-				}
-			}
+		if d != '*' && (d < '0' || d > '9') {
+			return false
 		}
 	}
 	return true
