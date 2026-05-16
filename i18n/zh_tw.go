@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-16 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2023-12-16 00:00:00
+ * @LastEditTime: 2026-05-17 01:54:02
  * @FilePath: \go-argus\i18n\zh_tw.go
  * @Description: 繁体中文错误消息
  *
@@ -31,6 +31,16 @@ func ZhTWMessages() map[string]string {
 		"format.uuid_invalid":             "無效的 UUID 格式",
 		"format.base64_empty":             "Base64 字串為空",
 		"format.base64_invalid":           "無效的 Base64 編碼",
+		"format.semver_invalid":           "無效的語義化版本號",
+		"format.isbn10_invalid":           "無效的 ISBN-10",
+		"format.isbn13_invalid":           "無效的 ISBN-13",
+		"format.issn_invalid":             "無效的 ISSN",
+		"format.bic_invalid":              "無效的 BIC（SWIFT 代碼）",
+		"format.cron_invalid":             "無效的 Cron 表達式",
+		"format.datauri_invalid":          "無效的 Data URI",
+		"format.bcp47_invalid":            "無效的 BCP 47 語言標籤",
+		"format.eth_addr_invalid":         "無效的以太坊地址",
+		"format.btc_addr_invalid":         "無效的比特幣地址",
 		"enum.invalid_value":              "無效的列舉值: {value}",
 		"json.invalid":                    "無效的 JSON",
 		"json.root_not_object":            "JSON 根節點不是物件",
@@ -175,5 +185,15 @@ func ZhTWMessages() map[string]string {
 		"luhn_checksum":                   "{field} 必須通過 Luhn 校驗",
 		"credit_card":                     "{field} 必須是有效的信用卡號",
 		"dns_rfc1035_label":               "{field} 必須是有效的 DNS RFC 1035 標籤",
+		"semver":                          "{field} 必須是有效的語義化版本號",
+		"isbn10":                          "{field} 必須是有效的 ISBN-10",
+		"isbn13":                          "{field} 必須是有效的 ISBN-13",
+		"issn":                            "{field} 必須是有效的 ISSN",
+		"bic":                             "{field} 必須是有效的 BIC（SWIFT 代碼）",
+		"cron":                            "{field} 必須是有效的 Cron 表達式",
+		"datauri":                         "{field} 必須是有效的 Data URI",
+		"bcp47":                           "{field} 必須是有效的 BCP 47 語言標籤",
+		"eth_addr":                        "{field} 必須是有效的以太坊地址",
+		"btc_addr":                        "{field} 必須是有效的比特幣地址",
 	}
 }

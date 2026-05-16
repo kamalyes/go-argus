@@ -35,6 +35,16 @@ func EnMessages() map[string]string {
 		"format.uuid_invalid":             "invalid UUID format",
 		"format.base64_empty":             "Base64 string is empty",
 		"format.base64_invalid":           "invalid Base64 encoding",
+		"format.semver_invalid":           "invalid semantic version",
+		"format.isbn10_invalid":           "invalid ISBN-10",
+		"format.isbn13_invalid":           "invalid ISBN-13",
+		"format.issn_invalid":             "invalid ISSN",
+		"format.bic_invalid":              "invalid BIC (SWIFT code)",
+		"format.cron_invalid":             "invalid cron expression",
+		"format.datauri_invalid":          "invalid Data URI",
+		"format.bcp47_invalid":            "invalid BCP 47 language tag",
+		"format.eth_addr_invalid":         "invalid Ethereum address",
+		"format.btc_addr_invalid":         "invalid Bitcoin address",
 
 		// ─── enum 内部消息 ───
 		"enum.invalid_value": "invalid enum value: {value}",
@@ -189,5 +199,15 @@ func EnMessages() map[string]string {
 		"luhn_checksum":        "{field} must pass the Luhn checksum",
 		"credit_card":          "{field} must be a valid credit card number",
 		"dns_rfc1035_label":    "{field} must be a valid DNS RFC 1035 label",
+		"semver":               "{field} must be a valid semantic version",
+		"isbn10":               "{field} must be a valid ISBN-10",
+		"isbn13":               "{field} must be a valid ISBN-13",
+		"issn":                 "{field} must be a valid ISSN",
+		"bic":                  "{field} must be a valid BIC (SWIFT code)",
+		"cron":                 "{field} must be a valid cron expression",
+		"datauri":              "{field} must be a valid Data URI",
+		"bcp47":                "{field} must be a valid BCP 47 language tag",
+		"eth_addr":             "{field} must be a valid Ethereum address",
+		"btc_addr":             "{field} must be a valid Bitcoin address",
 	}
 }

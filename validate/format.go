@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-06 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2023-12-06 00:00:00
+ * @LastEditTime: 2026-05-17 01:53:23
  * @FilePath: \go-argus\validate\format.go
  * @Description: 格式校验能力，提供 Email、IP、URL、UUID、Base64 和正则校验
  *
@@ -15,7 +15,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net"
-	"net/mail"
 	"net/url"
 	"regexp"
 	"strings"
@@ -26,6 +25,12 @@ import (
 
 var (
 	uuidRegex    = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+	semverRegex  = regexp.MustCompile(`^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$`)
+	bicRegex     = regexp.MustCompile(`^[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}(?:[A-Z0-9]{3})?$`)
+	ethAddrRegex = regexp.MustCompile(`^0x[0-9a-fA-F]{40}$`)
+	btcAddrRegex = regexp.MustCompile(`^[13][a-km-zA-HJ-NP-Z1-9]{25,34}$|^[bc1q][a-z0-9]{39,59}$`)
+	bcp47Regex   = regexp.MustCompile(`^[a-zA-Z]{2,3}(?:-[a-zA-Z]{4})?(?:-(?:[a-zA-Z]{2}|\d{3}))?(?:-[a-zA-Z0-9]{5,8})*(?:-[a-zA-Z0-9]{1,8})*$`)
+	datauriRegex = regexp.MustCompile(`^data:([^;,]*)?(;[^;,]*)*;?(base64,)?,`)
 	regexCache   = make(map[string]*regexp.Regexp)
 	regexCacheMu sync.RWMutex
 )
@@ -81,19 +86,8 @@ func ValidateRegex(body []byte, pattern string) CompareResult {
 // ValidateEmail 校验 Email 格式
 func ValidateEmail(email string) CompareResult {
 	result := CompareResult{Actual: email, Expect: "valid email format"}
-	email = strings.TrimSpace(email)
-	if email == "" {
-		result.Message = i18n.Msg(MsgFormatEmailEmpty)
-		return result
-	}
-	addr, err := mail.ParseAddress(email)
-	if err != nil {
-		result.Message = i18n.Msg(MsgFormatEmailInvalid, map[string]string{"error": err.Error()})
-		return result
-	}
-	parts := strings.Split(addr.Address, "@")
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" || !strings.Contains(parts[1], ".") {
-		result.Message = i18n.Msg(MsgFormatEmailMalformed)
+	if !IsEmail(email) {
+		result.Message = i18n.Msg(MsgFormatEmailInvalid, map[string]string{"error": "invalid email format"})
 		return result
 	}
 	result.Success = true
@@ -301,4 +295,260 @@ func IsBase64(str string) bool {
 // ValidateIP 校验 IP 地址格式（ValidateIPAddress 的别名，兼容旧 API）
 func ValidateIP(ipStr string) CompareResult {
 	return ValidateIPAddress(ipStr)
+}
+
+func ValidateSemver(version string) CompareResult {
+	result := CompareResult{Actual: version, Expect: "valid semantic version"}
+	if !semverRegex.MatchString(version) {
+		result.Message = i18n.Msg(MsgFormatSemverInvalid)
+		return result
+	}
+	result.Success = true
+	return result
+}
+
+func ValidateISBN10(isbn string) CompareResult {
+	result := CompareResult{Actual: isbn, Expect: "valid ISBN-10"}
+	if !isISBN10(isbn) {
+		result.Message = i18n.Msg(MsgFormatISBN10Invalid)
+		return result
+	}
+	result.Success = true
+	return result
+}
+
+func ValidateISBN13(isbn string) CompareResult {
+	result := CompareResult{Actual: isbn, Expect: "valid ISBN-13"}
+	if !isISBN13(isbn) {
+		result.Message = i18n.Msg(MsgFormatISBN13Invalid)
+		return result
+	}
+	result.Success = true
+	return result
+}
+
+func ValidateISSN(issn string) CompareResult {
+	result := CompareResult{Actual: issn, Expect: "valid ISSN"}
+	if !isISSN(issn) {
+		result.Message = i18n.Msg(MsgFormatISSNInvalid)
+		return result
+	}
+	result.Success = true
+	return result
+}
+
+func ValidateBIC(bic string) CompareResult {
+	result := CompareResult{Actual: bic, Expect: "valid BIC (SWIFT code)"}
+	if !bicRegex.MatchString(bic) {
+		result.Message = i18n.Msg(MsgFormatBICInvalid)
+		return result
+	}
+	result.Success = true
+	return result
+}
+
+func ValidateCron(expr string) CompareResult {
+	result := CompareResult{Actual: expr, Expect: "valid cron expression"}
+	if !isCron(expr) {
+		result.Message = i18n.Msg(MsgFormatCronInvalid)
+		return result
+	}
+	result.Success = true
+	return result
+}
+
+func ValidateDataURI(uri string) CompareResult {
+	result := CompareResult{Actual: uri, Expect: "valid Data URI"}
+	if !strings.HasPrefix(uri, "data:") || !datauriRegex.MatchString(uri) {
+		result.Message = i18n.Msg(MsgFormatDataURIInvalid)
+		return result
+	}
+	result.Success = true
+	return result
+}
+
+func ValidateBCP47(tag string) CompareResult {
+	result := CompareResult{Actual: tag, Expect: "valid BCP 47 language tag"}
+	if !bcp47Regex.MatchString(tag) {
+		result.Message = i18n.Msg(MsgFormatBCP47Invalid)
+		return result
+	}
+	result.Success = true
+	return result
+}
+
+func ValidateEthAddr(addr string) CompareResult {
+	result := CompareResult{Actual: addr, Expect: "valid Ethereum address"}
+	if !ethAddrRegex.MatchString(addr) {
+		result.Message = i18n.Msg(MsgFormatEthAddrInvalid)
+		return result
+	}
+	result.Success = true
+	return result
+}
+
+func ValidateBtcAddr(addr string) CompareResult {
+	result := CompareResult{Actual: addr, Expect: "valid Bitcoin address"}
+	if !btcAddrRegex.MatchString(addr) {
+		result.Message = i18n.Msg(MsgFormatBtcAddrInvalid)
+		return result
+	}
+	result.Success = true
+	return result
+}
+
+func IsSemver(version string) bool {
+	return semverRegex.MatchString(version)
+}
+
+func IsISBN10(isbn string) bool {
+	return isISBN10(isbn)
+}
+
+func IsISBN13(isbn string) bool {
+	return isISBN13(isbn)
+}
+
+func IsISSN(issn string) bool {
+	return isISSN(issn)
+}
+
+func IsBIC(bic string) bool {
+	return bicRegex.MatchString(bic)
+}
+
+func IsCron(expr string) bool {
+	return isCron(expr)
+}
+
+func IsDataURI(uri string) bool {
+	return strings.HasPrefix(uri, "data:") && datauriRegex.MatchString(uri)
+}
+
+func IsBCP47(tag string) bool {
+	return bcp47Regex.MatchString(tag)
+}
+
+func IsEthAddr(addr string) bool {
+	return ethAddrRegex.MatchString(addr)
+}
+
+func IsBtcAddr(addr string) bool {
+	return btcAddrRegex.MatchString(addr)
+}
+
+func isISBN10(s string) bool {
+	s = strings.ReplaceAll(s, "-", "")
+	s = strings.ReplaceAll(s, " ", "")
+	if len(s) != 10 {
+		return false
+	}
+	sum := 0
+	for i := 0; i < 9; i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+		sum += int(s[i]-'0') * (10 - i)
+	}
+	last := s[9]
+	if last == 'X' || last == 'x' {
+		sum += 10
+	} else if last >= '0' && last <= '9' {
+		sum += int(last - '0')
+	} else {
+		return false
+	}
+	return sum%11 == 0
+}
+
+func isISBN13(s string) bool {
+	s = strings.ReplaceAll(s, "-", "")
+	s = strings.ReplaceAll(s, " ", "")
+	if len(s) != 13 {
+		return false
+	}
+	sum := 0
+	for i := 0; i < 12; i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+		weight := 1
+		if i%2 == 1 {
+			weight = 3
+		}
+		sum += int(s[i]-'0') * weight
+	}
+	check := (10 - sum%10) % 10
+	return s[12] >= '0' && s[12] <= '9' && int(s[12]-'0') == check
+}
+
+func isISSN(s string) bool {
+	s = strings.ReplaceAll(s, "-", "")
+	if len(s) != 8 {
+		return false
+	}
+	sum := 0
+	for i := 0; i < 7; i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+		sum += int(s[i]-'0') * (8 - i)
+	}
+	last := s[7]
+	var check int
+	if last == 'X' || last == 'x' {
+		check = 10
+	} else if last >= '0' && last <= '9' {
+		check = int(last - '0')
+	} else {
+		return false
+	}
+	return sum%11 == check
+}
+
+func isCron(expr string) bool {
+	fields := strings.Fields(expr)
+	if len(fields) != 5 && len(fields) != 6 {
+		return false
+	}
+	for _, f := range fields {
+		if !isValidCronField(f) {
+			return false
+		}
+	}
+	return true
+}
+
+func isValidCronField(field string) bool {
+	parts := strings.Split(field, ",")
+	for _, part := range parts {
+		stepParts := strings.SplitN(part, "/", 2)
+		base := stepParts[0]
+		if len(stepParts) == 2 {
+			step := stepParts[1]
+			if step == "" {
+				return false
+			}
+			for _, c := range step {
+				if c != '*' && (c < '0' || c > '9') {
+					return false
+				}
+			}
+		}
+		if base == "*" {
+			continue
+		}
+		rangeParts := strings.SplitN(base, "-", 2)
+		for _, rp := range rangeParts {
+			if rp == "" {
+				return false
+			}
+			for _, c := range rp {
+				if c < '0' || c > '9' {
+					return false
+				}
+			}
+		}
+	}
+	return true
 }

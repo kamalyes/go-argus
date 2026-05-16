@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-16 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2023-12-16 00:00:00
+ * @LastEditTime: 2026-05-17 01:50:30
  * @FilePath: \go-argus\i18n\es.go
  * @Description: 西班牙语错误消息
  *
@@ -31,6 +31,16 @@ func EsMessages() map[string]string {
 		"format.uuid_invalid":             "formato UUID inválido",
 		"format.base64_empty":             "la cadena Base64 está vacía",
 		"format.base64_invalid":           "codificación Base64 inválida",
+		"format.semver_invalid":           "versión semántica inválida",
+		"format.isbn10_invalid":           "ISBN-10 inválido",
+		"format.isbn13_invalid":           "ISBN-13 inválido",
+		"format.issn_invalid":             "ISSN inválido",
+		"format.bic_invalid":              "BIC (código SWIFT) inválido",
+		"format.cron_invalid":             "expresión cron inválida",
+		"format.datauri_invalid":          "Data URI inválido",
+		"format.bcp47_invalid":            "etiqueta de idioma BCP 47 inválida",
+		"format.eth_addr_invalid":         "dirección Ethereum inválida",
+		"format.btc_addr_invalid":         "dirección Bitcoin inválida",
 		"enum.invalid_value":              "valor de enumeración inválido: {value}",
 		"json.invalid":                    "JSON inválido",
 		"json.root_not_object":            "la raíz JSON no es un objeto",
@@ -175,5 +185,15 @@ func EsMessages() map[string]string {
 		"luhn_checksum":                   "{field} debe pasar la suma de verificación Luhn",
 		"credit_card":                     "{field} debe ser un número de tarjeta de crédito válido",
 		"dns_rfc1035_label":               "{field} debe ser una etiqueta DNS RFC 1035 válida",
+		"semver":                          "{field} debe ser una versión semántica válida",
+		"isbn10":                          "{field} debe ser un ISBN-10 válido",
+		"isbn13":                          "{field} debe ser un ISBN-13 válido",
+		"issn":                            "{field} debe ser un ISSN válido",
+		"bic":                             "{field} debe ser un BIC (código SWIFT) válido",
+		"cron":                            "{field} debe ser una expresión cron válida",
+		"datauri":                         "{field} debe ser un Data URI válido",
+		"bcp47":                           "{field} debe ser una etiqueta de idioma BCP 47 válida",
+		"eth_addr":                        "{field} debe ser una dirección Ethereum válida",
+		"btc_addr":                        "{field} debe ser una dirección Bitcoin válida",
 	}
 }

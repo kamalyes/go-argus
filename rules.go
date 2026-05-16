@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-06 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2023-12-06 00:00:00
+ * @LastEditTime: 2026-05-17 01:58:16
  * @FilePath: \go-argus\rules.go
  * @Description: 根包内置字段规则，负责单字段格式、长度、数值和枚举校验
  *
@@ -97,10 +97,6 @@ var builtinRules = map[string]builtinRule{
 	"base64url":         ruleBase64URL,
 	"base64rawurl":      ruleBase64RawURL,
 	"json":              ruleJSON,
-	"oneof":             ruleOneOf,
-	"oneofci":           ruleOneOfCI,
-	"noneof":            ruleNoneOf,
-	"noneofci":          ruleNoneOfCI,
 	"unique":            ruleUnique,
 	"startswith":        ruleStartsWith,
 	"endswith":          ruleEndsWith,
@@ -129,6 +125,16 @@ var builtinRules = map[string]builtinRule{
 	"luhn_checksum":     ruleLuhnChecksum,
 	"credit_card":       ruleLuhnChecksum,
 	"dns_rfc1035_label": ruleDNSRFC1035Label,
+	"semver":            ruleSemver,
+	"isbn10":            ruleISBN10,
+	"isbn13":            ruleISBN13,
+	"issn":              ruleISSN,
+	"bic":               ruleBIC,
+	"cron":              ruleCron,
+	"datauri":           ruleDataURI,
+	"bcp47":             ruleBCP47,
+	"eth_addr":          ruleEthAddr,
+	"btc_addr":          ruleBtcAddr,
 }
 
 var (
@@ -290,19 +296,25 @@ func ruleE164(field reflect.Value, _ string, _ bool) bool {
 
 func ruleIP(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	return ok && net.ParseIP(strings.TrimSpace(s)) != nil
+	return ok && net.ParseIP(trimSpaceIfNeeded(s)) != nil
 }
 
 func ruleIPv4(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	ip := net.ParseIP(strings.TrimSpace(s))
-	return ok && ip != nil && ip.To4() != nil
+	if !ok {
+		return false
+	}
+	ip := net.ParseIP(trimSpaceIfNeeded(s))
+	return ip != nil && ip.To4() != nil
 }
 
 func ruleIPv6(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	ip := net.ParseIP(strings.TrimSpace(s))
-	return ok && ip != nil && ip.To4() == nil
+	if !ok {
+		return false
+	}
+	ip := net.ParseIP(trimSpaceIfNeeded(s))
+	return ip != nil && ip.To4() == nil
 }
 
 func ruleCIDR(field reflect.Value, _ string, _ bool) bool {
@@ -377,8 +389,8 @@ func ruleURL(field reflect.Value, _ string, _ bool) bool {
 	if !ok {
 		return false
 	}
-	u, err := url.ParseRequestURI(strings.TrimSpace(s))
-	return err == nil && u.Scheme != ""
+	s = strings.TrimSpace(s)
+	return hasSchemeAndHost(s)
 }
 
 func ruleURI(field reflect.Value, _ string, _ bool) bool {
@@ -386,8 +398,21 @@ func ruleURI(field reflect.Value, _ string, _ bool) bool {
 	if !ok {
 		return false
 	}
-	_, err := url.ParseRequestURI(strings.TrimSpace(s))
-	return err == nil
+	s = strings.TrimSpace(s)
+	colon := strings.Index(s, ":")
+	if colon < 1 {
+		return false
+	}
+	for i := 0; i < colon; i++ {
+		c := s[i]
+		if !(c >= 'a' && c <= 'z') && !(c >= 'A' && c <= 'Z') && !(c >= '0' && c <= '9') && c != '+' && c != '-' && c != '.' {
+			return false
+		}
+	}
+	if len(s) <= colon+1 {
+		return false
+	}
+	return true
 }
 
 func ruleHTTPURL(field reflect.Value, _ string, _ bool) bool {
@@ -395,8 +420,16 @@ func ruleHTTPURL(field reflect.Value, _ string, _ bool) bool {
 	if !ok {
 		return false
 	}
-	u, err := url.Parse(strings.TrimSpace(s))
-	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
+	s = strings.TrimSpace(s)
+	colon := strings.Index(s, ":")
+	if colon < 0 {
+		return false
+	}
+	scheme := s[:colon]
+	if scheme != "http" && scheme != "https" {
+		return false
+	}
+	return hasHostAfterScheme(s, colon)
 }
 
 func ruleHTTPSURL(field reflect.Value, _ string, _ bool) bool {
@@ -404,8 +437,47 @@ func ruleHTTPSURL(field reflect.Value, _ string, _ bool) bool {
 	if !ok {
 		return false
 	}
-	u, err := url.Parse(strings.TrimSpace(s))
-	return err == nil && u.Scheme == "https" && u.Host != ""
+	s = strings.TrimSpace(s)
+	colon := strings.Index(s, ":")
+	if colon < 0 {
+		return false
+	}
+	scheme := s[:colon]
+	if scheme != "https" {
+		return false
+	}
+	return hasHostAfterScheme(s, colon)
+}
+
+func hasSchemeAndHost(s string) bool {
+	colon := strings.Index(s, ":")
+	if colon < 1 {
+		return false
+	}
+	return hasHostAfterScheme(s, colon)
+}
+
+func hasHostAfterScheme(s string, colonIdx int) bool {
+	if len(s) <= colonIdx+2 || s[colonIdx+1] != '/' || s[colonIdx+2] != '/' {
+		return false
+	}
+	hostStart := colonIdx + 3
+	if hostStart >= len(s) {
+		return false
+	}
+	for i := hostStart; i < len(s); i++ {
+		c := s[i]
+		if c == '/' || c == '?' || c == '#' {
+			break
+		}
+		if c == ':' || c == '@' {
+			continue
+		}
+		if hostStart == i && (c == '.' || c == '-') {
+			return false
+		}
+	}
+	return true
 }
 
 func ruleURLEncoded(field reflect.Value, _ string, _ bool) bool {
@@ -477,11 +549,11 @@ func ruleBase64RawURL(field reflect.Value, _ string, _ bool) bool {
 }
 
 func ruleJSON(field reflect.Value, _ string, _ bool) bool {
-	if bytes, ok := bytesValue(field); ok {
-		return json.Valid(bytes)
+	if b, ok := bytesValue(field); ok {
+		return json.Valid(b)
 	}
 	if s, ok := stringValue(field); ok {
-		return json.Valid([]byte(s))
+		return json.NewDecoder(strings.NewReader(s)).Decode(new(interface{})) == nil
 	}
 	return false
 }
@@ -620,12 +692,30 @@ func ruleExcludesRune(field reflect.Value, param string, _ bool) bool {
 
 func ruleLowercase(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	return ok && s == strings.ToLower(s)
+	if !ok {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c >= 'A' && c <= 'Z' {
+			return false
+		}
+	}
+	return true
 }
 
 func ruleUppercase(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	return ok && s == strings.ToUpper(s)
+	if !ok {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c >= 'a' && c <= 'z' {
+			return false
+		}
+	}
+	return true
 }
 
 func ruleBoolean(field reflect.Value, _ string, _ bool) bool {
@@ -900,4 +990,186 @@ func isHostname(host string) bool {
 		}
 	}
 	return true
+}
+
+func trimSpaceIfNeeded(s string) string {
+	if len(s) > 0 && (s[0] == ' ' || s[0] == '\t' || s[len(s)-1] == ' ' || s[len(s)-1] == '\t') {
+		return strings.TrimSpace(s)
+	}
+	return s
+}
+
+var (
+	semverRegex  = regexp.MustCompile(`^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$`)
+	bicRegex     = regexp.MustCompile(`^[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}(?:[A-Z0-9]{3})?$`)
+	ethAddrRegex = regexp.MustCompile(`^0x[0-9a-fA-F]{40}$`)
+	btcAddrRegex = regexp.MustCompile(`^[13][a-km-zA-HJ-NP-Z1-9]{25,34}$|^[bc1q][a-z0-9]{39,59}$`)
+	bcp47Regex   = regexp.MustCompile(`^[a-zA-Z]{2,3}(?:-[a-zA-Z]{4})?(?:-(?:[a-zA-Z]{2}|\d{3}))?(?:-[a-zA-Z0-9]{5,8})*(?:-[a-zA-Z0-9]{1,8})*$`)
+	cronFieldRe  = regexp.MustCompile(`^\S+$`)
+	datauriRegex = regexp.MustCompile(`^data:([^;,]*)?(;[^;,]*)*;?(base64,)?,`)
+)
+
+func ruleSemver(field reflect.Value, _ string, _ bool) bool {
+	s, ok := stringValue(field)
+	return ok && semverRegex.MatchString(s)
+}
+
+func ruleISBN10(field reflect.Value, _ string, _ bool) bool {
+	s, ok := stringValue(field)
+	if !ok {
+		return false
+	}
+	s = strings.ReplaceAll(s, "-", "")
+	s = strings.ReplaceAll(s, " ", "")
+	if len(s) != 10 {
+		return false
+	}
+	sum := 0
+	for i := 0; i < 9; i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+		sum += int(s[i]-'0') * (10 - i)
+	}
+	last := s[9]
+	if last == 'X' || last == 'x' {
+		sum += 10
+	} else if last >= '0' && last <= '9' {
+		sum += int(last - '0')
+	} else {
+		return false
+	}
+	return sum%11 == 0
+}
+
+func ruleISBN13(field reflect.Value, _ string, _ bool) bool {
+	s, ok := stringValue(field)
+	if !ok {
+		return false
+	}
+	s = strings.ReplaceAll(s, "-", "")
+	s = strings.ReplaceAll(s, " ", "")
+	if len(s) != 13 {
+		return false
+	}
+	sum := 0
+	for i := 0; i < 12; i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+		weight := 1
+		if i%2 == 1 {
+			weight = 3
+		}
+		sum += int(s[i]-'0') * weight
+	}
+	check := (10 - sum%10) % 10
+	return s[12] >= '0' && s[12] <= '9' && int(s[12]-'0') == check
+}
+
+func ruleISSN(field reflect.Value, _ string, _ bool) bool {
+	s, ok := stringValue(field)
+	if !ok {
+		return false
+	}
+	s = strings.ReplaceAll(s, "-", "")
+	if len(s) != 8 {
+		return false
+	}
+	sum := 0
+	for i := 0; i < 7; i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+		sum += int(s[i]-'0') * (8 - i)
+	}
+	last := s[7]
+	var check int
+	if last == 'X' || last == 'x' {
+		check = 10
+	} else if last >= '0' && last <= '9' {
+		check = int(last - '0')
+	} else {
+		return false
+	}
+	return sum%11 == check
+}
+
+func ruleBIC(field reflect.Value, _ string, _ bool) bool {
+	s, ok := stringValue(field)
+	return ok && bicRegex.MatchString(s)
+}
+
+func ruleCron(field reflect.Value, _ string, _ bool) bool {
+	s, ok := stringValue(field)
+	if !ok {
+		return false
+	}
+	fields := strings.Fields(s)
+	if len(fields) != 5 && len(fields) != 6 {
+		return false
+	}
+	for _, f := range fields {
+		if !isValidCronField(f) {
+			return false
+		}
+	}
+	return true
+}
+
+func isValidCronField(field string) bool {
+	parts := strings.Split(field, ",")
+	for _, part := range parts {
+		stepParts := strings.SplitN(part, "/", 2)
+		base := stepParts[0]
+		if len(stepParts) == 2 {
+			step := stepParts[1]
+			if step == "" {
+				return false
+			}
+			for _, c := range step {
+				if c != '*' && (c < '0' || c > '9') {
+					return false
+				}
+			}
+		}
+		if base == "*" {
+			continue
+		}
+		rangeParts := strings.SplitN(base, "-", 2)
+		for _, rp := range rangeParts {
+			if rp == "" {
+				return false
+			}
+			for _, c := range rp {
+				if c < '0' || c > '9' {
+					return false
+				}
+			}
+		}
+	}
+	return true
+}
+
+func ruleDataURI(field reflect.Value, _ string, _ bool) bool {
+	s, ok := stringValue(field)
+	if !ok || !strings.HasPrefix(s, "data:") {
+		return false
+	}
+	return datauriRegex.MatchString(s)
+}
+
+func ruleBCP47(field reflect.Value, _ string, _ bool) bool {
+	s, ok := stringValue(field)
+	return ok && bcp47Regex.MatchString(s)
+}
+
+func ruleEthAddr(field reflect.Value, _ string, _ bool) bool {
+	s, ok := stringValue(field)
+	return ok && ethAddrRegex.MatchString(s)
+}
+
+func ruleBtcAddr(field reflect.Value, _ string, _ bool) bool {
+	s, ok := stringValue(field)
+	return ok && btcAddrRegex.MatchString(s)
 }

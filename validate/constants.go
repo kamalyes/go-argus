@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-16 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2023-12-16 00:00:00
+ * @LastEditTime: 2026-05-17 01:51:36
  * @FilePath: \go-argus\validate\constants.go
  * @Description: i18n 消息键常量，统一维护所有国际化消息的 key，避免硬编码字符串散落各处
  *
@@ -34,6 +34,16 @@ const (
 	MsgFormatUUIDInvalid            = "format.uuid_invalid"
 	MsgFormatBase64Empty            = "format.base64_empty"
 	MsgFormatBase64Invalid          = "format.base64_invalid"
+	MsgFormatSemverInvalid          = "format.semver_invalid"
+	MsgFormatISBN10Invalid          = "format.isbn10_invalid"
+	MsgFormatISBN13Invalid          = "format.isbn13_invalid"
+	MsgFormatISSNInvalid            = "format.issn_invalid"
+	MsgFormatBICInvalid             = "format.bic_invalid"
+	MsgFormatCronInvalid            = "format.cron_invalid"
+	MsgFormatDataURIInvalid         = "format.datauri_invalid"
+	MsgFormatBCP47Invalid           = "format.bcp47_invalid"
+	MsgFormatEthAddrInvalid         = "format.eth_addr_invalid"
+	MsgFormatBtcAddrInvalid         = "format.btc_addr_invalid"
 )
 
 // enum 系列消息键 —— 枚举校验相关

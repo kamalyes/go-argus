@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-16 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2023-12-16 00:00:00
+ * @LastEditTime: 2026-05-17 01:55:55
  * @FilePath: \go-argus\i18n\ko.go
  * @Description: 韩语错误消息
  *
@@ -31,6 +31,16 @@ func KoMessages() map[string]string {
 		"format.uuid_invalid":             "유효하지 않은 UUID 형식입니다",
 		"format.base64_empty":             "Base64 문자열이 비어 있습니다",
 		"format.base64_invalid":           "유효하지 않은 Base64 인코딩입니다",
+		"format.semver_invalid":           "유효하지 않은 시맨틱 버전입니다",
+		"format.isbn10_invalid":           "유효하지 않은 ISBN-10입니다",
+		"format.isbn13_invalid":           "유효하지 않은 ISBN-13입니다",
+		"format.issn_invalid":             "유효하지 않은 ISSN입니다",
+		"format.bic_invalid":              "유효하지 않은 BIC(SWIFT 코드)입니다",
+		"format.cron_invalid":             "유효하지 않은 Cron 표현식입니다",
+		"format.datauri_invalid":          "유효하지 않은 Data URI입니다",
+		"format.bcp47_invalid":            "유효하지 않은 BCP 47 언어 태그입니다",
+		"format.eth_addr_invalid":         "유효하지 않은 이더리움 주소입니다",
+		"format.btc_addr_invalid":         "유효하지 않은 비트코인 주소입니다",
 		"enum.invalid_value":              "유효하지 않은 열거형 값: {value}",
 		"json.invalid":                    "유효하지 않은 JSON입니다",
 		"json.root_not_object":            "JSON 루트가 객체가 아닙니다",
@@ -175,5 +185,15 @@ func KoMessages() map[string]string {
 		"luhn_checksum":                   "{field}은(는) Luhn 체크섬을 통과해야 합니다",
 		"credit_card":                     "{field}은(는) 유효한 신용카드 번호여야 합니다",
 		"dns_rfc1035_label":               "{field}은(는) 유효한 DNS RFC 1035 레이블이어야 합니다",
+		"semver":                          "{field}은(는) 유효한 시맨틱 버전이어야 합니다",
+		"isbn10":                          "{field}은(는) 유효한 ISBN-10이어야 합니다",
+		"isbn13":                          "{field}은(는) 유효한 ISBN-13이어야 합니다",
+		"issn":                            "{field}은(는) 유효한 ISSN이어야 합니다",
+		"bic":                             "{field}은(는) 유효한 BIC(SWIFT 코드)여야 합니다",
+		"cron":                            "{field}은(는) 유효한 Cron 표현식이어야 합니다",
+		"datauri":                         "{field}은(는) 유효한 Data URI여야 합니다",
+		"bcp47":                           "{field}은(는) 유효한 BCP 47 언어 태그여야 합니다",
+		"eth_addr":                        "{field}은(는) 유효한 이더리움 주소여야 합니다",
+		"btc_addr":                        "{field}은(는) 유효한 비트코인 주소여야 합니다",
 	}
 }

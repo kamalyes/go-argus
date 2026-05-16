@@ -33,6 +33,16 @@ func ZhMessages() map[string]string {
 		"format.uuid_invalid":             "无效的 UUID 格式",
 		"format.base64_empty":             "Base64 字符串为空",
 		"format.base64_invalid":           "无效的 Base64 编码",
+		"format.semver_invalid":           "无效的语义化版本号",
+		"format.isbn10_invalid":           "无效的 ISBN-10",
+		"format.isbn13_invalid":           "无效的 ISBN-13",
+		"format.issn_invalid":             "无效的 ISSN",
+		"format.bic_invalid":              "无效的 BIC（SWIFT 代码）",
+		"format.cron_invalid":             "无效的 Cron 表达式",
+		"format.datauri_invalid":          "无效的 Data URI",
+		"format.bcp47_invalid":            "无效的 BCP 47 语言标签",
+		"format.eth_addr_invalid":         "无效的以太坊地址",
+		"format.btc_addr_invalid":         "无效的比特币地址",
 
 		"enum.invalid_value": "无效的枚举值: {value}",
 
@@ -182,5 +192,15 @@ func ZhMessages() map[string]string {
 		"luhn_checksum":        "{field} 必须通过 Luhn 校验",
 		"credit_card":          "{field} 必须是有效的信用卡号",
 		"dns_rfc1035_label":    "{field} 必须是有效的 DNS RFC 1035 标签",
+		"semver":               "{field} 必须是有效的语义化版本号",
+		"isbn10":               "{field} 必须是有效的 ISBN-10",
+		"isbn13":               "{field} 必须是有效的 ISBN-13",
+		"issn":                 "{field} 必须是有效的 ISSN",
+		"bic":                  "{field} 必须是有效的 BIC（SWIFT 代码）",
+		"cron":                 "{field} 必须是有效的 Cron 表达式",
+		"datauri":              "{field} 必须是有效的 Data URI",
+		"bcp47":                "{field} 必须是有效的 BCP 47 语言标签",
+		"eth_addr":             "{field} 必须是有效的以太坊地址",
+		"btc_addr":             "{field} 必须是有效的比特币地址",
 	}
 }

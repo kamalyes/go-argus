@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-16 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2023-12-28 00:00:00
+ * @LastEditTime: 2026-05-17 02:04:22
  * @FilePath: \go-argus\rules_test.go
  * @Description: rules.go 测试，覆盖所有内置字段规则和辅助函数
  *
@@ -1840,5 +1840,319 @@ func TestScalarStringNilField(t *testing.T) {
 	v := New()
 	if err := v.Var(nil, "port"); err == nil {
 		t.Fatal("expected port to fail for nil")
+	}
+}
+
+func TestRuleSemver(t *testing.T) {
+	v := New()
+	if err := v.Var("1.2.3", "semver"); err != nil {
+		t.Fatal("expected semver to pass for 1.2.3")
+	}
+	if err := v.Var("v1.2.3", "semver"); err != nil {
+		t.Fatal("expected semver to pass for v1.2.3")
+	}
+	if err := v.Var("1.0.0-alpha.1", "semver"); err != nil {
+		t.Fatal("expected semver to pass for pre-release")
+	}
+	if err := v.Var("1.0.0+build.123", "semver"); err != nil {
+		t.Fatal("expected semver to pass with build metadata")
+	}
+	if err := v.Var("1.2", "semver"); err == nil {
+		t.Fatal("expected semver to fail for incomplete version")
+	}
+	if err := v.Var("abc", "semver"); err == nil {
+		t.Fatal("expected semver to fail for non-version")
+	}
+	if err := v.Var("01.2.3", "semver"); err == nil {
+		t.Fatal("expected semver to fail for leading zero")
+	}
+}
+
+func TestRuleISBN10(t *testing.T) {
+	v := New()
+	if err := v.Var("0471958697", "isbn10"); err != nil {
+		t.Fatal("expected isbn10 to pass for valid ISBN-10")
+	}
+	if err := v.Var("0-471-95869-7", "isbn10"); err != nil {
+		t.Fatal("expected isbn10 to pass with dashes")
+	}
+	if err := v.Var("0 471 95869 7", "isbn10"); err != nil {
+		t.Fatal("expected isbn10 to pass with spaces")
+	}
+	if err := v.Var("0471958698", "isbn10"); err == nil {
+		t.Fatal("expected isbn10 to fail for wrong checksum")
+	}
+	if err := v.Var("123456789", "isbn10"); err == nil {
+		t.Fatal("expected isbn10 to fail for too short")
+	}
+	if err := v.Var("12345678901", "isbn10"); err == nil {
+		t.Fatal("expected isbn10 to fail for too long")
+	}
+}
+
+func TestRuleISBN10WithX(t *testing.T) {
+	v := New()
+	if err := v.Var("080442957X", "isbn10"); err != nil {
+		t.Fatal("expected isbn10 to pass for ISBN ending with X")
+	}
+}
+
+func TestRuleISBN13(t *testing.T) {
+	v := New()
+	if err := v.Var("9780471117094", "isbn13"); err != nil {
+		t.Fatal("expected isbn13 to pass for valid ISBN-13")
+	}
+	if err := v.Var("978-0-471-11709-4", "isbn13"); err != nil {
+		t.Fatal("expected isbn13 to pass with dashes")
+	}
+	if err := v.Var("9780471117095", "isbn13"); err == nil {
+		t.Fatal("expected isbn13 to fail for wrong checksum")
+	}
+	if err := v.Var("978047111709", "isbn13"); err == nil {
+		t.Fatal("expected isbn13 to fail for too short")
+	}
+}
+
+func TestRuleISSN(t *testing.T) {
+	v := New()
+	if err := v.Var("0317847X", "issn"); err != nil {
+		t.Fatal("expected issn to pass for valid ISSN")
+	}
+	if err := v.Var("0317-847X", "issn"); err != nil {
+		t.Fatal("expected issn to pass with dash")
+	}
+	if err := v.Var("03178470", "issn"); err == nil {
+		t.Fatal("expected issn to fail for wrong checksum")
+	}
+	if err := v.Var("1234567", "issn"); err == nil {
+		t.Fatal("expected issn to fail for too short")
+	}
+}
+
+func TestRuleBIC(t *testing.T) {
+	v := New()
+	if err := v.Var("CHASUS33", "bic"); err != nil {
+		t.Fatal("expected bic to pass for valid BIC")
+	}
+	if err := v.Var("CHASUS33XXX", "bic"); err != nil {
+		t.Fatal("expected bic to pass for 11-char BIC")
+	}
+	if err := v.Var("CHASU", "bic"); err == nil {
+		t.Fatal("expected bic to fail for too short")
+	}
+	if err := v.Var("12345678", "bic"); err == nil {
+		t.Fatal("expected bic to fail for numeric")
+	}
+}
+
+func TestRuleCron(t *testing.T) {
+	v := New()
+	if err := v.Var("*/5 * * * *", "cron"); err != nil {
+		t.Fatal("expected cron to pass for standard 5-field")
+	}
+	if err := v.Var("0 0 1 1 *", "cron"); err != nil {
+		t.Fatal("expected cron to pass for yearly")
+	}
+	if err := v.Var("0 0 * * * *", "cron"); err != nil {
+		t.Fatal("expected cron to pass for 6-field")
+	}
+	if err := v.Var("* * * *", "cron"); err == nil {
+		t.Fatal("expected cron to fail for 4-field")
+	}
+	if err := v.Var("* * * * * * *", "cron"); err == nil {
+		t.Fatal("expected cron to fail for 7-field")
+	}
+}
+
+func TestRuleDataURI(t *testing.T) {
+	v := New()
+	if err := v.Var("data:text/plain;base64,SGVsbG8=", "datauri"); err != nil {
+		t.Fatal("expected datauri to pass for valid data URI")
+	}
+	if err := v.Var("data:text/html,Hello", "datauri"); err != nil {
+		t.Fatal("expected datauri to pass for simple data URI")
+	}
+	if err := v.Var("http://example.com", "datauri"); err == nil {
+		t.Fatal("expected datauri to fail for non-data URI")
+	}
+	if err := v.Var("data:", "datauri"); err == nil {
+		t.Fatal("expected datauri to fail for empty data URI")
+	}
+}
+
+func TestRuleBCP47(t *testing.T) {
+	v := New()
+	if err := v.Var("en", "bcp47"); err != nil {
+		t.Fatal("expected bcp47 to pass for 'en'")
+	}
+	if err := v.Var("zh-CN", "bcp47"); err != nil {
+		t.Fatal("expected bcp47 to pass for 'zh-CN'")
+	}
+	if err := v.Var("en-US", "bcp47"); err != nil {
+		t.Fatal("expected bcp47 to pass for 'en-US'")
+	}
+	if err := v.Var("sr-Latn-RS", "bcp47"); err != nil {
+		t.Fatal("expected bcp47 to pass for 'sr-Latn-RS'")
+	}
+	if err := v.Var("1", "bcp47"); err == nil {
+		t.Fatal("expected bcp47 to fail for single digit")
+	}
+}
+
+func TestRuleEthAddr(t *testing.T) {
+	v := New()
+	if err := v.Var("0x742d35Cc6634C0532925a3b844Bc9e7595f2bD38", "eth_addr"); err != nil {
+		t.Fatal("expected eth_addr to pass for valid address")
+	}
+	if err := v.Var("0x0000000000000000000000000000000000000000", "eth_addr"); err != nil {
+		t.Fatal("expected eth_addr to pass for zero address")
+	}
+	if err := v.Var("742d35Cc6634C0532925a3b844Bc9e7595f2bD38", "eth_addr"); err == nil {
+		t.Fatal("expected eth_addr to fail without 0x prefix")
+	}
+	if err := v.Var("0x1234", "eth_addr"); err == nil {
+		t.Fatal("expected eth_addr to fail for too short")
+	}
+}
+
+func TestRuleBtcAddr(t *testing.T) {
+	v := New()
+	if err := v.Var("1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa", "btc_addr"); err != nil {
+		t.Fatal("expected btc_addr to pass for legacy address")
+	}
+	if err := v.Var("not-a-btc-address", "btc_addr"); err == nil {
+		t.Fatal("expected btc_addr to fail for invalid address")
+	}
+}
+
+func TestRuleSemverNonString(t *testing.T) {
+	v := New()
+	if err := v.Var(123, "semver"); err == nil {
+		t.Fatal("expected semver to fail for non-string")
+	}
+}
+
+func TestRuleISBN10NonString(t *testing.T) {
+	v := New()
+	if err := v.Var(123, "isbn10"); err == nil {
+		t.Fatal("expected isbn10 to fail for non-string")
+	}
+}
+
+func TestRuleISBN13NonString(t *testing.T) {
+	v := New()
+	if err := v.Var(123, "isbn13"); err == nil {
+		t.Fatal("expected isbn13 to fail for non-string")
+	}
+}
+
+func TestRuleISSNNonString(t *testing.T) {
+	v := New()
+	if err := v.Var(123, "issn"); err == nil {
+		t.Fatal("expected issn to fail for non-string")
+	}
+}
+
+func TestRuleBICNonString(t *testing.T) {
+	v := New()
+	if err := v.Var(123, "bic"); err == nil {
+		t.Fatal("expected bic to fail for non-string")
+	}
+}
+
+func TestRuleCronNonString(t *testing.T) {
+	v := New()
+	if err := v.Var(123, "cron"); err == nil {
+		t.Fatal("expected cron to fail for non-string")
+	}
+}
+
+func TestRuleDataURINonString(t *testing.T) {
+	v := New()
+	if err := v.Var(123, "datauri"); err == nil {
+		t.Fatal("expected datauri to fail for non-string")
+	}
+}
+
+func TestRuleBCP47NonString(t *testing.T) {
+	v := New()
+	if err := v.Var(123, "bcp47"); err == nil {
+		t.Fatal("expected bcp47 to fail for non-string")
+	}
+}
+
+func TestRuleEthAddrNonString(t *testing.T) {
+	v := New()
+	if err := v.Var(123, "eth_addr"); err == nil {
+		t.Fatal("expected eth_addr to fail for non-string")
+	}
+}
+
+func TestRuleBtcAddrNonString(t *testing.T) {
+	v := New()
+	if err := v.Var(123, "btc_addr"); err == nil {
+		t.Fatal("expected btc_addr to fail for non-string")
+	}
+}
+
+func TestRuleURIMailto(t *testing.T) {
+	v := New()
+	if err := v.Var("mailto:user@example.com", "uri"); err != nil {
+		t.Fatal("expected uri to pass for mailto scheme")
+	}
+}
+
+func TestRuleURITel(t *testing.T) {
+	v := New()
+	if err := v.Var("tel:+1-234-567-8900", "uri"); err != nil {
+		t.Fatal("expected uri to pass for tel scheme")
+	}
+}
+
+func TestRuleURINoScheme(t *testing.T) {
+	v := New()
+	if err := v.Var("no-scheme-here", "uri"); err == nil {
+		t.Fatal("expected uri to fail for no scheme")
+	}
+}
+
+func TestRuleURLEmptyHost(t *testing.T) {
+	v := New()
+	if err := v.Var("https://", "url"); err == nil {
+		t.Fatal("expected url to fail for empty host")
+	}
+}
+
+func TestRuleLowercaseEmpty(t *testing.T) {
+	v := New()
+	if err := v.Var("", "lowercase"); err != nil {
+		t.Fatal("expected lowercase to pass for empty string")
+	}
+}
+
+func TestRuleUppercaseEmpty(t *testing.T) {
+	v := New()
+	if err := v.Var("", "uppercase"); err != nil {
+		t.Fatal("expected uppercase to pass for empty string")
+	}
+}
+
+func TestRuleLowercaseMixedDigits(t *testing.T) {
+	v := New()
+	if err := v.Var("hello123", "lowercase"); err != nil {
+		t.Fatal("expected lowercase to pass for lowercase+digits")
+	}
+	if err := v.Var("Hello123", "lowercase"); err == nil {
+		t.Fatal("expected lowercase to fail for mixed case+digits")
+	}
+}
+
+func TestRuleUppercaseMixedDigits(t *testing.T) {
+	v := New()
+	if err := v.Var("HELLO123", "uppercase"); err != nil {
+		t.Fatal("expected uppercase to pass for uppercase+digits")
+	}
+	if err := v.Var("Hello123", "uppercase"); err == nil {
+		t.Fatal("expected uppercase to fail for mixed case+digits")
 	}
 }

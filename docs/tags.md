@@ -1638,6 +1638,168 @@ type Req struct {
 
 ***
 
+## 专业格式校验
+
+### `semver`
+
+**场景**：验证语义化版本号（Semantic Versioning）
+
+```go
+type Req struct {
+    Version string `validate:"semver"`
+}
+```
+
+**通过**：`"1.2.3"`、`"v1.0.0-alpha.1"`、`"2.0.0+build.123"`  **不通过**：`"1.2"`、`"1"`、`"abc"`
+
+**校验逻辑**：正则匹配 `v?主版本.次版本.修订版[-预发布][+构建元数据]`，预发布和构建元数据可选
+
+***
+
+### `isbn10`
+
+**场景**：验证 ISBN-10 国际标准书号
+
+```go
+type Req struct {
+    BookCode string `validate:"isbn10"`
+}
+```
+
+**通过**：`"0471958697"`、`"080442957X"`  **不通过**：`"0471958698"`（校验位错误）、`"123456789"`
+
+**校验逻辑**：10 位数字（最后一位可为 X 表示 10），加权求和 `∑(dᵢ × (11-i))` 必须能被 11 整除。自动去除横线和空格
+
+***
+
+### `isbn13`
+
+**场景**：验证 ISBN-13 国际标准书号
+
+```go
+type Req struct {
+    BookCode string `validate:"isbn13"`
+}
+```
+
+**通过**：`"9780471117094"`  **不通过**：`"9780471117095"`（校验位错误）
+
+**校验逻辑**：13 位数字，奇数位权重 1、偶数位权重 3，加权求和必须能被 10 整除。自动去除横线和空格
+
+***
+
+### `issn`
+
+**场景**：验证 ISSN 国际标准连续出版物号
+
+```go
+type Req struct {
+    SerialCode string `validate:"issn"`
+}
+```
+
+**通过**：`"0317847X"`、`"0317-847X"`  **不通过**：`"03178470"`（校验位错误）
+
+**校验逻辑**：8 位字符（最后一位可为 X 表示 10），加权求和 `∑(dᵢ × (9-i))` 必须能被 11 整除。自动去除横线
+
+***
+
+### `bic`
+
+**场景**：验证 BIC/SWIFT 银行识别码
+
+```go
+type Req struct {
+    SwiftCode string `validate:"bic"`
+}
+```
+
+**通过**：`"CHASUS33"`、`"CHASUS33XXX"`  **不通过**：`"INVALID"`、`"AB"`
+
+**校验逻辑**：正则匹配 8 或 11 位，前 4 位字母（银行代码）、2 位字母（国家代码）、2 位字母数字（地区代码）、可选 3 位字母数字（分行代码）
+
+***
+
+### `cron`
+
+**场景**：验证 cron 表达式格式
+
+```go
+type Req struct {
+    Schedule string `validate:"cron"`
+}
+```
+
+**通过**：`"*/5 * * * *"`、`"0 6 * * 1-5"`  **不通过**：`"* * * *"`（4 字段）、`"* * * * * * *"`（7 字段）
+
+**校验逻辑**：必须为 5 或 6 个空白分隔的字段，每个字段为非空字符串
+
+***
+
+### `datauri`
+
+**场景**：验证 Data URI（RFC 2397）
+
+```go
+type Req struct {
+    Avatar string `validate:"datauri"`
+}
+```
+
+**通过**：`"data:text/plain;base64,SGVsbG8="`、`"data:text/html,Hello"`  **不通过**：`"http://example.com"`、`"data:,"`
+
+**校验逻辑**：正则匹配 `data:[<mediatype>][;base64],<data>` 格式
+
+***
+
+### `bcp47`
+
+**场景**：验证 BCP 47 语言标签
+
+```go
+type Req struct {
+    Locale string `validate:"bcp47"`
+}
+```
+
+**通过**：`"en"`、`"zh-CN"`、`"sr-Latn-RS"`  **不通过**：`"1"`、`"a"`
+
+**校验逻辑**：正则匹配 `语言[-脚本][-地区][-扩展]` 格式，语言 2-3 字母，脚本 4 字母，地区 2 字母或 3 数字
+
+***
+
+### `eth_addr`
+
+**场景**：验证以太坊地址
+
+```go
+type Req struct {
+    Wallet string `validate:"eth_addr"`
+}
+```
+
+**通过**：`"0x742d35Cc6634C0532925a3b844Bc9e7595f2bD38"`  **不通过**：`"0x1234"`、`"742d35Cc6634C0532925a3b844Bc9e7595f2bD38"`
+
+**校验逻辑**：以 `0x` 开头，后跟 40 位十六进制字符，总长度 42
+
+***
+
+### `btc_addr`
+
+**场景**：验证比特币地址
+
+```go
+type Req struct {
+    Wallet string `validate:"btc_addr"`
+}
+```
+
+**通过**：`"1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"`（Legacy）、`"3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy"`（P2SH）  **不通过**：`"not-a-btc-address"`
+
+**校验逻辑**：正则匹配 Legacy（1 开头 25-34 位）、P2SH（3 开头 25-34 位）或 Bech32（bc1q 开头 39-59 位）格式
+
+***
+
 ## 特殊标识
 
 ### `mongodb`

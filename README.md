@@ -17,7 +17,7 @@
 ## ✨ 特性
 
 - 🚀 **零第三方依赖** — 仅依赖 Go 标准库，供应链安全无忧
-- 🏷️ **87+ 内置字段规则** — required、min/max、email、IP、UUID、datetime、Luhn 校验等
+- 🏷️ **97+ 内置字段规则** — required、min/max、email、IP、UUID、datetime、Luhn 校验、semver、ISBN、ISSN、BIC/SWIFT、cron、Data URI、BCP 47、以太坊/比特币地址等
 - 🔗 **跨字段规则** — range（范围校验）、fieldcontains（字段包含）、requiredWithout 等
 - 🌍 **i18n 原生支持** — 内置 9 种语言翻译（en/zh/zh-TW/ja/ko/fr/de/es/ru），一行代码切换，可扩展任意语言
 - 🔄 **go-playground/validator 兼容** — struct tag 语法和 API 高度兼容，迁移成本极低
@@ -26,7 +26,7 @@
 - 🛠️ **自定义规则** — 支持 `RegisterValidation` 注册自定义校验函数，支持 context 透传
 - 📊 **数组化错误输出** — `TranslateValidationErrors` 直接输出可序列化的 JSON 错误
 - 🌐 **网关工具** — IP 黑白名单（CIDR/通配符）、HTTP 状态码、Header、Content-Type、JSON Path 校验
-- 📎 **格式校验** — email、IP、UUID、base64、URL、协议、WebSocket
+- 📎 **格式校验** — email、IP、UUID、base64、URL、URI（含 mailto/tel）、协议、WebSocket、semver、ISBN-10/13、ISSN、BIC/SWIFT、cron、Data URI、BCP 47 语言标签、以太坊/比特币地址
 - 📦 **泛型枚举校验器** — `NewEnumValidator[T]` 类型安全的枚举值校验
 - 🔀 **标签逗号转义** — `\,` 在参数中保留逗号，`|` 作为替代分隔符
 - 🛑 **规则执行策略** — 单字段失败即短路，其他字段不受影响
@@ -205,7 +205,7 @@ Argus 与 `go-playground/validator/v10` 的完整性能对比见 [go-argus-bench
 | `NestedWorkspace_Valid` | **1014 ns** / 192 B / 5 allocs | 3249 ns / 992 B / 33 allocs | 🚀 **3.2×** |
 | `SimpleUser_Valid` | **341 ns** / 0 B / 0 allocs | 810 ns / 98 B / 5 allocs | 🚀 **2.4×** |
 
-> 主要优化手段：手写 email 解析器替代 `net/mail`、预编译规则分发表、`sync.Pool` 错误对象复用、零分配 `isEmptyValue` 等。详见 [go-argus-benchmark](https://github.com/kamalyes/go-argus-benchmark)。
+> 主要优化手段：手写 email 解析器替代 `net/mail`、预编译规则分发表、`sync.Pool` 错误对象复用、零分配 `isEmptyValue`、零分配 lowercase/uppercase 字节检查、`json.NewDecoder` 替代 `json.Valid`、轻量 URL/URI 解析替代 `net/url` 等。详见 [go-argus-benchmark](https://github.com/kamalyes/go-argus-benchmark)。
 
 ---
 
