@@ -1,0 +1,50 @@
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - "**"
+      - "!docs/**"
+      - "!**.md"
+  pull_request:
+    paths:
+      - "**"
+      - "!docs/**"
+      - "!**.md"
+
+name: Test
+jobs:
+  Build:
+    strategy:
+      matrix:
+        go-version: [1.21.x, 1.22.x]
+        platform: [ubuntu-latest, windows-latest, macos-latest, macos-14]
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - name: Fetch Repository
+        uses: actions/checkout@v5
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - name: Install gotestsum
+        run: go install gotest.tools/gotestsum@v1.12.2
+
+      - name: Test
+        run: gotestsum -f testname -- ./... -race -count=1 -shuffle=on
+        continue-on-error: true
+
+      - name: Test with Coverage
+        run: gotestsum -f testname -- ./... -race -count=1 -coverprofile=coverage.txt -covermode=atomic -shuffle=on
+        continue-on-error: true
+
+      - name: Upload coverage reports to Codecov
+        if: ${{ matrix.platform == 'ubuntu-latest' && matrix.go-version == '1.22.x' }}
+        uses: codecov/codecov-action@v4.5.0
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file: ./coverage.txt
+          flags: unittests
+          slug: kamalyes/go-argus

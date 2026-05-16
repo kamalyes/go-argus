@@ -1,0 +1,20 @@
+version: v1
+labels:
+    -   label: '📒 Documentation'
+        matcher:
+            title: '(docs|doc:|\[doc\]|README|typos|comment|documentation)'
+    -   label: '☢️ Bug'
+        matcher:
+            title: '(fix|race|bug|missing|correct)'
+    -   label: '🧹 Updates'
+        matcher:
+            title: '(improve|update|refactor|deprecated|remove|unused|test)'
+    -   label: '🤖 Dependencies'
+        matcher:
+            title: '(bumb|bdependencies)'
+    -   label: '✏️ Feature'
+        matcher:
+            title: '(feature|feat|create|implement|add)'
+    -   label: '🤔 Question'
+        matcher:
+            title: '(question|how)'
