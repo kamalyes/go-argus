@@ -174,22 +174,128 @@ func ValidateBase64(str string) CompareResult {
 
 // IsEmail 判断字符串是否为有效 Email
 func IsEmail(email string) bool {
-	return ValidateEmail(email).Success
+	email = strings.TrimSpace(email)
+	if email == "" {
+		return false
+	}
+	n := len(email)
+	if n > 254 {
+		return false
+	}
+	at := strings.LastIndex(email, "@")
+	if at <= 0 || at == n-1 {
+		return false
+	}
+	local := email[:at]
+	domain := email[at+1:]
+	if local == "" || len(local) > 64 {
+		return false
+	}
+	if !isEmailLocal(local) {
+		return false
+	}
+	if !isEmailDomain(domain) {
+		return false
+	}
+	return true
+}
+
+func isEmailLocal(local string) bool {
+	for i := 0; i < len(local); i++ {
+		c := local[i]
+		if c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' {
+			continue
+		}
+		if c == '.' || c == '!' || c == '#' || c == '$' || c == '%' || c == '&' || c == '\'' {
+			continue
+		}
+		if c == '*' || c == '+' || c == '/' || c == '=' || c == '?' || c == '^' || c == '_' || c == '`' {
+			continue
+		}
+		if c == '{' || c == '|' || c == '}' || c == '~' || c == '-' {
+			continue
+		}
+		return false
+	}
+	if local[0] == '.' || local[len(local)-1] == '.' {
+		return false
+	}
+	for i := 0; i < len(local)-1; i++ {
+		if local[i] == '.' && local[i+1] == '.' {
+			return false
+		}
+	}
+	return true
+}
+
+func isEmailDomain(domain string) bool {
+	if domain == "" || len(domain) > 253 {
+		return false
+	}
+	if domain[0] == '.' || domain[len(domain)-1] == '.' {
+		return false
+	}
+	hasDot := false
+	start := 0
+	for i := 0; i <= len(domain); i++ {
+		if i == len(domain) || domain[i] == '.' {
+			if i == start {
+				return false
+			}
+			if !isDomainLabel(domain[start:i]) {
+				return false
+			}
+			if i < len(domain) {
+				if i > 0 && domain[i-1] == '.' {
+					return false
+				}
+				hasDot = true
+			}
+			start = i + 1
+		}
+	}
+	return hasDot
+}
+
+func isDomainLabel(label string) bool {
+	if label == "" || len(label) > 63 {
+		return false
+	}
+	if label[0] == '-' || label[len(label)-1] == '-' {
+		return false
+	}
+	for i := 0; i < len(label); i++ {
+		c := label[i]
+		if c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 // IsIP 判断字符串是否为有效 IP
 func IsIP(ip string) bool {
-	return ValidateIPAddress(ip).Success
+	return net.ParseIP(strings.TrimSpace(ip)) != nil
 }
 
 // IsUUID 判断字符串是否为有效 UUID
 func IsUUID(uuid string) bool {
-	return ValidateUUID(uuid).Success
+	return uuidRegex.MatchString(strings.TrimSpace(uuid))
 }
 
 // IsBase64 判断字符串是否为有效 Base64
 func IsBase64(str string) bool {
-	return ValidateBase64(str).Success
+	str = strings.TrimSpace(str)
+	if str == "" {
+		return false
+	}
+	for _, enc := range []*base64.Encoding{base64.StdEncoding, base64.URLEncoding, base64.RawStdEncoding, base64.RawURLEncoding} {
+		if _, err := enc.DecodeString(str); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 // ValidateIP 校验 IP 地址格式（ValidateIPAddress 的别名，兼容旧 API）

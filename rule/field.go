@@ -24,6 +24,12 @@ func FieldByPath(root reflect.Value, path string) (reflect.Value, bool) {
 	if !root.IsValid() || path == "" {
 		return reflect.Value{}, false
 	}
+	if !strings.ContainsRune(path, '.') {
+		if !root.IsValid() || root.Kind() != reflect.Struct {
+			return reflect.Value{}, false
+		}
+		return directField(root, path)
+	}
 	current := root
 	for _, part := range strings.Split(path, ".") {
 		part = strings.TrimSpace(part)
@@ -46,6 +52,14 @@ func FieldByPath(root reflect.Value, path string) (reflect.Value, bool) {
 // IsRequiredIf 判断 required_if 条件是否触发
 func IsRequiredIf(parent reflect.Value, param string) bool {
 	parts := strings.Fields(param)
+	return isRequiredIfParts(parent, parts)
+}
+
+func IsRequiredIfFast(parent reflect.Value, parts []string) bool {
+	return isRequiredIfParts(parent, parts)
+}
+
+func isRequiredIfParts(parent reflect.Value, parts []string) bool {
 	if len(parts) < 2 || len(parts)%2 != 0 {
 		return false
 	}
@@ -116,11 +130,16 @@ func directField(current reflect.Value, name string) (reflect.Value, bool) {
 		if sf.PkgPath != "" {
 			continue
 		}
-		candidates := fieldNames(sf)
-		for _, candidate := range candidates {
-			if candidate == name {
+		if sf.Name == name {
+			return current.Field(i), true
+		}
+		if jsonTag := sf.Tag.Get("json"); jsonTag != "" {
+			if jsonName, _, _ := strings.Cut(jsonTag, ","); jsonName == name && jsonName != "-" {
 				return current.Field(i), true
 			}
+		}
+		if lowerCamel(sf.Name) == name || snakeCase(sf.Name) == name {
+			return current.Field(i), true
 		}
 	}
 	return reflect.Value{}, false

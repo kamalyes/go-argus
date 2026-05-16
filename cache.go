@@ -19,17 +19,20 @@ import (
 )
 
 type rulePlan struct {
-	name  string
-	param string
+	name       string
+	param      string
+	paramParts []string
 }
 
 type fieldPlan struct {
-	index       []int
-	name        string
-	altName     string
-	typ         reflect.Type
-	rules       []rulePlan
-	hasValidate bool
+	index          []int
+	name           string
+	altName        string
+	typ            reflect.Type
+	rules          []rulePlan
+	hasValidate    bool
+	nsPrefix       string
+	structNsPrefix string
 }
 
 type structPlan struct {
@@ -42,12 +45,11 @@ func (v *Validate) compileStruct(t reflect.Type) *structPlan {
 		return cached.(*structPlan)
 	}
 
-	plan := &structPlan{name: t.Name(), fields: make([]fieldPlan, 0, t.NumField())}
+	typeName := t.Name()
+	plan := &structPlan{name: typeName, fields: make([]fieldPlan, 0, t.NumField())}
 	for i := 0; i < t.NumField(); i++ {
 		sf := t.Field(i)
-		if sf.Anonymous && sf.Type.Kind() == reflect.Struct {
-			// Embedded structs are handled as normal fields by reflection below.
-		}
+		// if sf.Anonymous && sf.Type.Kind() == reflect.Struct {}
 		if sf.PkgPath != "" && !v.privateFieldValidation {
 			continue
 		}
@@ -57,13 +59,16 @@ func (v *Validate) compileStruct(t reflect.Type) *structPlan {
 			continue
 		}
 
+		altName := v.resolveFieldName(sf)
 		fp := fieldPlan{
-			index:       sf.Index,
-			name:        sf.Name,
-			altName:     v.resolveFieldName(sf),
-			typ:         sf.Type,
-			rules:       parseRules(tag),
-			hasValidate: tag != "",
+			index:          sf.Index,
+			name:           sf.Name,
+			altName:        altName,
+			typ:            sf.Type,
+			rules:          parseRules(tag),
+			hasValidate:    tag != "",
+			nsPrefix:       joinNS(typeName, altName),
+			structNsPrefix: joinNS(typeName, sf.Name),
 		}
 		plan.fields = append(plan.fields, fp)
 	}
@@ -91,7 +96,17 @@ func parseRules(tag string) []rulePlan {
 	parsed := rule.ParseTag(tag)
 	rules := make([]rulePlan, 0, len(parsed))
 	for _, item := range parsed {
-		rules = append(rules, rulePlan{name: item.Name, param: item.Param})
+		rp := rulePlan{name: item.Name, param: item.Param}
+		switch item.Name {
+		case "oneof", "oneofci", "noneof", "noneofci",
+			"required_with", "required_with_all", "required_without", "required_without_all",
+			"excluded_with", "excluded_with_all", "excluded_without", "excluded_without_all",
+			"required_if", "required_unless", "excluded_if", "excluded_unless":
+			if item.Param != "" {
+				rp.paramParts = strings.Fields(item.Param)
+			}
+		}
+		rules = append(rules, rp)
 	}
 	return rules
 }

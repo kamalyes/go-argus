@@ -39,7 +39,13 @@ func IsEmptyValueWithStruct(v reflect.Value, requiredStructEnabled bool) bool {
 	case reflect.Array, reflect.Map, reflect.Slice:
 		return v.Len() == 0
 	case reflect.String:
-		return strings.TrimSpace(v.String()) == ""
+		s := v.String()
+		for i := 0; i < len(s); i++ {
+			if s[i] != ' ' && s[i] != '\t' && s[i] != '\n' && s[i] != '\r' {
+				return false
+			}
+		}
+		return true
 	case reflect.Bool:
 		return !v.Bool()
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
@@ -93,6 +99,9 @@ func StringValue(v reflect.Value) string {
 	v = DerefReflect(v)
 	if !v.IsValid() {
 		return ""
+	}
+	if v.Kind() == reflect.String {
+		return v.String()
 	}
 	if v.CanInterface() {
 		return fmt.Sprint(v.Interface())

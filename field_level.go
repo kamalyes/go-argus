@@ -52,30 +52,30 @@ type fieldLevel struct {
 	param           string
 }
 
-func (fl fieldLevel) Top() reflect.Value {
+func (fl *fieldLevel) Top() reflect.Value {
 	return fl.top
 }
 
-func (fl fieldLevel) Parent() reflect.Value {
+func (fl *fieldLevel) Parent() reflect.Value {
 	return fl.parent
 }
 
-func (fl fieldLevel) Field() reflect.Value {
+func (fl *fieldLevel) Field() reflect.Value {
 	return fl.field
 }
 
-func (fl fieldLevel) FieldName() string {
+func (fl *fieldLevel) FieldName() string {
 	return fl.fieldName
 }
 
-func (fl fieldLevel) StructFieldName() string {
+func (fl *fieldLevel) StructFieldName() string {
 	return fl.structFieldName
 }
 
-func (fl fieldLevel) GetTag() string {
+func (fl *fieldLevel) GetTag() string {
 	return fl.tag
 }
 
-func (fl fieldLevel) Param() string {
+func (fl *fieldLevel) Param() string {
 	return fl.param
 }

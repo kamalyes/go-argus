@@ -153,17 +153,17 @@ func ruleDefault(field reflect.Value, _ string, requiredStructEnabled bool) bool
 
 func ruleMin(field reflect.Value, param string, _ bool) bool {
 	n, ok := parseFloat(param)
-	return ok && compareLengthOrNumber(field, n, func(actual, expect float64) bool { return actual >= expect })
+	return ok && compareLengthOrNumber(field, n, cmpGTE)
 }
 
 func ruleMax(field reflect.Value, param string, _ bool) bool {
 	n, ok := parseFloat(param)
-	return ok && compareLengthOrNumber(field, n, func(actual, expect float64) bool { return actual <= expect })
+	return ok && compareLengthOrNumber(field, n, cmpLTE)
 }
 
 func ruleLen(field reflect.Value, param string, _ bool) bool {
 	n, ok := parseFloat(param)
-	return ok && compareLengthOrNumber(field, n, func(actual, expect float64) bool { return actual == expect })
+	return ok && compareLengthOrNumber(field, n, cmpEQ)
 }
 
 func ruleEq(field reflect.Value, param string, _ bool) bool {
@@ -188,22 +188,22 @@ func ruleNeIgnoreCase(field reflect.Value, param string, _ bool) bool {
 
 func ruleGt(field reflect.Value, param string, _ bool) bool {
 	n, ok := parseFloat(param)
-	return ok && compareLengthOrNumber(field, n, func(actual, expect float64) bool { return actual > expect })
+	return ok && compareLengthOrNumber(field, n, cmpGT)
 }
 
 func ruleGte(field reflect.Value, param string, _ bool) bool {
 	n, ok := parseFloat(param)
-	return ok && compareLengthOrNumber(field, n, func(actual, expect float64) bool { return actual >= expect })
+	return ok && compareLengthOrNumber(field, n, cmpGTE)
 }
 
 func ruleLt(field reflect.Value, param string, _ bool) bool {
 	n, ok := parseFloat(param)
-	return ok && compareLengthOrNumber(field, n, func(actual, expect float64) bool { return actual < expect })
+	return ok && compareLengthOrNumber(field, n, cmpLT)
 }
 
 func ruleLte(field reflect.Value, param string, _ bool) bool {
 	n, ok := parseFloat(param)
-	return ok && compareLengthOrNumber(field, n, func(actual, expect float64) bool { return actual <= expect })
+	return ok && compareLengthOrNumber(field, n, cmpLTE)
 }
 
 func ruleAlpha(field reflect.Value, _ string, _ bool) bool {
@@ -758,22 +758,47 @@ func ruleDNSRFC1035Label(field reflect.Value, _ string, _ bool) bool {
 	return ok && len(s) <= 63 && dnsLabelRegex.MatchString(s)
 }
 
-func compareLengthOrNumber(field reflect.Value, expect float64, cmp func(float64, float64) bool) bool {
+type cmpOp int
+
+const (
+	cmpGTE cmpOp = iota
+	cmpLTE
+	cmpGT
+	cmpLT
+	cmpEQ
+)
+
+func compareLengthOrNumber(field reflect.Value, expect float64, op cmpOp) bool {
 	field = derefValue(field)
 	if !field.IsValid() {
 		return false
 	}
+	var actual float64
 	switch field.Kind() {
 	case reflect.String:
-		return cmp(float64(utf8.RuneCountInString(field.String())), expect)
+		actual = float64(utf8.RuneCountInString(field.String()))
 	case reflect.Slice, reflect.Array, reflect.Map:
-		return cmp(float64(field.Len()), expect)
+		actual = float64(field.Len())
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return cmp(float64(field.Int()), expect)
+		actual = float64(field.Int())
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
-		return cmp(float64(field.Uint()), expect)
+		actual = float64(field.Uint())
 	case reflect.Float32, reflect.Float64:
-		return cmp(field.Float(), expect)
+		actual = field.Float()
+	default:
+		return false
+	}
+	switch op {
+	case cmpGTE:
+		return actual >= expect
+	case cmpLTE:
+		return actual <= expect
+	case cmpGT:
+		return actual > expect
+	case cmpLT:
+		return actual < expect
+	case cmpEQ:
+		return actual == expect
 	default:
 		return false
 	}
