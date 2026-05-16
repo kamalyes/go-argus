@@ -192,6 +192,50 @@ v := validator.New()
 
 ---
 
+## 🚀 性能基准测试
+
+Argus 与 `go-playground/validator/v10` 的完整性能对比见 [go-argus-benchmark](https://github.com/kamalyes/go-argus-benchmark)。
+
+**核心结论：Argus 在 13 个测试场景中赢得 12 个**，顺序执行平均 **2.4× 更快**，并行执行平均 **2.9× 更快**，简单校验零内存分配。
+
+| 场景 | Argus | validator/v10 | 优势 |
+|------|------:|--------------:|:----:|
+| `Var_Email_Valid` | **87 ns** / 0 B / 0 allocs | 626 ns / 98 B / 5 allocs | 🚀 **7.2×** |
+| `NestedWorkspace_Valid_Parallel` | **171 ns** / 192 B / 5 allocs | 768 ns / 1007 B / 33 allocs | 🚀 **4.5×** |
+| `NestedWorkspace_Valid` | **1014 ns** / 192 B / 5 allocs | 3249 ns / 992 B / 33 allocs | 🚀 **3.2×** |
+| `SimpleUser_Valid` | **341 ns** / 0 B / 0 allocs | 810 ns / 98 B / 5 allocs | 🚀 **2.4×** |
+
+> 主要优化手段：手写 email 解析器替代 `net/mail`、预编译规则分发表、`sync.Pool` 错误对象复用、零分配 `isEmptyValue` 等。详见 [go-argus-benchmark](https://github.com/kamalyes/go-argus-benchmark)。
+
+---
+
+## 🔗 生态项目
+
+| 项目 | 说明 |
+|------|------|
+| [go-rpc-gateway](https://github.com/kamalyes/go-rpc-gateway) | 新一代企业级微服务网关框架，内置 Argus 作为 gRPC/HTTP 参数校验引擎 |
+| [go-pbmo](https://github.com/kamalyes/go-pbmo) | 高性能 Protocol Buffer ↔ Model 双向转换库，集成 Argus 字段级参数校验 |
+| [go-sqlbuilder](https://github.com/kamalyes/go-sqlbuilder) | 泛型 GORM 仓储层封装，使用 Argus 校验查询参数与模型字段 |
+| [go-toolbox](https://github.com/kamalyes/go-toolbox) | 零依赖高性能 Go 工具库，集成 Argus 校验 HTTP 参数、字符串与数据结构 |
+
+### go-rpc-gateway 集成
+
+[go-rpc-gateway](https://github.com/kamalyes/go-rpc-gateway) 开箱即集成了 Argus，提供基于 struct tag 的 gRPC 拦截器，配合 `protoc-go-inject-tag` 在 pb 生成代码上注入 `validate:"..."` 标签，无需业务方手写参数校验：
+
+```go
+import "github.com/kamalyes/go-rpc-gateway/middleware"
+
+// gRPC Unary 拦截器 — 自动校验 req 上的 validate 标签
+unary := middleware.StructTagValidatorUnaryInterceptor()
+
+// gRPC Stream 拦截器 — 自动校验每条流消息
+stream := middleware.StructTagValidatorStreamInterceptor()
+```
+
+校验失败自动返回 `codes.InvalidArgument`，字段未注入标签则跳过，不产生误报。
+
+---
+
 ## 📄 License
 
 [MIT License](LICENSE)
