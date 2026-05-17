@@ -8,7 +8,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/kamalyes/go-argus)](https://goreportcard.com/report/github.com/kamalyes/go-argus)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-[English](#) · [中文](#)
+[English](README_EN.md) · [中文](#)
 
 </div>
 
@@ -17,6 +17,7 @@
 ## ✨ 特性
 
 - 🚀 **零第三方依赖** — 仅依赖 Go 标准库，供应链安全无忧
+- ⚡ **零反射 VarString 快速路径** — 字符串变量校验完全绕过 `reflect`，0 堆分配，比反射路径快 2~3 倍
 - 🏷️ **97+ 内置字段规则** — required、min/max、email、IP、UUID、datetime、Luhn 校验、semver、ISBN、ISSN、BIC/SWIFT、cron、Data URI、BCP 47、以太坊/比特币地址等
 - 🔗 **跨字段规则** — range（范围校验）、fieldcontains（字段包含）、requiredWithout 等
 - 🌍 **i18n 原生支持** — 内置 9 种语言翻译（en/zh/zh-TW/ja/ko/fr/de/es/ru），一行代码切换，可扩展任意语言
@@ -42,9 +43,10 @@ graph TB
     end
 
     subgraph "根包 validator"
-        V["Validate 实例<br/>Struct / Var 校验"]
+        V["Validate 实例<br/>Struct / Var / VarString 校验"]
         CACHE["编译缓存<br/>structPlan"]
         TAGS["内置规则<br/>87+ builtinRules"]
+        STAGS["字符串规则<br/>stringRuleMap"]
         TRANS["错误翻译<br/>translations.go → i18n.Lookup"]
         OPTS["配置选项<br/>Option / SetLocale"]
         ERRORS["错误模型<br/>ValidationErrors"]
@@ -80,6 +82,7 @@ graph TB
     APP --> V
     V --> CACHE
     V --> TAGS
+    V --> STAGS
     V --> TRANS
     V --> OPTS
     V --> ERRORS
@@ -90,6 +93,7 @@ graph TB
     TAGS --> FORMAT
     TAGS --> COMPARE
     TAGS --> ENUM
+    STAGS --> FORMAT
 
     APP --> COMPARE
     APP --> FORMAT
@@ -108,6 +112,7 @@ graph TB
 
     style APP fill:#e1f5fe
     style V fill:#fff3e0
+    style STAGS fill:#ffe0b2
     style I18N fill:#e8f5e9
     style SCHEMA fill:#fce4ec
 ```
@@ -156,6 +161,30 @@ func main() {
 }
 ```
 
+## ⚡ VarString 零反射快速路径
+
+对于字符串变量校验场景，`VarString` 提供完全绕过 `reflect` 的零分配快速路径：
+
+```go
+v := validator.New()
+
+// 传统 Var 路径 — 通过 interface{} 装箱 + reflect
+err := v.Var("user@example.com", "email")
+
+// VarString 零反射路径 — 直接 string 参数，0 堆分配
+err = v.VarString("user@example.com", "email")
+```
+
+**工作原理：**
+
+- `VarString` 查找 `stringRuleMap`（所有字符串兼容规则的零反射实现），直接以 `string` 参数调用规则函数
+- 不支持的规则（如跨字段规则 `eqfield`、`required_if`）自动降级到 reflect 路径，功能完全兼容
+- 错误返回轻量级 `stringFieldError`，同样实现 `FieldError` 接口
+
+**支持零反射的规则：**
+
+`required` · `min` · `max` · `len` · `eq` · `ne` · `gt` · `gte` · `lt` · `lte` · `alpha` · `alphanum` · `email` · `url` · `uri` · `ip` · `ipv4` · `ipv6` · `uuid` · `uuid3/4/5` · `semver` · `isbn10/13` · `issn` · `bic` · `cron` · `base64` · `json` · `hostname` · `fqdn` · `mac` · `cidr` · `e164` · `lowercase` · `uppercase` · `boolean` · `number` · `datetime` · `latitude` · `longitude` · `eth_addr` · `btc_addr` · `bcp47` · `datauri` · `oneof` · `oneofci` · `contains` · `startswith` · `endswith` 等 70+ 规则
+
 ## 📚 文档
 
 | 文档 | 说明 |
@@ -188,7 +217,7 @@ v := validator.New()
 | i18n | 需额外安装 translator | **内置 9 种语言** |
 | JSON Schema | 不支持 | **内置** |
 | IP/CIDR/网络 | 不支持 | **内置** |
-| 比较校验 | 不支持 | **内置** |
+| 零反射字符串校验 | 不支持 | **VarString 0 allocs** |
 
 ---
 
@@ -196,7 +225,18 @@ v := validator.New()
 
 Argus 与 `go-playground/validator/v10` 的完整性能对比见 [go-argus-benchmark](https://github.com/kamalyes/go-argus-benchmark)。
 
-**核心结论：Argus 在 13 个测试场景中赢得 12 个**，顺序执行平均 **2.4× 更快**，并行执行平均 **2.9× 更快**，简单校验零内存分配。
+### VarString 零反射路径 vs Var 反射路径
+
+| 规则 | VarString (零反射) | Var (反射) | VarString 加速 |
+|------|-------------------|-----------|---------------|
+| `required` | **18 ns** / 0 B / 0 allocs | 49 ns / 16 B / 1 alloc | **2.7×** |
+| `email` | **47 ns** / 0 B / 0 allocs | 81 ns / 16 B / 1 alloc | **1.7×** |
+| `url` | **37 ns** / 0 B / 0 allocs | 64 ns / 16 B / 1 alloc | **1.7×** |
+| `semver` | **28 ns** / 0 B / 0 allocs | 57 ns / 16 B / 1 alloc | **2.0×** |
+| `isbn10` | **25 ns** / 0 B / 0 allocs | 60 ns / 16 B / 1 alloc | **2.4×** |
+| `cron` | **44 ns** / 0 B / 0 allocs | 74 ns / 16 B / 1 alloc | **1.7×** |
+
+### Argus vs go-playground/validator/v10
 
 | 场景 | Argus | validator/v10 | 优势 |
 |------|------:|--------------:|:----:|
@@ -205,7 +245,7 @@ Argus 与 `go-playground/validator/v10` 的完整性能对比见 [go-argus-bench
 | `NestedWorkspace_Valid` | **1014 ns** / 192 B / 5 allocs | 3249 ns / 992 B / 33 allocs | 🚀 **3.2×** |
 | `SimpleUser_Valid` | **341 ns** / 0 B / 0 allocs | 810 ns / 98 B / 5 allocs | 🚀 **2.4×** |
 
-> 主要优化手段：手写 email 解析器替代 `net/mail`、预编译规则分发表、`sync.Pool` 错误对象复用、零分配 `isEmptyValue`、零分配 lowercase/uppercase 字节检查、`json.NewDecoder` 替代 `json.Valid`、轻量 URL/URI 解析替代 `net/url` 等。详见 [go-argus-benchmark](https://github.com/kamalyes/go-argus-benchmark)。
+> 主要优化手段：零反射 VarString 快速路径、手写 email 解析器替代 `net/mail`、预编译规则分发表、`sync.Pool` 错误对象复用、零分配 `isEmptyValue`、零分配 lowercase/uppercase 字节检查、`json.NewDecoder` 替代 `json.Valid`、轻量 URL/URI 解析替代 `net/url` 等。详见 [go-argus-benchmark](https://github.com/kamalyes/go-argus-benchmark)。
 
 ---
 

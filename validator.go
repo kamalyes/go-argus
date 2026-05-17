@@ -158,6 +158,11 @@ func (v *Validate) Var(field interface{}, tag string) error {
 	return v.VarCtx(bgCtx, field, tag)
 }
 
+// VarString 按标签表达式校验字符串变量，零分配快速路径
+func (v *Validate) VarString(field string, tag string) error {
+	return v.VarStringCtx(bgCtx, field, tag)
+}
+
 // VarCtx 按标签表达式校验单个变量，并传递 context
 func (v *Validate) VarCtx(ctx context.Context, field interface{}, tag string) error {
 	rv := reflect.ValueOf(field)
@@ -172,6 +177,89 @@ func (v *Validate) VarCtx(ctx context.Context, field interface{}, tag string) er
 	}
 	releaseErrors(errs)
 	return nil
+}
+
+// VarStringCtx 按标签表达式校验字符串变量，零反射快速路径
+func (v *Validate) VarStringCtx(ctx context.Context, field string, tag string) error {
+	rules := v.cachedVarRules(tag)
+	for i := 0; i < len(rules); i++ {
+		r := rules[i]
+		switch r.name {
+		case "omitempty", "omitzero":
+			if isBlankString(field) {
+				return nil
+			}
+			continue
+		case "omitnil":
+			continue
+		case "structonly", "nostructlevel", "":
+			continue
+		}
+		if fn, ok := stringRuleMap[r.name]; ok {
+			if fn != nil && !fn(field, r.param) {
+				return &stringFieldError{tag: r.name, param: r.param, value: field}
+			}
+			continue
+		}
+		if r.name == "oneof" {
+			if !stringOneOf(field, r.paramParts) {
+				return &stringFieldError{tag: r.name, param: r.param, value: field}
+			}
+			continue
+		}
+		if r.name == "oneofci" {
+			if !stringOneOfCI(field, r.paramParts) {
+				return &stringFieldError{tag: r.name, param: r.param, value: field}
+			}
+			continue
+		}
+		if r.name == "noneof" {
+			if stringOneOf(field, r.paramParts) {
+				return &stringFieldError{tag: r.name, param: r.param, value: field}
+			}
+			continue
+		}
+		if r.name == "noneofci" {
+			if stringOneOfCI(field, r.paramParts) {
+				return &stringFieldError{tag: r.name, param: r.param, value: field}
+			}
+			continue
+		}
+		return v.varStringReflectPath(ctx, field, rules)
+	}
+	return nil
+}
+
+func (v *Validate) varStringReflectPath(ctx context.Context, field string, rules []rulePlan) error {
+	rv := reflect.ValueOf(field)
+	errs := acquireErrors()
+	v.applyRules(ctx, reflect.Value{}, rv, rv, "", "", "", "", rules, errs)
+	if len(*errs) > 0 {
+		result := make(ValidationErrors, len(*errs))
+		copy(result, *errs)
+		releaseErrors(errs)
+		return result
+	}
+	releaseErrors(errs)
+	return nil
+}
+
+func stringOneOf(s string, parts []string) bool {
+	for _, item := range parts {
+		if s == item {
+			return true
+		}
+	}
+	return false
+}
+
+func stringOneOfCI(s string, parts []string) bool {
+	for _, item := range parts {
+		if strings.EqualFold(s, item) {
+			return true
+		}
+	}
+	return false
 }
 
 func (v *Validate) cachedVarRules(tag string) []rulePlan {
