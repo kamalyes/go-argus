@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2026-05-17 11:11:08
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2026-05-17 11:11:08
+ * @LastEditTime: 2026-05-17 15:57:07
  * @FilePath: \go-argus\string_rules.go
  * @Description: Argus 字符串规则实现
  *
@@ -132,10 +132,6 @@ var stringRuleMap = map[string]stringRuleFunc{
 	"bcp47":             stringBCP47,
 	"eth_addr":          stringEthAddr,
 	"btc_addr":          stringBtcAddr,
-	"oneof":             nil,
-	"oneofci":           nil,
-	"noneof":            nil,
-	"noneofci":          nil,
 }
 
 func isBlankString(s string) bool {

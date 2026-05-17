@@ -2,80 +2,80 @@
 
 # ⚡ Argus
 
-**零依赖 · 高性能 · i18n 原生支持的 Go 结构体校验器**
+**Zero-dependency · High-performance · i18n-native Go struct validator**
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/kamalyes/go-argus.svg)](https://pkg.go.dev/github.com/kamalyes/go-argus)
 [![Go Report Card](https://goreportcard.com/badge/github.com/kamalyes/go-argus)](https://goreportcard.com/report/github.com/kamalyes/go-argus)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-[English](README_EN.md) · [中文](#)
+[English](#) · [中文](README_ZH.md)
 
 </div>
 
 ---
 
-## ✨ 特性
+## ✨ Features
 
-- 🚀 **零第三方依赖** — 仅依赖 Go 标准库，供应链安全无忧
-- ⚡ **零反射 VarString 快速路径** — 字符串变量校验完全绕过 `reflect`，0 堆分配，比反射路径快 2~3 倍
-- 🏷️ **97+ 内置字段规则** — required、min/max、email、IP、UUID、datetime、Luhn 校验、semver、ISBN、ISSN、BIC/SWIFT、cron、Data URI、BCP 47、以太坊/比特币地址等
-- 🔗 **跨字段规则** — range（范围校验）、fieldcontains（字段包含）、requiredWithout 等
-- 🌍 **i18n 原生支持** — 内置 9 种语言翻译（en/zh/zh-TW/ja/ko/fr/de/es/ru），一行代码切换，可扩展任意语言
-- 🔄 **go-playground/validator 兼容** — struct tag 语法和 API 高度兼容，迁移成本极低
-- 🧩 **JSON Schema 校验** — 轻量 JSON Schema 子集校验，适合 API 网关场景
-- 🔒 **并发安全** — 校验器实例可复用，struct 编译结果自动缓存
-- 🛠️ **自定义规则** — 支持 `RegisterValidation` 注册自定义校验函数，支持 context 透传
-- 📊 **数组化错误输出** — `TranslateValidationErrors` 直接输出可序列化的 JSON 错误
-- 🌐 **网关工具** — IP 黑白名单（CIDR/通配符）、HTTP 状态码、Header、Content-Type、JSON Path 校验
-- 📎 **格式校验** — email、IP、UUID、base64、URL、URI（含 mailto/tel）、协议、WebSocket、semver、ISBN-10/13、ISSN、BIC/SWIFT、cron、Data URI、BCP 47 语言标签、以太坊/比特币地址
-- 📦 **泛型枚举校验器** — `NewEnumValidator[T]` 类型安全的枚举值校验
-- 🔀 **标签逗号转义** — `\,` 在参数中保留逗号，`|` 作为替代分隔符
-- 🛑 **规则执行策略** — 单字段失败即短路，其他字段不受影响
+- 🚀 **Zero third-party dependencies** — Only Go standard library, supply-chain secure
+- ⚡ **Zero-reflection VarString fast path** — String variable validation bypasses `reflect` entirely, 0 heap allocations, 2~3× faster than reflection path
+- 🏷️ **97+ built-in field rules** — required, min/max, email, IP, UUID, datetime, Luhn checksum, semver, ISBN, ISSN, BIC/SWIFT, cron, Data URI, BCP 47, Ethereum/Bitcoin address, etc.
+- 🔗 **Cross-field rules** — range, fieldcontains, requiredWithout, etc.
+- 🌍 **i18n native support** — 9 built-in language translations (en/zh/zh-TW/ja/ko/fr/de/es/ru), switch with one line, extensible to any language
+- 🔄 **go-playground/validator compatible** — Struct tag syntax and API highly compatible, minimal migration cost
+- 🧩 **JSON Schema validation** — Lightweight JSON Schema subset validation, suitable for API gateway scenarios
+- 🔒 **Concurrency safe** — Validator instances are reusable, struct compilation results auto-cached
+- 🛠️ **Custom rules** — `RegisterValidation` for custom validation functions, context propagation supported
+- 📊 **Array-style error output** — `TranslateValidationErrors` outputs serializable JSON errors
+- 🌐 **Gateway utilities** — IP allowlist/blocklist (CIDR/wildcard), HTTP status codes, headers, content types, JSON Path validation
+- 📎 **Format validation** — email, IP, UUID, base64, URL, URI (including mailto/tel), protocol, WebSocket, semver, ISBN-10/13, ISSN, BIC/SWIFT, cron, Data URI, BCP 47 language tags, Ethereum/Bitcoin addresses
+- 📦 **Generic enum validator** — `NewEnumValidator[T]` type-safe enum value validation
+- 🔀 **Tag comma escaping** — `\,` preserves commas in parameters, `|` as alternative separator
+- 🛑 **Rule execution policy** — Short-circuit on single field failure, other fields unaffected
 
 ---
 
-## 🏗️ 架构
+## 🏗️ Architecture
 
 ```mermaid
 graph TB
-    subgraph "用户层 User Layer"
-        APP["应用代码"]
+    subgraph "User Layer"
+        APP["Application Code"]
     end
 
-    subgraph "根包 validator"
-        V["Validate 实例<br/>Struct / Var / VarString 校验"]
-        CACHE["编译缓存<br/>structPlan"]
-        TAGS["内置规则<br/>87+ builtinRules"]
-        STAGS["字符串规则<br/>stringRuleMap"]
-        TRANS["错误翻译<br/>translations.go → i18n.Lookup"]
-        OPTS["配置选项<br/>Option / SetLocale"]
-        ERRORS["错误模型<br/>ValidationErrors"]
+    subgraph "Root Package validator"
+        V["Validate Instance<br/>Struct / Var / VarString"]
+        CACHE["Compilation Cache<br/>structPlan"]
+        TAGS["Built-in Rules<br/>87+ builtinRules"]
+        STAGS["String Rules<br/>stringRuleMap"]
+        TRANS["Error Translation<br/>translations.go → i18n.Lookup"]
+        OPTS["Configuration<br/>Option / SetLocale"]
+        ERRORS["Error Model<br/>ValidationErrors"]
     end
 
-    subgraph "rule 包"
-        RPARSE["标签解析<br/>ParseTag"]
-        RFIELD["字段路径<br/>FieldByPath"]
-        RTIME["时间规则<br/>TimeValue / ResolveTimeExpr"]
+    subgraph "rule Package"
+        RPARSE["Tag Parsing<br/>ParseTag"]
+        RFIELD["Field Path<br/>FieldByPath"]
+        RTIME["Time Rules<br/>TimeValue / ResolveTimeExpr"]
     end
 
-    subgraph "validate 包"
-        COMPARE["比较校验<br/>CompareNumbers / Strings"]
-        FORMAT["格式校验<br/>Email / IP / URL / UUID / Base64"]
-        ENUM["枚举校验<br/>EnumValidator"]
-        JSON["JSON 校验<br/>ValidateJSON / JSONPath"]
-        NETWORK["网络校验<br/>IPSet / CIDR / 通配符"]
-        CONSTANTS["消息常量<br/>constants.go"]
+    subgraph "validate Package"
+        COMPARE["Comparison<br/>CompareNumbers / Strings"]
+        FORMAT["Format Validation<br/>Email / IP / URL / UUID / Base64"]
+        ENUM["Enum Validation<br/>EnumValidator"]
+        JSON["JSON Validation<br/>ValidateJSON / JSONPath"]
+        NETWORK["Network Validation<br/>IPSet / CIDR / Wildcard"]
+        CONSTANTS["Message Constants<br/>constants.go"]
     end
 
-    subgraph "i18n 包（统一翻译存储）"
-        I18N["i18n 核心<br/>SetLocale / Msg / Lookup / Register"]
+    subgraph "i18n Package (Unified Translation Store)"
+        I18N["i18n Core<br/>SetLocale / Msg / Lookup / Register"]
         I18N_EN["en.go"]
         I18N_ZH["zh.go / zh_tw.go"]
         I18N_JA["ja.go / ko.go"]
         I18N_OTHER["fr.go / de.go / es.go / ru.go"]
     end
 
-    subgraph "schema 包"
+    subgraph "schema Package"
         SCHEMA["JSON Schema<br/>ValidateJSONSchema"]
     end
 
@@ -117,15 +117,15 @@ graph TB
     style SCHEMA fill:#fce4ec
 ```
 
-## 📦 安装
+## 📦 Installation
 
 ```bash
 go get github.com/kamalyes/go-argus
 ```
 
-> 要求 Go 1.21+
+> Requires Go 1.21+
 
-## 🚀 快速开始
+## 🚀 Quick Start
 
 ```go
 package main
@@ -145,90 +145,90 @@ func main() {
     v := validator.New()
     err := v.Struct(User{Name: "A", Email: "bad", Age: -1})
 
-    // 一行切换语言
-    validator.SetLocale("zh")
-    messages := validator.TranslateValidationErrors(err, "zh")
+    // Switch language with one line
+    validator.SetLocale("en")
+    messages := validator.TranslateValidationErrors(err, "en")
     for _, msg := range messages {
         fmt.Printf("%s: %s\n", msg.Field, msg.Message)
     }
-    // 注册新语言（9 种内置语言：en/zh/zh-TW/ja/ko/fr/de/es/ru）
+    // Register new language (9 built-in: en/zh/zh-TW/ja/ko/fr/de/es/ru)
     validator.RegisterI18nMessages("pt", map[string]string{
         "required": "{field} é obrigatório",
     })
-    // name: name 不能小于 2
-    // email: email 必须是有效的 Email
-    // age: age 必须大于或等于 0
+    // name: name must be at least 2 characters
+    // email: email must be a valid email address
+    // age: age must be greater than or equal to 0
 }
 ```
 
-## ⚡ VarString 零反射快速路径
+## ⚡ VarString Zero-Reflection Fast Path
 
-对于字符串变量校验场景，`VarString` 提供完全绕过 `reflect` 的零分配快速路径：
+For string variable validation, `VarString` provides a zero-allocation fast path that completely bypasses `reflect`:
 
 ```go
 v := validator.New()
 
-// 传统 Var 路径 — 通过 interface{} 装箱 + reflect
+// Traditional Var path — interface{} boxing + reflect
 err := v.Var("user@example.com", "email")
 
-// VarString 零反射路径 — 直接 string 参数，0 堆分配
+// VarString zero-reflection path — direct string parameter, 0 heap allocations
 err = v.VarString("user@example.com", "email")
 ```
 
-**工作原理：**
+**How it works:**
 
-- `VarString` 查找 `stringRuleMap`（所有字符串兼容规则的零反射实现），直接以 `string` 参数调用规则函数
-- 不支持的规则（如跨字段规则 `eqfield`、`required_if`）自动降级到 reflect 路径，功能完全兼容
-- 错误返回轻量级 `stringFieldError`，同样实现 `FieldError` 接口
+- `VarString` looks up `stringRuleMap` (zero-reflection implementations of all string-compatible rules) and calls rule functions directly with `string` parameters
+- Unsupported rules (e.g., cross-field rules like `eqfield`, `required_if`) automatically fall back to the reflect path, maintaining full compatibility
+- Errors return lightweight `stringFieldError`, which also implements the `FieldError` interface
 
-**支持零反射的规则：**
+**Supported zero-reflection rules:**
 
-`required` · `min` · `max` · `len` · `eq` · `ne` · `gt` · `gte` · `lt` · `lte` · `alpha` · `alphanum` · `email` · `url` · `uri` · `ip` · `ipv4` · `ipv6` · `uuid` · `uuid3/4/5` · `semver` · `isbn10/13` · `issn` · `bic` · `cron` · `base64` · `json` · `hostname` · `fqdn` · `mac` · `cidr` · `e164` · `lowercase` · `uppercase` · `boolean` · `number` · `datetime` · `latitude` · `longitude` · `eth_addr` · `btc_addr` · `bcp47` · `datauri` · `oneof` · `oneofci` · `contains` · `startswith` · `endswith` 等 70+ 规则
+`required` · `min` · `max` · `len` · `eq` · `ne` · `gt` · `gte` · `lt` · `lte` · `alpha` · `alphanum` · `email` · `url` · `uri` · `ip` · `ipv4` · `ipv6` · `uuid` · `uuid3/4/5` · `semver` · `isbn10/13` · `issn` · `bic` · `cron` · `base64` · `json` · `hostname` · `fqdn` · `mac` · `cidr` · `e164` · `lowercase` · `uppercase` · `boolean` · `number` · `datetime` · `latitude` · `longitude` · `eth_addr` · `btc_addr` · `bcp47` · `datauri` · `oneof` · `oneofci` · `contains` · `startswith` · `endswith` and 70+ more rules
 
-## 📚 文档
+## 📚 Documentation
 
-| 文档 | 说明 |
-|------|------|
-| [docs/tags.md](docs/tags.md) | 所有校验标签完整参考 |
-| [docs/i18n.md](docs/i18n.md) | 国际化使用指南 |
-| [docs/examples.md](docs/examples.md) | 完整使用示例 |
+| Document | Description |
+|----------|-------------|
+| [docs/tags.md](docs/tags.md) | Complete reference for all validation tags |
+| [docs/i18n.md](docs/i18n.md) | Internationalization guide |
+| [docs/examples.md](docs/examples.md) | Complete usage examples |
 
 ---
 
-## 🔄 从 go-playground/validator 迁移
+## 🔄 Migrating from go-playground/validator
 
-Argus 的 struct tag 语法和核心 API 与 `go-playground/validator` 高度兼容：
+Argus's struct tag syntax and core API are highly compatible with `go-playground/validator`:
 
 ```go
 // go-playground/validator
 import "github.com/go-playground/validator/v10"
 v := validator.New()
 
-// Argus — 只需改 import 路径
+// Argus — just change the import path
 import "github.com/kamalyes/go-argus"
 v := validator.New()
 ```
 
-主要差异：
+Key differences:
 
-| 特性 | go-playground/validator | Argus |
-|------|------------------------|-------|
-| 第三方依赖 | 多个（如 utranslator） | **零依赖** |
-| i18n | 需额外安装 translator | **内置 9 种语言** |
-| JSON Schema | 不支持 | **内置** |
-| IP/CIDR/网络 | 不支持 | **内置** |
-| 零反射字符串校验 | 不支持 | **VarString 0 allocs** |
+| Feature | go-playground/validator | Argus |
+|---------|------------------------|-------|
+| Third-party dependencies | Multiple (e.g., utranslator) | **Zero** |
+| i18n | Requires extra translator install | **9 built-in languages** |
+| JSON Schema | Not supported | **Built-in** |
+| IP/CIDR/Network | Not supported | **Built-in** |
+| Zero-reflection string validation | Not supported | **VarString 0 allocs** |
 
 ---
 
-## 🚀 性能基准测试
+## 🚀 Performance Benchmarks
 
-Argus 与 `go-playground/validator/v10` 的完整性能对比见 [go-argus-benchmark](https://github.com/kamalyes/go-argus-benchmark)。
+Full performance comparison between Argus and `go-playground/validator/v10` is available at [go-argus-benchmark](https://github.com/kamalyes/go-argus-benchmark).
 
-### VarString 零反射路径 vs Var 反射路径
+### VarString Zero-Reflection Path vs Var Reflection Path
 
-| 规则 | VarString (零反射) | Var (反射) | VarString 加速 |
-|------|-------------------|-----------|---------------|
+| Rule | VarString (zero-reflect) | Var (reflect) | VarString Speedup |
+|------|-------------------------|---------------|-------------------|
 | `required` | **18 ns** / 0 B / 0 allocs | 49 ns / 16 B / 1 alloc | **2.7×** |
 | `email` | **47 ns** / 0 B / 0 allocs | 81 ns / 16 B / 1 alloc | **1.7×** |
 | `url` | **37 ns** / 0 B / 0 allocs | 64 ns / 16 B / 1 alloc | **1.7×** |
@@ -238,41 +238,41 @@ Argus 与 `go-playground/validator/v10` 的完整性能对比见 [go-argus-bench
 
 ### Argus vs go-playground/validator/v10
 
-| 场景 | Argus | validator/v10 | 优势 |
-|------|------:|--------------:|:----:|
+| Scenario | Argus | validator/v10 | Advantage |
+|----------|------:|--------------:|:---------:|
 | `Var_Email_Valid` | **87 ns** / 0 B / 0 allocs | 626 ns / 98 B / 5 allocs | 🚀 **7.2×** |
 | `NestedWorkspace_Valid_Parallel` | **171 ns** / 192 B / 5 allocs | 768 ns / 1007 B / 33 allocs | 🚀 **4.5×** |
 | `NestedWorkspace_Valid` | **1014 ns** / 192 B / 5 allocs | 3249 ns / 992 B / 33 allocs | 🚀 **3.2×** |
 | `SimpleUser_Valid` | **341 ns** / 0 B / 0 allocs | 810 ns / 98 B / 5 allocs | 🚀 **2.4×** |
 
-> 主要优化手段：零反射 VarString 快速路径、手写 email 解析器替代 `net/mail`、预编译规则分发表、`sync.Pool` 错误对象复用、零分配 `isEmptyValue`、零分配 lowercase/uppercase 字节检查、`json.NewDecoder` 替代 `json.Valid`、轻量 URL/URI 解析替代 `net/url` 等。详见 [go-argus-benchmark](https://github.com/kamalyes/go-argus-benchmark)。
+> Key optimizations: zero-reflection VarString fast path, hand-written email parser replacing `net/mail`, pre-compiled rule dispatch table, `sync.Pool` error object reuse, zero-allocation `isEmptyValue`, zero-allocation lowercase/uppercase byte checks, `json.NewDecoder` replacing `json.Valid`, lightweight URL/URI parsing replacing `net/url`, etc. See [go-argus-benchmark](https://github.com/kamalyes/go-argus-benchmark) for details.
 
 ---
 
-## 🔗 生态项目
+## 🔗 Ecosystem
 
-| 项目 | 说明 |
-|------|------|
-| [go-rpc-gateway](https://github.com/kamalyes/go-rpc-gateway) | 新一代企业级微服务网关框架，内置 Argus 作为 gRPC/HTTP 参数校验引擎 |
-| [go-pbmo](https://github.com/kamalyes/go-pbmo) | 高性能 Protocol Buffer ↔ Model 双向转换库，集成 Argus 字段级参数校验 |
-| [go-sqlbuilder](https://github.com/kamalyes/go-sqlbuilder) | 泛型 GORM 仓储层封装，使用 Argus 校验查询参数与模型字段 |
-| [go-toolbox](https://github.com/kamalyes/go-toolbox) | 零依赖高性能 Go 工具库，集成 Argus 校验 HTTP 参数、字符串与数据结构 |
+| Project | Description |
+|---------|-------------|
+| [go-rpc-gateway](https://github.com/kamalyes/go-rpc-gateway) | Next-gen enterprise microservice gateway framework with built-in Argus as gRPC/HTTP parameter validation engine |
+| [go-pbmo](https://github.com/kamalyes/go-pbmo) | High-performance Protocol Buffer ↔ Model bidirectional conversion library with Argus field-level validation |
+| [go-sqlbuilder](https://github.com/kamalyes/go-sqlbuilder) | Generic GORM repository layer using Argus to validate query parameters and model fields |
+| [go-toolbox](https://github.com/kamalyes/go-toolbox) | Zero-dependency high-performance Go utility library with Argus validation for HTTP parameters, strings, and data structures |
 
-### go-rpc-gateway 集成
+### go-rpc-gateway Integration
 
-[go-rpc-gateway](https://github.com/kamalyes/go-rpc-gateway) 开箱即集成了 Argus，提供基于 struct tag 的 gRPC 拦截器，配合 `protoc-go-inject-tag` 在 pb 生成代码上注入 `validate:"..."` 标签，无需业务方手写参数校验：
+[go-rpc-gateway](https://github.com/kamalyes/go-rpc-gateway) integrates Argus out of the box, providing struct tag-based gRPC interceptors. Combined with `protoc-go-inject-tag` to inject `validate:"..."` tags on generated pb code, no manual parameter validation needed:
 
 ```go
 import "github.com/kamalyes/go-rpc-gateway/middleware"
 
-// gRPC Unary 拦截器 — 自动校验 req 上的 validate 标签
+// gRPC Unary interceptor — auto-validates validate tags on req
 unary := middleware.StructTagValidatorUnaryInterceptor()
 
-// gRPC Stream 拦截器 — 自动校验每条流消息
+// gRPC Stream interceptor — auto-validates each stream message
 stream := middleware.StructTagValidatorStreamInterceptor()
 ```
 
-校验失败自动返回 `codes.InvalidArgument`，字段未注入标签则跳过，不产生误报。
+Validation failures automatically return `codes.InvalidArgument`. Fields without injected tags are skipped, no false positives.
 
 ---
 

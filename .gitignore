@@ -13,10 +13,13 @@
 
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
+cov
 cover
 cover_*
 cover.*
 coverage
+coverage_*
+coverage.*
 
 # Dependency directories (remove the comment below to include it)
 # vendor/

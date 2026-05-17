@@ -576,10 +576,6 @@ var evalDispatchTable = map[string]evalDispatchFn{
 	"noneofci":             (*Validate).evalNoneOfCI,
 }
 
-func rulepkgRequiredIf(parent reflect.Value, param string) bool {
-	return rule.IsRequiredIf(parent, param)
-}
-
 func ruleOneOfFast(field reflect.Value, parts []string) bool {
 	actual, ok := scalarString(field)
 	if !ok {
@@ -606,16 +602,6 @@ func ruleOneOfCIFast(field reflect.Value, parts []string) bool {
 	return false
 }
 
-func ruleRequiredWithAll(parent reflect.Value, param string) bool {
-	for _, field := range strings.Fields(param) {
-		value, ok := rule.FieldByPath(parent, field)
-		if !ok || isEmptyValue(value, true) {
-			return false
-		}
-	}
-	return strings.TrimSpace(param) != ""
-}
-
 func ruleRequiredWithAllFast(parent reflect.Value, parts []string) bool {
 	if len(parts) == 0 {
 		return false
@@ -629,16 +615,6 @@ func ruleRequiredWithAllFast(parent reflect.Value, parts []string) bool {
 	return true
 }
 
-func ruleRequiredWithout(parent reflect.Value, param string) bool {
-	for _, field := range strings.Fields(param) {
-		value, ok := rule.FieldByPath(parent, field)
-		if !ok || isEmptyValue(value, true) {
-			return true
-		}
-	}
-	return false
-}
-
 func ruleRequiredWithoutFast(parent reflect.Value, parts []string) bool {
 	for _, field := range parts {
 		value, ok := rule.FieldByPath(parent, field)
@@ -647,16 +623,6 @@ func ruleRequiredWithoutFast(parent reflect.Value, parts []string) bool {
 		}
 	}
 	return false
-}
-
-func ruleRequiredWithoutAll(parent reflect.Value, param string) bool {
-	for _, field := range strings.Fields(param) {
-		value, ok := rule.FieldByPath(parent, field)
-		if ok && !isEmptyValue(value, true) {
-			return false
-		}
-	}
-	return strings.TrimSpace(param) != ""
 }
 
 func ruleRequiredWithoutAllFast(parent reflect.Value, parts []string) bool {

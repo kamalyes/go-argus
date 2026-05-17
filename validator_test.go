@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-06 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2023-12-28 00:00:00
+ * @LastEditTime: 2026-05-17 18:22:15
  * @FilePath: \go-argus\validator_test.go
  * @Description: validator.go 测试，覆盖校验器核心逻辑、Struct/Var 校验和 evalRule 分支
  *
@@ -1337,5 +1337,347 @@ func TestExcludedWithoutConditionMet(t *testing.T) {
 	}
 	if err := v.Struct(req{B: "", Debug: "value"}); err == nil {
 		t.Fatal("expected excluded_without to fail when field non-empty and B absent")
+	}
+}
+
+func TestExcludedUnlessEmptyFieldConditionNotMet(t *testing.T) {
+	type req struct {
+		Mode  string `validate:"required,oneof=on off"`
+		Debug string `validate:"excluded_unless=Mode debug"`
+	}
+	v := New()
+	if err := v.Struct(req{Mode: "off", Debug: ""}); err != nil {
+		t.Fatalf("expected excluded_unless to pass when field empty and condition not met: %v", err)
+	}
+}
+
+func TestExcludedWithEmptyFieldConditionMet(t *testing.T) {
+	type req struct {
+		B     string `validate:""`
+		Debug string `validate:"excluded_with=B"`
+	}
+	v := New()
+	if err := v.Struct(req{B: "present", Debug: ""}); err != nil {
+		t.Fatalf("expected excluded_with to pass when field empty and B present: %v", err)
+	}
+}
+
+func TestExcludedWithAllEmptyFieldConditionMet(t *testing.T) {
+	type req struct {
+		B     string `validate:""`
+		C     string `validate:""`
+		Debug string `validate:"excluded_with_all=B C"`
+	}
+	v := New()
+	if err := v.Struct(req{B: "b", C: "c", Debug: ""}); err != nil {
+		t.Fatalf("expected excluded_with_all to pass when field empty and B,C present: %v", err)
+	}
+}
+
+func TestFieldContainsNonScalarOtherField(t *testing.T) {
+	type req struct {
+		Name  string `validate:"fieldcontains=Items"`
+		Items []int  `validate:""`
+	}
+	v := New()
+	if err := v.Struct(req{Name: "hello", Items: []int{1, 2}}); err == nil {
+		t.Fatal("expected fieldcontains to fail when other is non-scalar")
+	}
+}
+
+func TestExcludedUnlessConditionMetFieldNonEmpty(t *testing.T) {
+	type req struct {
+		Mode  string `validate:"required,oneof=on off debug"`
+		Debug string `validate:"excluded_unless=Mode debug"`
+	}
+	v := New()
+	if err := v.Struct(req{Mode: "debug", Debug: "yes"}); err != nil {
+		t.Fatalf("expected excluded_unless to pass when condition met and field non-empty: %v", err)
+	}
+}
+
+func TestExcludedWithConditionMetFieldNonEmpty(t *testing.T) {
+	type req struct {
+		B     string `validate:""`
+		Debug string `validate:"excluded_with=B"`
+	}
+	v := New()
+	if err := v.Struct(req{B: "present", Debug: "yes"}); err == nil {
+		t.Fatal("expected excluded_with to fail when B present and field non-empty")
+	}
+}
+
+func TestExcludedWithAllConditionMetFieldNonEmpty(t *testing.T) {
+	type req struct {
+		B     string `validate:""`
+		C     string `validate:""`
+		Debug string `validate:"excluded_with_all=B C"`
+	}
+	v := New()
+	if err := v.Struct(req{B: "b", C: "c", Debug: "yes"}); err == nil {
+		t.Fatal("expected excluded_with_all to fail when B,C present and field non-empty")
+	}
+}
+
+func TestVarStringReflectPathError(t *testing.T) {
+	v := New()
+	err := v.VarString("", "required_without=SomeField")
+	if err == nil {
+		t.Fatal("expected varStringReflectPath to return error for empty required_without")
+	}
+}
+
+func TestFieldContainsNonStringField(t *testing.T) {
+	type req struct {
+		Count int    `validate:"fieldcontains=Name"`
+		Name  string `validate:""`
+	}
+	v := New()
+	if err := v.Struct(req{Count: 1, Name: "hello"}); err == nil {
+		t.Fatal("expected fieldcontains to fail when field is non-string")
+	}
+}
+
+func TestExcludedWithBAbsent(t *testing.T) {
+	type req struct {
+		B     string `validate:""`
+		Debug string `validate:"excluded_with=B"`
+	}
+	v := New()
+	if err := v.Struct(req{B: "", Debug: "yes"}); err != nil {
+		t.Fatalf("expected excluded_with to pass when B is empty: %v", err)
+	}
+}
+
+func TestExcludedWithAllNotAllPresent(t *testing.T) {
+	type req struct {
+		B     string `validate:""`
+		C     string `validate:""`
+		Debug string `validate:"excluded_with_all=B C"`
+	}
+	v := New()
+	if err := v.Struct(req{B: "b", C: "", Debug: "yes"}); err != nil {
+		t.Fatalf("expected excluded_with_all to pass when not all present: %v", err)
+	}
+}
+
+func TestValidateStructNilPointer(t *testing.T) {
+	v := New()
+	var s *string
+	if err := v.Struct(s); err == nil {
+		t.Fatal("expected struct validation to fail for nil pointer")
+	}
+}
+
+func TestHTTPSURLNoColon(t *testing.T) {
+	v := New()
+	if err := v.Var("https-example.com", "https_url"); err == nil {
+		t.Fatal("expected https_url to fail for no colon")
+	}
+}
+
+func TestHTTPURLHostWithColon(t *testing.T) {
+	v := New()
+	if err := v.Var("http://user@example.com", "http_url"); err != nil {
+		t.Fatalf("expected http_url to pass for host with @: %v", err)
+	}
+}
+
+func TestHTTPURLHostWithPort(t *testing.T) {
+	v := New()
+	if err := v.Var("http://example.com:8080", "http_url"); err != nil {
+		t.Fatalf("expected http_url to pass for host with port: %v", err)
+	}
+}
+
+func TestRuleSemverPatchFail(t *testing.T) {
+	v := New()
+	if err := v.Var("1.2.", "semver"); err == nil {
+		t.Fatal("expected semver to fail for empty patch")
+	}
+}
+
+func TestRuleISBN10CheckDigitInvalid(t *testing.T) {
+	v := New()
+	if err := v.Var("080442957Y", "isbn10"); err == nil {
+		t.Fatal("expected isbn10 to fail for invalid check digit char")
+	}
+}
+
+func TestRuleISSNTooManyDigits(t *testing.T) {
+	v := New()
+	if err := v.Var("031784712", "issn"); err == nil {
+		t.Fatal("expected issn to fail for too many digits")
+	}
+}
+
+func TestRuleISSNCheckDigitNonDigitNonX(t *testing.T) {
+	v := New()
+	if err := v.Var("0317847A", "issn"); err == nil {
+		t.Fatal("expected issn to fail for non-digit non-X check digit")
+	}
+}
+
+func TestRuleBICBranchInvalidChar(t *testing.T) {
+	v := New()
+	if err := v.Var("CHASUS3!1", "bic"); err == nil {
+		t.Fatal("expected bic to fail for invalid branch code char")
+	}
+}
+
+func TestRuleDataURIMimeTypeNonASCII(t *testing.T) {
+	v := New()
+	if err := v.Var("data:text/pl\x00in;base64,SGVsbG8=", "datauri"); err == nil {
+		t.Fatal("expected datauri to fail for non-ASCII mime type")
+	}
+}
+
+func TestRuleBCP47InvalidPrimary(t *testing.T) {
+	v := New()
+	if err := v.Var("1n", "bcp47"); err == nil {
+		t.Fatal("expected bcp47 to fail for digit in primary subtag")
+	}
+}
+
+func TestRuleBCP47VariantTooLong(t *testing.T) {
+	v := New()
+	if err := v.Var("en-US-abcdefghi", "bcp47"); err == nil {
+		t.Fatal("expected bcp47 to fail for variant too long")
+	}
+}
+
+func TestRuleEthAddrNoPrefix(t *testing.T) {
+	v := New()
+	if err := v.Var("1x742d35Cc6634C0532925a3b844Bc9e7595f2bD38", "eth_addr"); err == nil {
+		t.Fatal("expected eth_addr to fail without 0x prefix")
+	}
+}
+
+func TestRuleBtcAddrLegacyTooShort(t *testing.T) {
+	v := New()
+	if err := v.Var("1A", "btc_addr"); err == nil {
+		t.Fatal("expected btc_addr to fail for too short legacy")
+	}
+}
+
+func TestRuleBtcAddrBech32InvalidPrefix(t *testing.T) {
+	v := New()
+	if err := v.Var("bc2qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4", "btc_addr"); err == nil {
+		t.Fatal("expected btc_addr to fail for invalid bech32 prefix")
+	}
+}
+
+func TestRuleBtcAddrBech32InvalidChar(t *testing.T) {
+	addr := "bc1q!508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4"
+	if len(addr) >= 26 && len(addr) <= 62 {
+		v := New()
+		if err := v.Var(addr, "btc_addr"); err == nil {
+			t.Fatal("expected btc_addr to fail for invalid bech32 char")
+		}
+	}
+}
+
+func TestTrimSpaceNoTrimNeeded(t *testing.T) {
+	v := New()
+	if err := v.Var("hello", "min=1"); err != nil {
+		t.Fatalf("expected min to pass for string without spaces: %v", err)
+	}
+}
+
+func TestCompareOpDefault(t *testing.T) {
+	v := New()
+	if err := v.Var(nil, "min=1"); err == nil {
+		t.Fatal("expected min to fail for nil")
+	}
+}
+
+func TestIPWithLeadingSpace(t *testing.T) {
+	v := New()
+	if err := v.Var(" 192.168.1.1", "ip"); err != nil {
+		t.Fatalf("expected ip to pass with leading space: %v", err)
+	}
+}
+
+func TestIPv4WithTrailingSpace(t *testing.T) {
+	v := New()
+	if err := v.Var("192.168.1.1 ", "ipv4"); err != nil {
+		t.Fatalf("expected ipv4 to pass with trailing space: %v", err)
+	}
+}
+
+func TestIPv6WithSpaces(t *testing.T) {
+	v := New()
+	if err := v.Var(" ::1 ", "ipv6"); err != nil {
+		t.Fatalf("expected ipv6 to pass with spaces: %v", err)
+	}
+}
+
+func TestRuleISBN13NonDigitChar(t *testing.T) {
+	type req struct {
+		ISBN string `validate:"isbn13"`
+	}
+	v := New()
+	if err := v.Struct(req{ISBN: "978-0-471-A1709-4"}); err == nil {
+		t.Fatal("expected isbn13 to fail for non-digit char")
+	}
+}
+
+func TestRuleISSNTooManyDigits2(t *testing.T) {
+	type req struct {
+		Code string `validate:"issn"`
+	}
+	v := New()
+	if err := v.Struct(req{Code: "0-317-8471-2"}); err == nil {
+		t.Fatal("expected issn to fail for too many digits")
+	}
+}
+
+func TestRuleBICBranchInvalidChar2(t *testing.T) {
+	type req struct {
+		Code string `validate:"bic"`
+	}
+	v := New()
+	if err := v.Struct(req{Code: "CHASUS3!"}); err == nil {
+		t.Fatal("expected bic to fail for invalid branch code char")
+	}
+}
+
+func TestRuleDataURIParamsNonASCII(t *testing.T) {
+	type req struct {
+		URI string `validate:"datauri"`
+	}
+	v := New()
+	if err := v.Struct(req{URI: "data:text/plain;chars\x00et=utf-8,hello"}); err == nil {
+		t.Fatal("expected datauri to fail for non-ASCII in params")
+	}
+}
+
+func TestRuleBCP47VariantNonAlphanum(t *testing.T) {
+	type req struct {
+		Tag string `validate:"bcp47"`
+	}
+	v := New()
+	if err := v.Struct(req{Tag: "en-US-variant!"}); err == nil {
+		t.Fatal("expected bcp47 to fail for non-alphanum in variant")
+	}
+}
+
+func TestRuleBtcAddrLegacyTooShort2(t *testing.T) {
+	type req struct {
+		Addr string `validate:"btc_addr"`
+	}
+	v := New()
+	if err := v.Struct(req{Addr: "1A"}); err == nil {
+		t.Fatal("expected btc_addr to fail for too short legacy address")
+	}
+}
+
+func TestEmptyRuleName(t *testing.T) {
+	type req struct {
+		Name string `validate:"=value"`
+	}
+	v := New()
+	if err := v.Struct(req{Name: "test"}); err != nil {
+		t.Fatalf("expected empty rule name to be skipped: %v", err)
 	}
 }

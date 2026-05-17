@@ -566,40 +566,6 @@ func ruleJSON(field reflect.Value, _ string, _ bool) bool {
 	return false
 }
 
-func ruleOneOf(field reflect.Value, param string, _ bool) bool {
-	actual, ok := scalarString(field)
-	if !ok {
-		return false
-	}
-	for _, item := range strings.Fields(param) {
-		if actual == item {
-			return true
-		}
-	}
-	return false
-}
-
-func ruleOneOfCI(field reflect.Value, param string, _ bool) bool {
-	actual, ok := scalarString(field)
-	if !ok {
-		return false
-	}
-	for _, item := range strings.Fields(param) {
-		if strings.EqualFold(actual, item) {
-			return true
-		}
-	}
-	return false
-}
-
-func ruleNoneOf(field reflect.Value, param string, _ bool) bool {
-	return !ruleOneOf(field, param, false)
-}
-
-func ruleNoneOfCI(field reflect.Value, param string, _ bool) bool {
-	return !ruleOneOfCI(field, param, false)
-}
-
 func ruleUnique(field reflect.Value, _ string, _ bool) bool {
 	field = derefValue(field)
 	if !field.IsValid() {

@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-16 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2026-05-17 02:04:22
+ * @LastEditTime: 2026-05-17 20:02:16
  * @FilePath: \go-argus\rules_test.go
  * @Description: rules.go 测试，覆盖所有内置字段规则和辅助函数
  *
@@ -12,6 +12,7 @@ package validator
 
 import (
 	"os"
+	"reflect"
 	"testing"
 )
 
@@ -2154,5 +2155,376 @@ func TestRuleUppercaseMixedDigits(t *testing.T) {
 	}
 	if err := v.Var("Hello123", "uppercase"); err == nil {
 		t.Fatal("expected uppercase to fail for mixed case+digits")
+	}
+}
+
+func TestRuleOneOfNonScalar(t *testing.T) {
+	v := New()
+	if err := v.Var([]int{1}, "oneof=a b c"); err == nil {
+		t.Fatal("expected oneof to fail for non-scalar slice")
+	}
+}
+
+func TestRuleNoneOfNonScalar(t *testing.T) {
+	v := New()
+	if err := v.Var([]int{1}, "noneof=a b c"); err != nil {
+		t.Fatalf("expected noneof to pass for non-scalar slice (scalarString fails, ruleOneOfFast returns false, !false=true): %v", err)
+	}
+}
+
+func TestRuleBtcAddrBech32(t *testing.T) {
+	v := New()
+	if err := v.Var("bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4", "btc_addr"); err != nil {
+		t.Fatalf("expected btc_addr to pass for bech32 address: %v", err)
+	}
+	if err := v.Var("bc1qinvalid!@#", "btc_addr"); err == nil {
+		t.Fatal("expected btc_addr to fail for invalid bech32")
+	}
+}
+
+func TestRuleBtcAddrTooShort(t *testing.T) {
+	v := New()
+	if err := v.Var("short", "btc_addr"); err == nil {
+		t.Fatal("expected btc_addr to fail for too short")
+	}
+}
+
+func TestRuleBtcAddrTooLong(t *testing.T) {
+	longAddr := "1"
+	for i := 0; i < 70; i++ {
+		longAddr += "A"
+	}
+	v := New()
+	if err := v.Var(longAddr, "btc_addr"); err == nil {
+		t.Fatal("expected btc_addr to fail for too long")
+	}
+}
+
+func TestRuleURISchemeInvalidChar(t *testing.T) {
+	v := New()
+	if err := v.Var("ht tp://example.com", "uri"); err == nil {
+		t.Fatal("expected uri to fail for space in scheme")
+	}
+}
+
+func TestRuleURISchemeOnly(t *testing.T) {
+	v := New()
+	if err := v.Var("http:", "uri"); err == nil {
+		t.Fatal("expected uri to fail for scheme only")
+	}
+}
+
+func TestRuleHTTPSURLNonHTTPS(t *testing.T) {
+	v := New()
+	if err := v.Var("http://example.com", "https_url"); err == nil {
+		t.Fatal("expected https_url to fail for http scheme")
+	}
+}
+
+func TestRuleHTTPURLHostStartsWithDot(t *testing.T) {
+	v := New()
+	if err := v.Var("http://.example.com", "http_url"); err == nil {
+		t.Fatal("expected http_url to fail for host starting with dot")
+	}
+}
+
+func TestRuleHTTPURLHostStartsWithDash(t *testing.T) {
+	v := New()
+	if err := v.Var("http://-example.com", "http_url"); err == nil {
+		t.Fatal("expected http_url to fail for host starting with dash")
+	}
+}
+
+func TestRuleSemverPreReleaseInvalid(t *testing.T) {
+	v := New()
+	if err := v.Var("1.0.0-", "semver"); err == nil {
+		t.Fatal("expected semver to fail for empty pre-release")
+	}
+}
+
+func TestRuleSemverBuildMetaInvalid(t *testing.T) {
+	v := New()
+	if err := v.Var("1.0.0+", "semver"); err == nil {
+		t.Fatal("expected semver to fail for empty build metadata")
+	}
+}
+
+func TestRuleSemverPreReleaseTrailingDot(t *testing.T) {
+	v := New()
+	if err := v.Var("1.0.0-alpha.", "semver"); err == nil {
+		t.Fatal("expected semver to fail for trailing dot in pre-release")
+	}
+}
+
+func TestRuleSemverBuildMetaTrailingDot(t *testing.T) {
+	v := New()
+	if err := v.Var("1.0.0+build.", "semver"); err == nil {
+		t.Fatal("expected semver to fail for trailing dot in build")
+	}
+}
+
+func TestRuleSemverPreReleaseInvalidChar(t *testing.T) {
+	v := New()
+	if err := v.Var("1.0.0-alpha!bad", "semver"); err == nil {
+		t.Fatal("expected semver to fail for invalid char in pre-release")
+	}
+}
+
+func TestRuleSemverBuildMetaInvalidChar(t *testing.T) {
+	v := New()
+	if err := v.Var("1.0.0+build!bad", "semver"); err == nil {
+		t.Fatal("expected semver to fail for invalid char in build")
+	}
+}
+
+func TestRuleSemverPreReleaseOnlyZero(t *testing.T) {
+	v := New()
+	if err := v.Var("1.0.0-0", "semver"); err != nil {
+		t.Fatalf("expected semver to pass for numeric pre-release: %v", err)
+	}
+}
+
+func TestRuleSemverPreReleaseAllDashes(t *testing.T) {
+	v := New()
+	if err := v.Var("1.0.0---", "semver"); err == nil {
+		t.Fatal("expected semver to fail for all-dash pre-release")
+	}
+}
+
+func TestRuleSemverBuildMetaTrailingDash(t *testing.T) {
+	v := New()
+	if err := v.Var("1.0.0+build-", "semver"); err == nil {
+		t.Fatal("expected semver to fail for trailing dash in build")
+	}
+}
+
+func TestRuleISBN10NonDigitMiddle(t *testing.T) {
+	v := New()
+	if err := v.Var("0471X58697", "isbn10"); err == nil {
+		t.Fatal("expected isbn10 to fail for non-digit in middle")
+	}
+}
+
+func TestRuleISBN10TooFewDigits(t *testing.T) {
+	v := New()
+	if err := v.Var("047195869", "isbn10"); err == nil {
+		t.Fatal("expected isbn10 to fail for too few digits")
+	}
+}
+
+func TestRuleISBN13NonDigit(t *testing.T) {
+	v := New()
+	if err := v.Var("978047111709A", "isbn13"); err == nil {
+		t.Fatal("expected isbn13 to fail for non-digit")
+	}
+}
+
+func TestRuleISBN13TooFewDigits(t *testing.T) {
+	v := New()
+	if err := v.Var("978047111709", "isbn13"); err == nil {
+		t.Fatal("expected isbn13 to fail for too few digits")
+	}
+}
+
+func TestRuleISSNNonDigitMiddle(t *testing.T) {
+	v := New()
+	if err := v.Var("031X8471", "issn"); err == nil {
+		t.Fatal("expected issn to fail for non-digit in middle")
+	}
+}
+
+func TestRuleISSNTooFewDigits(t *testing.T) {
+	v := New()
+	if err := v.Var("0317847", "issn"); err == nil {
+		t.Fatal("expected issn to fail for too few digits")
+	}
+}
+
+func TestRuleBICBankCodeDigit(t *testing.T) {
+	v := New()
+	if err := v.Var("CH1SUS33", "bic"); err == nil {
+		t.Fatal("expected bic to fail for digit in bank code")
+	}
+}
+
+func TestRuleBICCountryCodeDigit(t *testing.T) {
+	v := New()
+	if err := v.Var("C1ASUS33", "bic"); err == nil {
+		t.Fatal("expected bic to fail for digit in country code")
+	}
+}
+
+func TestRuleBICLocationCodeDigit(t *testing.T) {
+	v := New()
+	if err := v.Var("CHASU133", "bic"); err == nil {
+		t.Fatal("expected bic to fail for digit in location code")
+	}
+}
+
+func TestRuleBICBranchCodeInvalid(t *testing.T) {
+	v := New()
+	if err := v.Var("CHASUS3!1", "bic"); err == nil {
+		t.Fatal("expected bic to fail for invalid branch code")
+	}
+}
+
+func TestRuleCronDoubleDash(t *testing.T) {
+	v := New()
+	if err := v.Var("1--2 * * * *", "cron"); err == nil {
+		t.Fatal("expected cron to fail for double dash")
+	}
+}
+
+func TestRuleCronDoubleSlash(t *testing.T) {
+	v := New()
+	if err := v.Var("1//2 * * * *", "cron"); err == nil {
+		t.Fatal("expected cron to fail for double slash")
+	}
+}
+
+func TestRuleCronInvalidChar(t *testing.T) {
+	v := New()
+	if err := v.Var("a * * * *", "cron"); err == nil {
+		t.Fatal("expected cron to fail for alpha char")
+	}
+}
+
+func TestRuleCronInvalidStarPos(t *testing.T) {
+	v := New()
+	if err := v.Var("1*2 * * * *", "cron"); err == nil {
+		t.Fatal("expected cron to fail for invalid star position")
+	}
+}
+
+func TestRuleDataURINoComma(t *testing.T) {
+	v := New()
+	if err := v.Var("data:text/plain;base64", "datauri"); err == nil {
+		t.Fatal("expected datauri to fail for no comma")
+	}
+}
+
+func TestRuleDataURIInvalidMimeType(t *testing.T) {
+	v := New()
+	if err := v.Var("data:;base64,SGVsbG8=", "datauri"); err != nil {
+		t.Fatalf("expected datauri to pass for empty mime type with base64: %v", err)
+	}
+}
+
+func TestRuleBCP47WithVariant(t *testing.T) {
+	v := New()
+	if err := v.Var("en-US-variant", "bcp47"); err != nil {
+		t.Fatalf("expected bcp47 to pass for variant subtag: %v", err)
+	}
+}
+
+func TestRuleBCP47NumericRegion(t *testing.T) {
+	v := New()
+	if err := v.Var("en-123", "bcp47"); err != nil {
+		t.Fatalf("expected bcp47 to pass for numeric region: %v", err)
+	}
+}
+
+func TestRuleBCP47ExtLang(t *testing.T) {
+	v := New()
+	if err := v.Var("zh-yue", "bcp47"); err == nil {
+		t.Fatal("expected bcp47 to fail for extlang (4-char subtag)")
+	}
+}
+
+func TestRuleEthAddrInvalidHex(t *testing.T) {
+	v := New()
+	if err := v.Var("0x742d35Cc6634C0532925a3b844Bc9e7595f2bD3G", "eth_addr"); err == nil {
+		t.Fatal("expected eth_addr to fail for invalid hex char")
+	}
+}
+
+func TestRuleBtcAddrInvalidLegacy(t *testing.T) {
+	v := New()
+	if err := v.Var("1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfN!", "btc_addr"); err == nil {
+		t.Fatal("expected btc_addr to fail for invalid char")
+	}
+}
+
+func TestRuleBtcAddrInvalidBech32(t *testing.T) {
+	v := New()
+	if err := v.Var("bc1q!nvalidaddress", "btc_addr"); err == nil {
+		t.Fatal("expected btc_addr to fail for invalid bech32")
+	}
+}
+
+func TestRuleHTTPURLNoDoubleSlash(t *testing.T) {
+	v := New()
+	if err := v.Var("http:example.com", "http_url"); err == nil {
+		t.Fatal("expected http_url to fail for no double slash")
+	}
+}
+
+func TestRuleHTTPURLSingleSlash(t *testing.T) {
+	v := New()
+	if err := v.Var("http:/example.com", "http_url"); err == nil {
+		t.Fatal("expected http_url to fail for single slash")
+	}
+}
+
+func TestRuleCompareOpInvalidField(t *testing.T) {
+	v := New()
+	if err := v.Var(nil, "gt=1"); err == nil {
+		t.Fatal("expected gt to fail for nil")
+	}
+}
+
+func TestTrimSpaceIfNeeded(t *testing.T) {
+	v := New()
+	if err := v.Var("  hello  ", "min=3"); err != nil {
+		t.Fatalf("expected min to pass for trimmed string: %v", err)
+	}
+}
+
+func TestRuleURIMailtoNoHost(t *testing.T) {
+	v := New()
+	if err := v.Var("mailto:", "uri"); err == nil {
+		t.Fatal("expected uri to fail for mailto with no content after colon")
+	}
+}
+
+func TestBuiltinRuleISBN13NonDigit(t *testing.T) {
+	if ruleISBN13(reflect.ValueOf("978-0-471-A1709-4"), "", false) {
+		t.Fatal("expected isbn13 to fail for non-digit char")
+	}
+}
+
+func TestBuiltinRuleISSNTooManyDigits(t *testing.T) {
+	if ruleISSN(reflect.ValueOf("0-317-8471-2"), "", false) {
+		t.Fatal("expected issn to fail for too many digits")
+	}
+}
+
+func TestBuiltinRuleBICBranchInvalidChar(t *testing.T) {
+	if ruleBIC(reflect.ValueOf("CHASUS3!"), "", false) {
+		t.Fatal("expected bic to fail for invalid branch code char")
+	}
+}
+
+func TestBuiltinRuleDataURIParamsNonASCII(t *testing.T) {
+	if ruleDataURI(reflect.ValueOf("data:text/plain;chars\x00et=utf-8,hello"), "", false) {
+		t.Fatal("expected datauri to fail for non-ASCII in params")
+	}
+}
+
+func TestBuiltinRuleBCP47VariantNonAlphanum(t *testing.T) {
+	if ruleBCP47(reflect.ValueOf("en-US-variant!"), "", false) {
+		t.Fatal("expected bcp47 to fail for non-alphanum in variant")
+	}
+}
+
+func TestBuiltinRuleBtcAddrLegacyTooShort(t *testing.T) {
+	if ruleBtcAddr(reflect.ValueOf("1A"), "", false) {
+		t.Fatal("expected btc_addr to fail for too short legacy address")
+	}
+}
+
+func TestBuiltinRuleSemverPatchFail(t *testing.T) {
+	if ruleSemver(reflect.ValueOf("1.2."), "", false) {
+		t.Fatal("expected semver to fail for empty patch")
 	}
 }
