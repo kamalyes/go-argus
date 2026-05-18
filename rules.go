@@ -8,23 +8,13 @@
  *
  * Copyright (c) 2023 by kamalyes, All Rights Reserved.
  */
-
 package validator
 
 import (
-	"encoding/base32"
-	"encoding/base64"
-	"encoding/json"
-	"html"
-	"net"
-	"net/url"
-	"os"
-	"path/filepath"
+	"fmt"
 	"reflect"
 	"regexp"
-	"strconv"
 	"strings"
-	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -173,23 +163,23 @@ func ruleLen(field reflect.Value, param string, _ bool) bool {
 }
 
 func ruleEq(field reflect.Value, param string, _ bool) bool {
-	actual, ok := scalarString(field)
-	return ok && actual == param
+	s, ok := scalarString(field)
+	return ok && s == param
 }
 
 func ruleEqIgnoreCase(field reflect.Value, param string, _ bool) bool {
-	actual, ok := scalarString(field)
-	return ok && strings.EqualFold(actual, param)
+	s, ok := scalarString(field)
+	return ok && strings.EqualFold(s, param)
 }
 
 func ruleNe(field reflect.Value, param string, _ bool) bool {
-	actual, ok := scalarString(field)
-	return ok && actual != param
+	s, ok := scalarString(field)
+	return ok && s != param
 }
 
 func ruleNeIgnoreCase(field reflect.Value, param string, _ bool) bool {
-	actual, ok := scalarString(field)
-	return ok && !strings.EqualFold(actual, param)
+	s, ok := scalarString(field)
+	return ok && !strings.EqualFold(s, param)
 }
 
 func ruleGt(field reflect.Value, param string, _ bool) bool {
@@ -248,7 +238,7 @@ func rulePrintASCII(field reflect.Value, _ string, _ bool) bool {
 
 func ruleMultibyte(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	return ok && len(s) != utf8.RuneCountInString(s)
+	return ok && stringMultibyte(s, "")
 }
 
 func ruleHexadecimal(field reflect.Value, _ string, _ bool) bool {
@@ -259,309 +249,175 @@ func ruleHexadecimal(field reflect.Value, _ string, _ bool) bool {
 
 func ruleHexColor(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	return ok && colorHexRegex.MatchString(s)
+	return ok && stringHexColor(s, "")
 }
 
 func ruleRGB(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	return ok && rgbRegex.MatchString(s)
+	return ok && stringRGB(s, "")
 }
 
 func ruleRGBA(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	return ok && rgbaRegex.MatchString(s)
+	return ok && stringRGBA(s, "")
 }
 
 func ruleHSL(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	return ok && hslRegex.MatchString(s)
+	return ok && stringHSL(s, "")
 }
 
 func ruleHSLA(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	return ok && hslaRegex.MatchString(s)
+	return ok && stringHSLA(s, "")
 }
 
 func ruleEmail(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	return ok && validate.IsEmail(s)
+	return ok && stringEmail(s, "")
 }
 
 func ruleE164(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	return ok && e164Regex.MatchString(s)
+	return ok && stringE164(s, "")
 }
 
 func ruleIP(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	return ok && net.ParseIP(trimSpaceIfNeeded(s)) != nil
+	return ok && stringIP(s, "")
 }
 
 func ruleIPv4(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	if !ok {
-		return false
-	}
-	ip := net.ParseIP(trimSpaceIfNeeded(s))
-	return ip != nil && ip.To4() != nil
+	return ok && stringIPv4(s, "")
 }
 
 func ruleIPv6(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	if !ok {
-		return false
-	}
-	ip := net.ParseIP(trimSpaceIfNeeded(s))
-	return ip != nil && ip.To4() == nil
+	return ok && stringIPv6(s, "")
 }
 
 func ruleCIDR(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	if !ok {
-		return false
-	}
-	_, _, err := net.ParseCIDR(strings.TrimSpace(s))
-	return err == nil
+	return ok && stringCIDR(s, "")
 }
 
 func ruleCIDRv4(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	if !ok {
-		return false
-	}
-	ip, _, err := net.ParseCIDR(strings.TrimSpace(s))
-	return err == nil && ip.To4() != nil
+	return ok && stringCIDRv4(s, "")
 }
 
 func ruleCIDRv6(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	if !ok {
-		return false
-	}
-	ip, _, err := net.ParseCIDR(strings.TrimSpace(s))
-	return err == nil && ip.To4() == nil
+	return ok && stringCIDRv6(s, "")
 }
 
 func ruleMAC(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	if !ok {
-		return false
-	}
-	_, err := net.ParseMAC(strings.TrimSpace(s))
-	return err == nil
+	return ok && stringMAC(s, "")
 }
 
 func ruleHostname(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	if !ok {
-		return false
-	}
-	return isHostname(strings.TrimSuffix(strings.TrimSpace(s), "."))
+	return ok && stringHostname(s, "")
 }
 
 func ruleFQDN(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	return ok && strings.HasSuffix(strings.TrimSpace(s), ".") && isHostname(strings.TrimSuffix(strings.TrimSpace(s), "."))
+	return ok && stringFQDN(s, "")
 }
 
 func ruleHostnamePort(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	if !ok {
-		return false
-	}
-	host, port, err := net.SplitHostPort(s)
-	return err == nil && host != "" && rulePort(reflect.ValueOf(port), "", false)
+	return ok && stringHostnamePort(s, "")
 }
 
 func rulePort(field reflect.Value, _ string, _ bool) bool {
 	s, ok := scalarString(field)
-	if !ok {
-		return false
-	}
-	n, err := strconv.Atoi(s)
-	return err == nil && n >= 0 && n <= 65535
+	return ok && stringPort(s, "")
 }
 
 func ruleURL(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	if !ok {
-		return false
-	}
-	s = strings.TrimSpace(s)
-	return hasSchemeAndHost(s)
+	return ok && stringURL(s, "")
 }
 
 func ruleURI(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	if !ok {
-		return false
-	}
-	s = strings.TrimSpace(s)
-	colon := strings.Index(s, ":")
-	if colon < 1 {
-		return false
-	}
-	for i := 0; i < colon; i++ {
-		c := s[i]
-		if !(c >= 'a' && c <= 'z') && !(c >= 'A' && c <= 'Z') && !(c >= '0' && c <= '9') && c != '+' && c != '-' && c != '.' {
-			return false
-		}
-	}
-	if len(s) <= colon+1 {
-		return false
-	}
-	return true
+	return ok && stringURI(s, "")
 }
 
 func ruleHTTPURL(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	if !ok {
-		return false
-	}
-	s = strings.TrimSpace(s)
-	colon := strings.Index(s, ":")
-	if colon < 0 {
-		return false
-	}
-	scheme := s[:colon]
-	if scheme != "http" && scheme != "https" {
-		return false
-	}
-	return hasHostAfterScheme(s, colon)
+	return ok && stringHTTPURL(s, "")
 }
 
 func ruleHTTPSURL(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	if !ok {
-		return false
-	}
-	s = strings.TrimSpace(s)
-	colon := strings.Index(s, ":")
-	if colon < 0 {
-		return false
-	}
-	scheme := s[:colon]
-	if scheme != "https" {
-		return false
-	}
-	return hasHostAfterScheme(s, colon)
-}
-
-func hasSchemeAndHost(s string) bool {
-	colon := strings.Index(s, ":")
-	if colon < 1 {
-		return false
-	}
-	return hasHostAfterScheme(s, colon)
-}
-
-func hasHostAfterScheme(s string, colonIdx int) bool {
-	if len(s) <= colonIdx+2 || s[colonIdx+1] != '/' || s[colonIdx+2] != '/' {
-		return false
-	}
-	hostStart := colonIdx + 3
-	if hostStart >= len(s) {
-		return false
-	}
-	for i := hostStart; i < len(s); i++ {
-		if isHostTerminator(s[i]) {
-			break
-		}
-		if !isValidHostChar(s, hostStart, i) {
-			return false
-		}
-	}
-	return true
-}
-
-func isHostTerminator(c byte) bool {
-	return c == '/' || c == '?' || c == '#'
-}
-
-func isValidHostChar(s string, hostStart, i int) bool {
-	c := s[i]
-	if c == ':' || c == '@' {
-		return true
-	}
-	return !(hostStart == i && (c == '.' || c == '-'))
+	return ok && stringHTTPSURL(s, "")
 }
 
 func ruleURLEncoded(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	if !ok || !strings.Contains(s, "%") {
-		return false
-	}
-	_, err := url.QueryUnescape(s)
-	return err == nil
+	return ok && stringURLEncoded(s, "")
 }
 
 func ruleHTML(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	return ok && strings.Contains(s, "<") && strings.Contains(s, ">")
+	return ok && stringHTML(s, "")
 }
 
 func ruleHTMLEncoded(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	return ok && html.UnescapeString(s) != s
+	return ok && stringHTMLEncoded(s, "")
 }
 
 func ruleUUID(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	return ok && validate.IsUUID(s)
+	return ok && stringUUID(s, "")
 }
 
 func ruleUUID3(field reflect.Value, _ string, _ bool) bool {
-	return uuidVersion(field, '3')
+	s, ok := stringValue(field)
+	return ok && stringUUID3(s, "")
 }
 
 func ruleUUID4(field reflect.Value, _ string, _ bool) bool {
-	return uuidVersion(field, '4')
+	s, ok := stringValue(field)
+	return ok && stringUUID4(s, "")
 }
 
 func ruleUUID5(field reflect.Value, _ string, _ bool) bool {
-	return uuidVersion(field, '5')
+	s, ok := stringValue(field)
+	return ok && stringUUID5(s, "")
 }
 
 func ruleBase32(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	if !ok || strings.TrimSpace(s) == "" {
-		return false
-	}
-	_, err := base32.StdEncoding.DecodeString(strings.TrimSpace(s))
-	return err == nil
+	return ok && stringBase32(s, "")
 }
 
 func ruleBase64(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	return ok && validate.IsBase64(s)
+	return ok && stringBase64(s, "")
 }
 
 func ruleBase64URL(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	if !ok || strings.TrimSpace(s) == "" {
-		return false
-	}
-	_, err := base64.URLEncoding.DecodeString(strings.TrimSpace(s))
-	return err == nil
+	return ok && stringBase64URL(s, "")
 }
 
 func ruleBase64RawURL(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	if !ok || strings.TrimSpace(s) == "" {
-		return false
-	}
-	_, err := base64.RawURLEncoding.DecodeString(strings.TrimSpace(s))
-	return err == nil
+	return ok && stringBase64RawURL(s, "")
 }
 
 func ruleJSON(field reflect.Value, _ string, _ bool) bool {
 	if b, ok := bytesValue(field); ok {
-		return json.Valid(b)
+		return validate.IsValidJSONBytes(b)
 	}
-	if s, ok := stringValue(field); ok {
-		return json.NewDecoder(strings.NewReader(s)).Decode(new(interface{})) == nil
-	}
-	return false
+	s, ok := stringValue(field)
+	return ok && stringJSON(s, "")
 }
 
 func ruleUnique(field reflect.Value, _ string, _ bool) bool {
@@ -571,7 +427,7 @@ func ruleUnique(field reflect.Value, _ string, _ bool) bool {
 	}
 	switch field.Kind() {
 	case reflect.String:
-		return isUniqueRunes(field.String())
+		return stringUnique(field.String(), "")
 	case reflect.Slice, reflect.Array:
 		return isUniqueSlice(field)
 	case reflect.Map:
@@ -579,17 +435,6 @@ func ruleUnique(field reflect.Value, _ string, _ bool) bool {
 	default:
 		return false
 	}
-}
-
-func isUniqueRunes(s string) bool {
-	seen := make(map[rune]struct{}, utf8.RuneCountInString(s))
-	for _, r := range s {
-		if _, ok := seen[r]; ok {
-			return false
-		}
-		seen[r] = struct{}{}
-	}
-	return true
 }
 
 func isUniqueSlice(field reflect.Value) bool {
@@ -618,88 +463,62 @@ func isUniqueMap(field reflect.Value) bool {
 
 func ruleStartsWith(field reflect.Value, param string, _ bool) bool {
 	s, ok := stringValue(field)
-	return ok && strings.HasPrefix(s, param)
+	return ok && stringStartsWith(s, param)
 }
 
 func ruleEndsWith(field reflect.Value, param string, _ bool) bool {
 	s, ok := stringValue(field)
-	return ok && strings.HasSuffix(s, param)
+	return ok && stringEndsWith(s, param)
 }
 
 func ruleStartsNotWith(field reflect.Value, param string, _ bool) bool {
 	s, ok := stringValue(field)
-	return ok && !strings.HasPrefix(s, param)
+	return ok && stringStartsNotWith(s, param)
 }
 
 func ruleEndsNotWith(field reflect.Value, param string, _ bool) bool {
 	s, ok := stringValue(field)
-	return ok && !strings.HasSuffix(s, param)
+	return ok && stringEndsNotWith(s, param)
 }
 
 func ruleContains(field reflect.Value, param string, _ bool) bool {
 	s, ok := stringValue(field)
-	return ok && strings.Contains(s, param)
+	return ok && stringContains(s, param)
 }
 
 func ruleContainsAny(field reflect.Value, param string, _ bool) bool {
 	s, ok := stringValue(field)
-	return ok && strings.ContainsAny(s, param)
+	return ok && stringContainsAny(s, param)
 }
 
 func ruleContainsRune(field reflect.Value, param string, _ bool) bool {
 	s, ok := stringValue(field)
-	if !ok {
-		return false
-	}
-	r, _ := utf8.DecodeRuneInString(param)
-	return r != utf8.RuneError && strings.ContainsRune(s, r)
+	return ok && stringContainsRune(s, param)
 }
 
 func ruleExcludes(field reflect.Value, param string, _ bool) bool {
 	s, ok := stringValue(field)
-	return ok && !strings.Contains(s, param)
+	return ok && stringExcludes(s, param)
 }
 
 func ruleExcludesAll(field reflect.Value, param string, _ bool) bool {
 	s, ok := stringValue(field)
-	return ok && !strings.ContainsAny(s, param)
+	return ok && stringExcludesAll(s, param)
 }
 
 func ruleExcludesRune(field reflect.Value, param string, _ bool) bool {
 	s, ok := stringValue(field)
-	if !ok {
-		return false
-	}
-	r, _ := utf8.DecodeRuneInString(param)
-	return r != utf8.RuneError && !strings.ContainsRune(s, r)
+	return ok && stringExcludesRune(s, param)
 }
 
 func ruleLowercase(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	if !ok {
-		return false
-	}
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if c >= 'A' && c <= 'Z' {
-			return false
-		}
-	}
-	return true
+	return ok && stringLowercase(s, "")
 }
 
 func ruleUppercase(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	if !ok {
-		return false
-	}
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if c >= 'a' && c <= 'z' {
-			return false
-		}
-	}
-	return true
+	return ok && stringUppercase(s, "")
 }
 
 func ruleBoolean(field reflect.Value, _ string, _ bool) bool {
@@ -707,8 +526,7 @@ func ruleBoolean(field reflect.Value, _ string, _ bool) bool {
 	if !ok {
 		return derefValue(field).Kind() == reflect.Bool
 	}
-	_, err := strconv.ParseBool(s)
-	return err == nil
+	return stringBoolean(s, "")
 }
 
 func ruleNumber(field reflect.Value, _ string, _ bool) bool {
@@ -722,8 +540,7 @@ func ruleNumber(field reflect.Value, _ string, _ bool) bool {
 		reflect.Float32, reflect.Float64:
 		return true
 	case reflect.String:
-		_, err := strconv.ParseFloat(field.String(), 64)
-		return err == nil
+		return stringNumber(field.String(), "")
 	default:
 		return false
 	}
@@ -731,110 +548,113 @@ func ruleNumber(field reflect.Value, _ string, _ bool) bool {
 
 func ruleDatetime(field reflect.Value, param string, _ bool) bool {
 	s, ok := stringValue(field)
-	if !ok {
-		return false
-	}
-	if param == "" {
-		param = time.RFC3339
-	}
-	_, err := time.Parse(param, s)
-	return err == nil
+	return ok && stringDatetime(s, param)
 }
 
 func ruleTimezone(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	if !ok {
-		return false
-	}
-	_, err := time.LoadLocation(s)
-	return err == nil
+	return ok && stringTimezone(s, "")
 }
 
 func ruleLatitude(field reflect.Value, _ string, _ bool) bool {
-	n, ok := numericValue(field)
-	return ok && n >= -90 && n <= 90
+	if n, ok := numericValue(field); ok {
+		return n >= -90 && n <= 90
+	}
+	s, ok := stringValue(field)
+	return ok && stringLatitude(s, "")
 }
 
 func ruleLongitude(field reflect.Value, _ string, _ bool) bool {
-	n, ok := numericValue(field)
-	return ok && n >= -180 && n <= 180
+	if n, ok := numericValue(field); ok {
+		return n >= -180 && n <= 180
+	}
+	s, ok := stringValue(field)
+	return ok && stringLongitude(s, "")
 }
 
 func ruleFile(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	if !ok {
-		return false
-	}
-	info, err := os.Stat(s)
-	return err == nil && !info.IsDir()
+	return ok && stringFile(s, "")
 }
 
 func ruleFilePath(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	return ok && strings.TrimSpace(s) != "" && filepath.Clean(s) != "."
+	return ok && stringFilePath(s, "")
 }
 
 func ruleDir(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	if !ok {
-		return false
-	}
-	info, err := os.Stat(s)
-	return err == nil && info.IsDir()
+	return ok && stringDir(s, "")
 }
 
 func ruleDirPath(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	if !ok || strings.TrimSpace(s) == "" {
-		return false
-	}
-	cleaned := filepath.Clean(s)
-	return cleaned != "." && !strings.Contains(filepath.Base(cleaned), ".")
+	return ok && stringDirPath(s, "")
 }
 
 func ruleMongoDB(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	return ok && mongoIDRegex.MatchString(s)
+	return ok && stringMongoDB(s, "")
 }
 
 func ruleLuhnChecksum(field reflect.Value, _ string, _ bool) bool {
-	s, ok := scalarString(field)
-	if !ok {
-		return false
-	}
-	sum := 0
-	double := false
-	digits := 0
-	for i := len(s) - 1; i >= 0; i-- {
-		r := s[i]
-		if r == ' ' || r == '-' {
-			continue
-		}
-		if r < '0' || r > '9' {
-			return false
-		}
-		n := int(r - '0')
-		if double {
-			n = luhnDouble(n)
-		}
-		sum += n
-		double = !double
-		digits++
-	}
-	return digits > 0 && sum%10 == 0
-}
-
-func luhnDouble(n int) int {
-	n *= 2
-	if n > 9 {
-		n -= 9
-	}
-	return n
+	s, ok := stringValue(field)
+	return ok && stringLuhnChecksum(s, "")
 }
 
 func ruleDNSRFC1035Label(field reflect.Value, _ string, _ bool) bool {
 	s, ok := stringValue(field)
-	return ok && len(s) <= 63 && dnsLabelRegex.MatchString(s)
+	return ok && stringDNSRFC1035Label(s, "")
+}
+
+func ruleSemver(field reflect.Value, _ string, _ bool) bool {
+	s, ok := stringValue(field)
+	return ok && stringSemver(s, "")
+}
+
+func ruleISBN10(field reflect.Value, _ string, _ bool) bool {
+	s, ok := stringValue(field)
+	return ok && stringISBN10(s, "")
+}
+
+func ruleISBN13(field reflect.Value, _ string, _ bool) bool {
+	s, ok := stringValue(field)
+	return ok && stringISBN13(s, "")
+}
+
+func ruleISSN(field reflect.Value, _ string, _ bool) bool {
+	s, ok := stringValue(field)
+	return ok && stringISSN(s, "")
+}
+
+func ruleBIC(field reflect.Value, _ string, _ bool) bool {
+	s, ok := stringValue(field)
+	return ok && stringBIC(s, "")
+}
+
+func ruleCron(field reflect.Value, _ string, _ bool) bool {
+	s, ok := stringValue(field)
+	return ok && stringCron(s, "")
+}
+
+func ruleDataURI(field reflect.Value, _ string, _ bool) bool {
+	s, ok := stringValue(field)
+	return ok && stringDataURI(s, "")
+}
+
+func ruleBCP47(field reflect.Value, _ string, _ bool) bool {
+	s, ok := stringValue(field)
+	return ok && stringBCP47(s, "")
+}
+
+func ruleEthAddr(field reflect.Value, _ string, _ bool) bool {
+	s, ok := stringValue(field)
+	return ok && stringEthAddr(s, "")
+}
+
+func ruleBtcAddr(field reflect.Value, _ string, _ bool) bool {
+	s, ok := stringValue(field)
+	return ok && stringBtcAddr(s, "")
 }
 
 type cmpOp int
@@ -904,16 +724,41 @@ func numericValue(field reflect.Value) (float64, bool) {
 	case reflect.Float32, reflect.Float64:
 		return field.Float(), true
 	case reflect.String:
-		n, err := strconv.ParseFloat(strings.TrimSpace(field.String()), 64)
-		return n, err == nil
+		return parseFloat(strings.TrimSpace(field.String()))
 	default:
 		return 0, false
 	}
 }
 
 func parseFloat(s string) (float64, bool) {
-	n, err := strconv.ParseFloat(s, 64)
+	n, err := parseFloatStr(s)
 	return n, err == nil
+}
+
+func parseFloatStr(s string) (float64, error) {
+	var n float64
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c >= '0' && c <= '9' {
+			n = n*10 + float64(c-'0')
+			continue
+		}
+		if c == '.' {
+			frac := 0.0
+			div := 1.0
+			for j := i + 1; j < len(s); j++ {
+				if s[j] < '0' || s[j] > '9' {
+					return 0, fmt.Errorf("invalid float")
+				}
+				frac = frac*10 + float64(s[j]-'0')
+				div *= 10
+			}
+			n += frac / div
+			break
+		}
+		return 0, fmt.Errorf("invalid float")
+	}
+	return n, nil
 }
 
 func stringValue(field reflect.Value) (string, bool) {
@@ -940,22 +785,13 @@ func scalarString(field reflect.Value) (string, bool) {
 	if !field.IsValid() {
 		return "", false
 	}
-	switch field.Kind() {
-	case reflect.String:
+	if field.Kind() == reflect.String {
 		return field.String(), true
-	case reflect.Bool:
-		return strconv.FormatBool(field.Bool()), true
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return strconv.FormatInt(field.Int(), 10), true
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
-		return strconv.FormatUint(field.Uint(), 10), true
-	case reflect.Float32:
-		return strconv.FormatFloat(field.Float(), 'f', -1, 32), true
-	case reflect.Float64:
-		return strconv.FormatFloat(field.Float(), 'f', -1, 64), true
-	default:
-		return "", false
 	}
+	if field.CanInterface() {
+		return fmt.Sprint(field.Interface()), true
+	}
+	return "", false
 }
 
 func matchStringRunes(field reflect.Value, fn func(rune) bool) bool {
@@ -969,11 +805,6 @@ func matchStringRunes(field reflect.Value, fn func(rune) bool) bool {
 		}
 	}
 	return true
-}
-
-func uuidVersion(field reflect.Value, version byte) bool {
-	s, ok := stringValue(field)
-	return ok && len(s) == 36 && s[14] == version && validate.IsUUID(s)
 }
 
 func isHostname(host string) bool {
@@ -996,322 +827,81 @@ func trimSpaceIfNeeded(s string) string {
 	return s
 }
 
-func ruleSemver(field reflect.Value, _ string, _ bool) bool {
-	s, ok := stringValue(field)
-	if !ok {
+func hasSchemeAndHost(s string) bool {
+	colon := strings.Index(s, ":")
+	if colon < 1 {
 		return false
 	}
-	i := 0
-	if i < len(s) && s[i] == 'v' {
-		i++
-	}
-	if !parseSemverNum(s, &i) || i >= len(s) || s[i] != '.' {
+	return hasHostAfterScheme(s, colon)
+}
+
+func hasHostAfterScheme(s string, colonIdx int) bool {
+	if len(s) <= colonIdx+2 || s[colonIdx+1] != '/' || s[colonIdx+2] != '/' {
 		return false
 	}
-	i++
-	if !parseSemverNum(s, &i) || i >= len(s) || s[i] != '.' {
+	hostStart := colonIdx + 3
+	if hostStart >= len(s) {
 		return false
 	}
-	i++
-	if !parseSemverNum(s, &i) {
-		return false
+	for i := hostStart; i < len(s); i++ {
+		if isHostTerminator(s[i]) {
+			break
+		}
+		if !isValidHostChar(s, hostStart, i) {
+			return false
+		}
 	}
-	if !parseSemverPreRelease(s, &i) {
-		return false
+	return true
+}
+
+func isHostTerminator(c byte) bool {
+	return c == '/' || c == '?' || c == '#'
+}
+
+func isValidHostChar(s string, hostStart, i int) bool {
+	c := s[i]
+	if c == ':' || c == '@' {
+		return true
 	}
-	if !parseSemverBuildMeta(s, &i) {
-		return false
+	return !(hostStart == i && (c == '.' || c == '-'))
+}
+
+func luhnDouble(n int) int {
+	n *= 2
+	if n > 9 {
+		return n - 9
 	}
-	return i == len(s)
+	return n
+}
+
+func parseSemverNum(s string, i *int) bool {
+	return validate.ParseSemverNum(s, i)
 }
 
 func parseSemverPreRelease(s string, i *int) bool {
-	if *i >= len(s) || s[*i] != '-' {
-		return true
-	}
-	*i++
-	if !parseSemverIdent(s, i) {
-		return false
-	}
-	for *i < len(s) && s[*i] == '.' {
-		*i++
-		if !parseSemverIdent(s, i) {
-			return false
-		}
-	}
-	return true
+	return validate.ParseSemverPreRelease(s, i)
 }
 
 func parseSemverBuildMeta(s string, i *int) bool {
-	if *i >= len(s) || s[*i] != '+' {
-		return true
-	}
-	*i++
-	if !parseSemverBuild(s, i) {
-		return false
-	}
-	for *i < len(s) && s[*i] == '.' {
-		*i++
-		if !parseSemverBuild(s, i) {
-			return false
-		}
-	}
-	return true
-}
-
-func parseSemverNum(s string, pos *int) bool {
-	if *pos >= len(s) || s[*pos] < '0' || s[*pos] > '9' {
-		return false
-	}
-	if s[*pos] == '0' {
-		*pos++
-		return true
-	}
-	for *pos < len(s) && s[*pos] >= '0' && s[*pos] <= '9' {
-		*pos++
-	}
-	return true
-}
-
-func parseSemverIdent(s string, pos *int) bool {
-	start := *pos
-	for *pos < len(s) && s[*pos] != '.' && s[*pos] != '+' {
-		if !isSemverIdentChar(s[*pos]) {
-			return false
-		}
-		*pos++
-	}
-	if *pos == start {
-		return false
-	}
-	return hasNonZeroAlphaNum(s, start, *pos)
-}
-
-func isSemverIdentChar(c byte) bool {
-	return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '-'
-}
-
-func hasNonZeroAlphaNum(s string, start, end int) bool {
-	for j := start; j < end; j++ {
-		if s[j] != '-' && s[j] != '0' {
-			return true
-		}
-	}
-	return end-start <= 1
-}
-
-func parseSemverBuild(s string, pos *int) bool {
-	if *pos >= len(s) {
-		return false
-	}
-	for *pos < len(s) && s[*pos] != '.' && s[*pos] != '+' {
-		if !isSemverIdentChar(s[*pos]) {
-			return false
-		}
-		*pos++
-	}
-	return *pos > 0 && s[*pos-1] != '.' && s[*pos-1] != '-'
-}
-
-func ruleISBN10(field reflect.Value, _ string, _ bool) bool {
-	s, ok := stringValue(field)
-	if !ok {
-		return false
-	}
-	digits := 0
-	sum := 0
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if c == '-' || c == ' ' {
-			continue
-		}
-		digits++
-		if digits == 10 {
-			return isISBN10CheckDigit(c, sum)
-		}
-		if c < '0' || c > '9' {
-			return false
-		}
-		sum += int(c-'0') * (11 - digits)
-	}
-	return false
+	return validate.ParseSemverBuildMeta(s, i)
 }
 
 func isISBN10CheckDigit(c byte, sum int) bool {
 	if c == 'X' || c == 'x' {
-		sum += 10
-	} else if c >= '0' && c <= '9' {
-		sum += int(c - '0')
-	} else {
+		return (sum+10)%11 == 0
+	}
+	if c < '0' || c > '9' {
 		return false
 	}
-	return sum%11 == 0
-}
-
-func ruleISBN13(field reflect.Value, _ string, _ bool) bool {
-	s, ok := stringValue(field)
-	if !ok {
-		return false
-	}
-	digits := 0
-	sum := 0
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if c == '-' || c == ' ' {
-			continue
-		}
-		if c < '0' || c > '9' {
-			return false
-		}
-		digits++
-		if digits > 13 {
-			return false
-		}
-		if digits < 13 {
-			weight := 1
-			if digits%2 == 0 {
-				weight = 3
-			}
-			sum += int(c-'0') * weight
-		}
-	}
-	if digits != 13 {
-		return false
-	}
-	check := (10 - sum%10) % 10
-	return int(s[len(s)-1]-'0') == check
-}
-
-func ruleISSN(field reflect.Value, _ string, _ bool) bool {
-	s, ok := stringValue(field)
-	if !ok {
-		return false
-	}
-	digits := 0
-	sum := 0
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if c == '-' {
-			continue
-		}
-		digits++
-		if digits == 8 {
-			if c == 'X' || c == 'x' {
-				return sum%11 == 10
-			}
-			if c < '0' || c > '9' {
-				return false
-			}
-			return sum%11 == int(c-'0')
-		}
-		if c < '0' || c > '9' {
-			return false
-		}
-		sum += int(c-'0') * (9 - digits)
-	}
-	return false
-}
-
-func ruleBIC(field reflect.Value, _ string, _ bool) bool {
-	s, ok := stringValue(field)
-	if !ok {
-		return false
-	}
-	n := len(s)
-	if n != 8 && n != 11 {
-		return false
-	}
-	for i := 0; i < 6; i++ {
-		if !isUpperCaseLetter(s[i]) {
-			return false
-		}
-	}
-	for i := 6; i < n; i++ {
-		if !isAlphanumeric(s[i]) {
-			return false
-		}
-	}
-	return true
-}
-
-func isUpperCaseLetter(c byte) bool {
-	return c >= 'A' && c <= 'Z'
-}
-
-func isAlphanumeric(c byte) bool {
-	return (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
-}
-
-func ruleCron(field reflect.Value, _ string, _ bool) bool {
-	s, ok := stringValue(field)
-	if !ok {
-		return false
-	}
-	count := 0
-	start := 0
-	for i := 0; i <= len(s); i++ {
-		if i == len(s) || s[i] == ' ' || s[i] == '\t' {
-			if i > start {
-				count++
-				if !isValidCronFieldZeroAlloc(s[start:i]) {
-					return false
-				}
-			}
-			start = i + 1
-		}
-	}
-	return count == 5 || count == 6
+	return (sum+int(c-'0'))%11 == 0
 }
 
 func isValidCronFieldZeroAlloc(field string) bool {
-	inRange := false
-	inStep := false
-	for i := 0; i < len(field); i++ {
-		if !validateCronFieldChar(field, i, &inRange, &inStep) {
-			return false
-		}
-	}
-	return true
-}
-
-func validateCronFieldChar(field string, i int, inRange, inStep *bool) bool {
-	c := field[i]
-	switch {
-	case c == ',':
-		*inRange = false
-		*inStep = false
-	case c == '/':
-		if *inStep {
-			return false
-		}
-		*inStep = true
-	case c == '-':
-		if *inRange {
-			return false
-		}
-		*inRange = true
-	case c == '*':
-		return i == 0 || field[i-1] == ',' || field[i-1] == '/'
-	case c >= '0' && c <= '9':
-	default:
-		return false
-	}
-	return true
-}
-
-func ruleDataURI(field reflect.Value, _ string, _ bool) bool {
-	s, ok := stringValue(field)
-	if !ok || len(s) < 6 || !hasDataPrefix(s) {
-		return false
-	}
-	i := 5
-	i = skipDataURIMimeType(s, i)
-	i = skipDataURIParams(s, i)
-	return i < len(s) && s[i] == ','
+	return validate.IsValidCronField(field)
 }
 
 func hasDataPrefix(s string) bool {
-	return s[0] == 'd' && s[1] == 'a' && s[2] == 't' && s[3] == 'a' && s[4] == ':'
+	return len(s) >= 5 && s[0] == 'd' && s[1] == 'a' && s[2] == 't' && s[3] == 'a' && s[4] == ':'
 }
 
 func skipDataURIMimeType(s string, i int) int {
@@ -1327,7 +917,9 @@ func skipDataURIMimeType(s string, i int) int {
 func skipDataURIParams(s string, i int) int {
 	for i < len(s) && s[i] == ';' {
 		i++
-		i = skipBase64IfPresent(s, i)
+		if i+6 <= len(s) && s[i] == 'b' && s[i+1] == 'a' && s[i+2] == 's' && s[i+3] == 'e' && s[i+4] == '6' && s[i+5] == '4' {
+			i += 6
+		}
 		for i < len(s) && s[i] != ';' && s[i] != ',' {
 			if s[i] < ' ' || s[i] > '~' {
 				return len(s)
@@ -1338,26 +930,17 @@ func skipDataURIParams(s string, i int) int {
 	return i
 }
 
-func skipBase64IfPresent(s string, i int) int {
-	if i+6 <= len(s) && s[i] == 'b' && s[i+1] == 'a' && s[i+2] == 's' && s[i+3] == 'e' && s[i+4] == '6' && s[i+5] == '4' {
-		return i + 6
+func isAlpha(s string, i *int, minLen, maxLen int) bool {
+	start := *i
+	for *i < len(s) && *i-start < maxLen {
+		c := s[*i]
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) {
+			break
+		}
+		*i++
 	}
-	return i
-}
-
-func ruleBCP47(field reflect.Value, _ string, _ bool) bool {
-	s, ok := stringValue(field)
-	if !ok || len(s) < 2 {
-		return false
-	}
-	i := 0
-	if !isAlpha(s, &i, 2, 3) {
-		return false
-	}
-	i = parseBCP47ExtLang(s, i)
-	i = parseBCP47Script(s, i)
-	i = parseBCP47Region(s, i)
-	return parseBCP47Variants(s, i) == len(s)
+	n := *i - start
+	return n >= minLen && n <= maxLen
 }
 
 func parseBCP47ExtLang(s string, i int) int {
@@ -1405,22 +988,6 @@ func parseBCP47Variants(s string, i int) int {
 	return i
 }
 
-func isAlphanum(c byte) bool {
-	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
-}
-
-func isAlpha(s string, pos *int, minLen, maxLen int) bool {
-	start := *pos
-	for *pos < len(s) && *pos-start < maxLen {
-		c := s[*pos]
-		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) {
-			break
-		}
-		*pos++
-	}
-	return *pos-start >= minLen && *pos-start <= maxLen
-}
-
 func isAlphaAt(s string, pos, length int) bool {
 	if pos+length > len(s) {
 		return false
@@ -1447,36 +1014,8 @@ func isDigitAt(s string, pos, length int) bool {
 	return true
 }
 
-func ruleEthAddr(field reflect.Value, _ string, _ bool) bool {
-	s, ok := stringValue(field)
-	if !ok || len(s) != 42 {
-		return false
-	}
-	if s[0] != '0' || (s[1] != 'x' && s[1] != 'X') {
-		return false
-	}
-	for i := 2; i < 42; i++ {
-		c := s[i]
-		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
-			return false
-		}
-	}
-	return true
-}
-
-func ruleBtcAddr(field reflect.Value, _ string, _ bool) bool {
-	s, ok := stringValue(field)
-	if !ok {
-		return false
-	}
-	n := len(s)
-	if n < 26 || n > 62 {
-		return false
-	}
-	if s[0] == '1' || s[0] == '3' {
-		return isBtcLegacyAddr(s, n)
-	}
-	return isBtcBech32Addr(s, n)
+func isAlphanum(c byte) bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
 }
 
 func isBtcLegacyAddr(s string, n int) bool {
@@ -1504,23 +1043,10 @@ func isBtcBech32Addr(s string, n int) bool {
 }
 
 func isBase58Char(c byte) bool {
-	if c >= '1' && c <= '9' {
-		return true
-	}
-	if c >= 'A' && c <= 'H' {
-		return true
-	}
-	if c >= 'J' && c <= 'N' {
-		return true
-	}
-	if c >= 'P' && c <= 'Z' {
-		return true
-	}
-	if c >= 'a' && c <= 'k' {
-		return true
-	}
-	if c >= 'm' && c <= 'z' {
-		return true
-	}
-	return false
+	return (c >= '1' && c <= '9') ||
+		(c >= 'A' && c <= 'H') ||
+		(c >= 'J' && c <= 'N') ||
+		(c >= 'P' && c <= 'Z') ||
+		(c >= 'a' && c <= 'k') ||
+		(c >= 'm' && c <= 'z')
 }

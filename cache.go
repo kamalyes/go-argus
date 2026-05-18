@@ -22,6 +22,7 @@ type rulePlan struct {
 	name       string
 	param      string
 	paramParts []string
+	orRules    []rulePlan
 }
 
 type fieldPlan struct {
@@ -96,17 +97,78 @@ func parseRules(tag string) []rulePlan {
 	parsed := rule.ParseTag(tag)
 	rules := make([]rulePlan, 0, len(parsed))
 	for _, item := range parsed {
-		rp := rulePlan{name: item.Name, param: item.Param}
-		switch item.Name {
-		case "oneof", "oneofci", "noneof", "noneofci",
-			"required_with", "required_with_all", "required_without", "required_without_all",
-			"excluded_with", "excluded_with_all", "excluded_without", "excluded_without_all",
-			"required_if", "required_unless", "excluded_if", "excluded_unless":
-			if item.Param != "" {
-				rp.paramParts = strings.Fields(item.Param)
-			}
-		}
-		rules = append(rules, rp)
+		rules = append(rules, parseRulePlan(item))
 	}
 	return rules
+}
+
+func parseRulePlan(item rule.Rule) rulePlan {
+	raw := strings.TrimSpace(item.Raw)
+	if raw != "" {
+		parts := splitRuleOr(raw)
+		if len(parts) > 1 {
+			rp := rulePlan{name: raw, orRules: make([]rulePlan, 0, len(parts))}
+			for _, part := range parts {
+				part = strings.TrimSpace(part)
+				if part == "" {
+					continue
+				}
+				rp.orRules = append(rp.orRules, parseSingleRulePlan(part))
+			}
+			return rp
+		}
+	}
+	return prepareRulePlan(rulePlan{name: item.Name, param: item.Param})
+}
+
+func parseSingleRulePlan(raw string) rulePlan {
+	name, param, ok := strings.Cut(raw, "=")
+	if !ok {
+		name = raw
+	}
+	return prepareRulePlan(rulePlan{name: strings.TrimSpace(name), param: strings.TrimSpace(param)})
+}
+
+func prepareRulePlan(rp rulePlan) rulePlan {
+	switch rp.name {
+	case "oneof", "oneofci", "noneof", "noneofci",
+		"required_with", "required_with_all", "required_without", "required_without_all",
+		"excluded_with", "excluded_with_all", "excluded_without", "excluded_without_all",
+		"required_if", "required_unless", "excluded_if", "excluded_unless":
+		if rp.param != "" {
+			rp.paramParts = strings.Fields(rp.param)
+		}
+	}
+	return rp
+}
+
+func splitRuleOr(s string) []string {
+	start := 0
+	escaped := false
+	var parts []string
+	for i := 0; i < len(s); i++ {
+		if escaped {
+			escaped = false
+			continue
+		}
+		switch s[i] {
+		case '\\':
+			escaped = true
+		case '|':
+			parts = append(parts, s[start:i])
+			start = i + 1
+		}
+	}
+	if len(parts) == 0 {
+		return nil
+	}
+	parts = append(parts, s[start:])
+	if strings.Contains(parts[0], "=") {
+		for i := 1; i < len(parts); i++ {
+			if !strings.Contains(parts[i], "=") {
+				return nil
+			}
+		}
+	}
+	return parts
 }

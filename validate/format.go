@@ -188,6 +188,28 @@ func IsEmail(email string) bool {
 	return true
 }
 
+func ParseSemverNum(s string, pos *int) bool {
+	return parseSemverNumFmt(s, pos)
+}
+
+func ParseSemverPreRelease(s string, pos *int) bool {
+	return parseSemverPreReleaseFmt(s, pos)
+}
+
+func ParseSemverBuildMeta(s string, pos *int) bool {
+	return parseSemverBuildMetaFmt(s, pos)
+}
+
+func IsValidCronField(field string) bool {
+	inRange := false
+	for i := 0; i < len(field); i++ {
+		if !validateCronChar(field, i, &inRange) {
+			return false
+		}
+	}
+	return true
+}
+
 func isSemver(s string) bool {
 	i := 0
 	if i < len(s) && s[i] == 'v' {

@@ -165,8 +165,11 @@ func (v *Validate) VarString(field string, tag string) error {
 
 // VarCtx 按标签表达式校验单个变量，并传递 context
 func (v *Validate) VarCtx(ctx context.Context, field interface{}, tag string) error {
-	rv := reflect.ValueOf(field)
 	rules := v.cachedVarRules(tag)
+	if s, ok := field.(string); ok {
+		return v.varStringRules(ctx, s, rules, true)
+	}
+	rv := reflect.ValueOf(field)
 	errs := acquireErrors()
 	v.applyRules(ctx, reflect.Value{}, rv, rv, "", "", "", "", rules, errs)
 	if len(*errs) > 0 {
@@ -181,7 +184,10 @@ func (v *Validate) VarCtx(ctx context.Context, field interface{}, tag string) er
 
 // VarStringCtx 按标签表达式校验字符串变量，零反射快速路径
 func (v *Validate) VarStringCtx(ctx context.Context, field string, tag string) error {
-	rules := v.cachedVarRules(tag)
+	return v.varStringRules(ctx, field, v.cachedVarRules(tag), false)
+}
+
+func (v *Validate) varStringRules(ctx context.Context, field string, rules []rulePlan, wrapError bool) error {
 	for i := 0; i < len(rules); i++ {
 		r := rules[i]
 		switch r.name {
@@ -195,39 +201,65 @@ func (v *Validate) VarStringCtx(ctx context.Context, field string, tag string) e
 		case "structonly", "nostructlevel", "":
 			continue
 		}
-		if fn, ok := stringRuleMap[r.name]; ok {
-			if fn != nil && !fn(field, r.param) {
-				return &stringFieldError{tag: r.name, param: r.param, value: field}
+		if len(r.orRules) > 0 {
+			ok, handled := v.evalStringOr(ctx, field, r.orRules)
+			if !handled {
+				return v.varStringReflectPath(ctx, field, rules)
+			}
+			if !ok {
+				return v.stringRuleError(field, r, wrapError)
 			}
 			continue
 		}
-		if r.name == "oneof" {
-			if !stringOneOf(field, r.paramParts) {
-				return &stringFieldError{tag: r.name, param: r.param, value: field}
-			}
-			continue
-		}
-		if r.name == "oneofci" {
-			if !stringOneOfCI(field, r.paramParts) {
-				return &stringFieldError{tag: r.name, param: r.param, value: field}
-			}
-			continue
-		}
-		if r.name == "noneof" {
-			if stringOneOf(field, r.paramParts) {
-				return &stringFieldError{tag: r.name, param: r.param, value: field}
-			}
-			continue
-		}
-		if r.name == "noneofci" {
-			if stringOneOfCI(field, r.paramParts) {
-				return &stringFieldError{tag: r.name, param: r.param, value: field}
+		ok, handled := evalStringRule(field, r)
+		if handled {
+			if !ok {
+				return v.stringRuleError(field, r, wrapError)
 			}
 			continue
 		}
 		return v.varStringReflectPath(ctx, field, rules)
 	}
 	return nil
+}
+
+func (v *Validate) evalStringOr(ctx context.Context, field string, rules []rulePlan) (bool, bool) {
+	for i := 0; i < len(rules); i++ {
+		ok, handled := evalStringRule(field, rules[i])
+		if !handled {
+			return false, false
+		}
+		if ok {
+			return true, true
+		}
+	}
+	return false, true
+}
+
+func evalStringRule(field string, r rulePlan) (bool, bool) {
+	if fn, ok := stringRuleMap[r.name]; ok {
+		return fn == nil || fn(field, r.param), true
+	}
+	switch r.name {
+	case "oneof":
+		return stringOneOf(field, r.paramParts), true
+	case "oneofci":
+		return stringOneOfCI(field, r.paramParts), true
+	case "noneof":
+		return !stringOneOf(field, r.paramParts), true
+	case "noneofci":
+		return !stringOneOfCI(field, r.paramParts), true
+	default:
+		return false, false
+	}
+}
+
+func (v *Validate) stringRuleError(field string, rule rulePlan, wrap bool) error {
+	fe := &stringFieldError{tag: rule.name, param: rule.param, value: field}
+	if wrap {
+		return ValidationErrors{fe}
+	}
+	return fe
 }
 
 func (v *Validate) varStringReflectPath(ctx context.Context, field string, rules []rulePlan) error {
@@ -331,7 +363,17 @@ func (v *Validate) applyRules(ctx context.Context, top reflect.Value, parent ref
 			continue
 		}
 
-		ok := v.evalRule(ctx, top, parent, derefed, fieldName, structFieldName, rule)
+		ok := false
+		if len(rule.orRules) > 0 {
+			for j := 0; j < len(rule.orRules); j++ {
+				if v.evalRule(ctx, top, parent, derefed, fieldName, structFieldName, rule.orRules[j]) {
+					ok = true
+					break
+				}
+			}
+		} else {
+			ok = v.evalRule(ctx, top, parent, derefed, fieldName, structFieldName, rule)
+		}
 		if !ok {
 			*errs = append(*errs, newFieldError(derefed, ns, structNs, fieldName, structFieldName, rule))
 			return

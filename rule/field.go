@@ -14,9 +14,12 @@ package rule
 import (
 	"reflect"
 	"strings"
+	"sync"
 
 	"github.com/kamalyes/go-argus/validate"
 )
+
+var fieldLookupCache sync.Map
 
 // FieldByPath 根据字段路径读取结构体字段
 func FieldByPath(root reflect.Value, path string) (reflect.Value, bool) {
@@ -124,25 +127,42 @@ func CompareValue(left reflect.Value, right reflect.Value, op string) bool {
 }
 
 func directField(current reflect.Value, name string) (reflect.Value, bool) {
-	typ := current.Type()
-	for i := 0; i < current.NumField(); i++ {
+	if idx, ok := fieldLookup(current.Type())[name]; ok {
+		return current.Field(idx), true
+	}
+	return reflect.Value{}, false
+}
+
+func fieldLookup(typ reflect.Type) map[string]int {
+	if cached, ok := fieldLookupCache.Load(typ); ok {
+		return cached.(map[string]int)
+	}
+	lookup := make(map[string]int, typ.NumField()*4)
+	for i := 0; i < typ.NumField(); i++ {
 		sf := typ.Field(i)
 		if sf.PkgPath != "" {
 			continue
 		}
-		if sf.Name == name {
-			return current.Field(i), true
-		}
+		addFieldLookupName(lookup, sf.Name, i)
 		if jsonTag := sf.Tag.Get("json"); jsonTag != "" {
-			if jsonName, _, _ := strings.Cut(jsonTag, ","); jsonName == name && jsonName != "-" {
-				return current.Field(i), true
+			if jsonName, _, _ := strings.Cut(jsonTag, ","); jsonName != "" && jsonName != "-" {
+				addFieldLookupName(lookup, jsonName, i)
 			}
 		}
-		if lowerCamel(sf.Name) == name || snakeCase(sf.Name) == name {
-			return current.Field(i), true
-		}
+		addFieldLookupName(lookup, lowerCamel(sf.Name), i)
+		addFieldLookupName(lookup, snakeCase(sf.Name), i)
 	}
-	return reflect.Value{}, false
+	actual, _ := fieldLookupCache.LoadOrStore(typ, lookup)
+	return actual.(map[string]int)
+}
+
+func addFieldLookupName(lookup map[string]int, name string, index int) {
+	if name == "" {
+		return
+	}
+	if _, exists := lookup[name]; !exists {
+		lookup[name] = index
+	}
 }
 
 func fieldNames(sf reflect.StructField) []string {

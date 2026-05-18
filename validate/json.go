@@ -28,6 +28,10 @@ func ValidateJSON(data []byte) error {
 	return fmt.Errorf(i18n.Msg(MsgJSONInvalid))
 }
 
+func IsValidJSONBytes(data []byte) bool {
+	return json.Valid(data)
+}
+
 // IsJSONNull 判断 JSON 字节是否为 null
 func IsJSONNull(data []byte) bool {
 	return strings.TrimSpace(string(data)) == "null"

@@ -13,7 +13,6 @@ package validator
 import (
 	"encoding/base32"
 	"encoding/base64"
-	"encoding/json"
 	"html"
 	"net"
 	"net/url"
@@ -455,7 +454,200 @@ func stringBase64RawURL(s string, _ string) bool {
 }
 
 func stringJSON(s string, _ string) bool {
-	return json.NewDecoder(strings.NewReader(s)).Decode(new(interface{})) == nil
+	return isValidJSONString(s)
+}
+
+func isValidJSONString(s string) bool {
+	n := len(s)
+	if n == 0 {
+		return false
+	}
+	p := 0
+	p = skipWS(s, p)
+	if p >= n {
+		return false
+	}
+	p = scanJSONVal(s, p)
+	if p < 0 {
+		return false
+	}
+	p = skipWS(s, p)
+	return p == n
+}
+
+func skipWS(s string, i int) int {
+	for i < len(s) {
+		switch s[i] {
+		case ' ', '\t', '\r', '\n':
+			i++
+		default:
+			return i
+		}
+	}
+	return i
+}
+
+func scanJSONVal(s string, i int) int {
+	if i >= len(s) {
+		return -1
+	}
+	switch s[i] {
+	case '"':
+		return scanJSONStr(s, i+1)
+	case '{':
+		return scanJSONObject(s, i+1)
+	case '[':
+		return scanJSONArray(s, i+1)
+	case 't':
+		if i+4 <= len(s) && s[i:i+4] == "true" {
+			return i + 4
+		}
+		return -1
+	case 'f':
+		if i+5 <= len(s) && s[i:i+5] == "false" {
+			return i + 5
+		}
+		return -1
+	case 'n':
+		if i+4 <= len(s) && s[i:i+4] == "null" {
+			return i + 4
+		}
+		return -1
+	default:
+		if s[i] == '-' || (s[i] >= '0' && s[i] <= '9') {
+			return scanJSONNum(s, i)
+		}
+		return -1
+	}
+}
+
+func scanJSONStr(s string, i int) int {
+	for i < len(s) {
+		c := s[i]
+		if c == '"' {
+			return i + 1
+		}
+		if c == '\\' {
+			i += 2
+			continue
+		}
+		if c < 0x20 {
+			return -1
+		}
+		i++
+	}
+	return -1
+}
+
+func scanJSONObject(s string, i int) int {
+	i = skipWS(s, i)
+	if i >= len(s) {
+		return -1
+	}
+	if s[i] == '}' {
+		return i + 1
+	}
+	for {
+		i = skipWS(s, i)
+		if i >= len(s) || s[i] != '"' {
+			return -1
+		}
+		i = scanJSONStr(s, i+1)
+		if i < 0 {
+			return -1
+		}
+		i = skipWS(s, i)
+		if i >= len(s) || s[i] != ':' {
+			return -1
+		}
+		i = skipWS(s, i+1)
+		i = scanJSONVal(s, i)
+		if i < 0 {
+			return -1
+		}
+		i = skipWS(s, i)
+		if i >= len(s) {
+			return -1
+		}
+		if s[i] == '}' {
+			return i + 1
+		}
+		if s[i] != ',' {
+			return -1
+		}
+		i++
+	}
+}
+
+func scanJSONArray(s string, i int) int {
+	i = skipWS(s, i)
+	if i >= len(s) {
+		return -1
+	}
+	if s[i] == ']' {
+		return i + 1
+	}
+	for {
+		i = skipWS(s, i)
+		i = scanJSONVal(s, i)
+		if i < 0 {
+			return -1
+		}
+		i = skipWS(s, i)
+		if i >= len(s) {
+			return -1
+		}
+		if s[i] == ']' {
+			return i + 1
+		}
+		if s[i] != ',' {
+			return -1
+		}
+		i++
+	}
+}
+
+func scanJSONNum(s string, i int) int {
+	if i < len(s) && s[i] == '-' {
+		i++
+	}
+	if i >= len(s) {
+		return -1
+	}
+	if s[i] == '0' {
+		i++
+	} else if s[i] >= '1' && s[i] <= '9' {
+		i++
+		for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+			i++
+		}
+	} else {
+		return -1
+	}
+	if i < len(s) && s[i] == '.' {
+		i++
+		if i >= len(s) || s[i] < '0' || s[i] > '9' {
+			return -1
+		}
+		i++
+		for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+			i++
+		}
+	}
+	if i < len(s) && (s[i] == 'e' || s[i] == 'E') {
+		i++
+		if i < len(s) && (s[i] == '+' || s[i] == '-') {
+			i++
+		}
+		if i >= len(s) || s[i] < '0' || s[i] > '9' {
+			return -1
+		}
+		i++
+		for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+			i++
+		}
+	}
+	return i
 }
 
 func stringUnique(s string, _ string) bool {

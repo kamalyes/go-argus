@@ -18,6 +18,7 @@ import "strings"
 type Rule struct {
 	Name  string
 	Param string
+	Raw   string
 }
 
 // ParseTag 解析 validate 标签，支持逗号分隔和 name=value 参数
@@ -39,6 +40,7 @@ func ParseTag(tag string) []Rule {
 		rules = append(rules, Rule{
 			Name:  strings.TrimSpace(name),
 			Param: strings.TrimSpace(param),
+			Raw:   part,
 		})
 	}
 	return rules

@@ -31,6 +31,9 @@ func TimeValue(value reflect.Value, layout string) (time.Time, bool) {
 		case time.Time:
 			return v, true
 		case string:
+			if layout == "" && !looksLikeTimeString(v) {
+				return time.Time{}, false
+			}
 			return parseTimeString(v, layout)
 		}
 	}
@@ -44,6 +47,20 @@ func TimeValue(value reflect.Value, layout string) (time.Time, bool) {
 		return t, true
 	}
 	return time.Time{}, false
+}
+
+func looksLikeTimeString(value string) bool {
+	value = strings.TrimSpace(value)
+	return len(value) >= len("2006-01-02") &&
+		isDigit(value[0]) && isDigit(value[1]) && isDigit(value[2]) && isDigit(value[3]) &&
+		value[4] == '-' &&
+		isDigit(value[5]) && isDigit(value[6]) &&
+		value[7] == '-' &&
+		isDigit(value[8]) && isDigit(value[9])
+}
+
+func isDigit(b byte) bool {
+	return b >= '0' && b <= '9'
 }
 
 // ResolveTimeExpr 解析 now、now+5m、now-30d 这类时间表达式
