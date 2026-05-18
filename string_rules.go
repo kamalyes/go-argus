@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2026-05-17 11:11:08
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2026-05-17 15:57:07
+ * @LastEditTime: 2026-05-18 10:53:56
  * @FilePath: \go-argus\string_rules.go
  * @Description: Argus 字符串规则实现
  *
@@ -649,9 +649,6 @@ func stringISBN10(s string, _ string) bool {
 			continue
 		}
 		digits++
-		if digits > 10 {
-			return false
-		}
 		if digits == 10 {
 			return isISBN10CheckDigit(c, sum)
 		}

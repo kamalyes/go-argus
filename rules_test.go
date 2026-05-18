@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-16 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2026-05-17 20:02:16
+ * @LastEditTime: 2026-05-17 20:10:55
  * @FilePath: \go-argus\rules_test.go
  * @Description: rules.go 测试，覆盖所有内置字段规则和辅助函数
  *
@@ -2488,8 +2488,40 @@ func TestRuleURIMailtoNoHost(t *testing.T) {
 }
 
 func TestBuiltinRuleISBN13NonDigit(t *testing.T) {
-	if ruleISBN13(reflect.ValueOf("978-0-471-A1709-4"), "", false) {
-		t.Fatal("expected isbn13 to fail for non-digit char")
+	testCases := []struct {
+		input    string
+		expected bool
+	}{
+		{"978-0-471-A1709-4", false},
+		{"978047111709A", false},
+		{"978-0-471-11709-4X", false},
+		{"9780123456786", true}, // 有效的 ISBN13
+	}
+	for _, tc := range testCases {
+		result := ruleISBN13(reflect.ValueOf(tc.input), "", false)
+		if result != tc.expected {
+			t.Errorf("ISBN13(%q) = %v, expected %v", tc.input, result, tc.expected)
+		}
+	}
+}
+
+func TestBuiltinRuleISBN13WithNonDigitInMiddle(t *testing.T) {
+	input := "9780A12345678"
+	v := reflect.ValueOf(input)
+	s, ok := stringValue(v)
+	t.Logf("stringValue: %q, ok: %v", s, ok)
+
+	for i, c := range s {
+		t.Logf("s[%d] = %q (byte=%d)", i, c, s[i])
+		if s[i] < '0' || s[i] > '9' {
+			t.Logf("Found non-digit at index %d: %q", i, s[i])
+		}
+	}
+
+	result := ruleISBN13(v, "", false)
+	t.Logf("ruleISBN13 result: %v", result)
+	if result {
+		t.Fatal("expected isbn13 to fail for non-digit char in middle")
 	}
 }
 

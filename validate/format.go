@@ -306,23 +306,21 @@ func isBIC(s string) bool {
 	if n != 8 && n != 11 {
 		return false
 	}
-	for i := 0; i < 4; i++ {
-		if s[i] < 'A' || s[i] > 'Z' {
-			return false
-		}
-	}
-	for i := 4; i < 6; i++ {
-		if s[i] < 'A' || s[i] > 'Z' {
+	for i := 0; i < 6; i++ {
+		if !isUpperCaseLetterFmt(s[i]) {
 			return false
 		}
 	}
 	for i := 6; i < n; i++ {
-		c := s[i]
-		if !((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) {
+		if !isAlphanumFmt(s[i]) {
 			return false
 		}
 	}
 	return true
+}
+
+func isUpperCaseLetterFmt(c byte) bool {
+	return c >= 'A' && c <= 'Z'
 }
 
 func isDataURI(s string) bool {
@@ -523,53 +521,37 @@ func isBtcBech32AddrFmt(s string, n int) bool {
 }
 
 func isBase58CharFmt(c byte) bool {
-	if c >= '1' && c <= '9' {
-		return true
-	}
-	if c >= 'A' && c <= 'H' {
-		return true
-	}
-	if c >= 'J' && c <= 'N' {
-		return true
-	}
-	if c >= 'P' && c <= 'Z' {
-		return true
-	}
-	if c >= 'a' && c <= 'k' {
-		return true
-	}
-	if c >= 'm' && c <= 'z' {
-		return true
-	}
-	return false
+	return (c >= '1' && c <= '9') ||
+		(c >= 'A' && c <= 'H') ||
+		(c >= 'J' && c <= 'N') ||
+		(c >= 'P' && c <= 'Z') ||
+		(c >= 'a' && c <= 'k') ||
+		(c >= 'm' && c <= 'z')
 }
 
 func isEmailLocal(local string) bool {
 	for i := 0; i < len(local); i++ {
-		c := local[i]
-		if c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' {
-			continue
-		}
-		if c == '.' || c == '!' || c == '#' || c == '$' || c == '%' || c == '&' || c == '\'' {
-			continue
-		}
-		if c == '*' || c == '+' || c == '/' || c == '=' || c == '?' || c == '^' || c == '_' || c == '`' {
-			continue
-		}
-		if c == '{' || c == '|' || c == '}' || c == '~' || c == '-' {
-			continue
-		}
-		return false
-	}
-	if local[0] == '.' || local[len(local)-1] == '.' {
-		return false
-	}
-	for i := 0; i < len(local)-1; i++ {
-		if local[i] == '.' && local[i+1] == '.' {
+		if !isValidEmailLocalChar(local[i]) {
 			return false
 		}
 	}
-	return true
+	return local[0] != '.' && local[len(local)-1] != '.' && !containsConsecutiveDots(local)
+}
+
+func isValidEmailLocalChar(c byte) bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
+		c == '.' || c == '!' || c == '#' || c == '$' || c == '%' || c == '&' || c == '\'' ||
+		c == '*' || c == '+' || c == '/' || c == '=' || c == '?' || c == '^' || c == '_' || c == '`' ||
+		c == '{' || c == '|' || c == '}' || c == '~' || c == '-'
+}
+
+func containsConsecutiveDots(s string) bool {
+	for i := 0; i < len(s)-1; i++ {
+		if s[i] == '.' && s[i+1] == '.' {
+			return true
+		}
+	}
+	return false
 }
 
 func isEmailDomain(domain string) bool {
@@ -897,32 +879,32 @@ func isCron(expr string) bool {
 func isValidCronFieldZeroAlloc(field string) bool {
 	inRange := false
 	for i := 0; i < len(field); i++ {
-		c := field[i]
-		switch {
-		case c == ',':
-			if inRange {
-				return false
-			}
-		case c == '/':
-			if i == 0 || i == len(field)-1 {
-				return false
-			}
-			if !validateCronStep(field, i+1) {
-				return false
-			}
-		case c == '-':
-			if inRange {
-				return false
-			}
-			inRange = true
-		case c == '*':
-			if i > 0 && field[i-1] != ',' && field[i-1] != '/' {
-				return false
-			}
-		case c >= '0' && c <= '9':
-		default:
+		if !validateCronChar(field, i, &inRange) {
 			return false
 		}
+	}
+	return true
+}
+
+func validateCronChar(field string, i int, inRange *bool) bool {
+	c := field[i]
+	switch {
+	case c == ',':
+		if *inRange {
+			return false
+		}
+	case c == '/':
+		return i > 0 && i < len(field)-1 && validateCronStep(field, i+1)
+	case c == '-':
+		if *inRange {
+			return false
+		}
+		*inRange = true
+	case c == '*':
+		return i == 0 || field[i-1] == ',' || field[i-1] == '/'
+	case c >= '0' && c <= '9':
+	default:
+		return false
 	}
 	return true
 }

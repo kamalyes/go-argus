@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-06 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2026-05-17 02:28:05
+ * @LastEditTime: 2026-05-18 10:53:49
  * @FilePath: \go-argus\rules.go
  * @Description: 根包内置字段规则，负责单字段格式、长度、数值和枚举校验
  *
@@ -197,9 +197,8 @@ func ruleGt(field reflect.Value, param string, _ bool) bool {
 	return ok && compareLengthOrNumber(field, n, cmpGT)
 }
 
-func ruleGte(field reflect.Value, param string, _ bool) bool {
-	n, ok := parseFloat(param)
-	return ok && compareLengthOrNumber(field, n, cmpGTE)
+func ruleGte(field reflect.Value, param string, hasCtx bool) bool {
+	return ruleMin(field, param, hasCtx)
 }
 
 func ruleLt(field reflect.Value, param string, _ bool) bool {
@@ -207,9 +206,8 @@ func ruleLt(field reflect.Value, param string, _ bool) bool {
 	return ok && compareLengthOrNumber(field, n, cmpLT)
 }
 
-func ruleLte(field reflect.Value, param string, _ bool) bool {
-	n, ok := parseFloat(param)
-	return ok && compareLengthOrNumber(field, n, cmpLTE)
+func ruleLte(field reflect.Value, param string, hasCtx bool) bool {
+	return ruleMax(field, param, hasCtx)
 }
 
 func ruleAlpha(field reflect.Value, _ string, _ bool) bool {
@@ -888,10 +886,8 @@ func compareOp(actual, expect float64, op cmpOp) bool {
 		return actual > expect
 	case cmpLT:
 		return actual < expect
-	case cmpEQ:
-		return actual == expect
 	default:
-		return false
+		return actual == expect
 	}
 }
 
@@ -1130,9 +1126,6 @@ func ruleISBN10(field reflect.Value, _ string, _ bool) bool {
 			continue
 		}
 		digits++
-		if digits > 10 {
-			return false
-		}
 		if digits == 10 {
 			return isISBN10CheckDigit(c, sum)
 		}
@@ -1202,9 +1195,6 @@ func ruleISSN(field reflect.Value, _ string, _ bool) bool {
 			continue
 		}
 		digits++
-		if digits > 8 {
-			return false
-		}
 		if digits == 8 {
 			if c == 'X' || c == 'x' {
 				return sum%11 == 10
@@ -1231,23 +1221,25 @@ func ruleBIC(field reflect.Value, _ string, _ bool) bool {
 	if n != 8 && n != 11 {
 		return false
 	}
-	for i := 0; i < 4; i++ {
-		if s[i] < 'A' || s[i] > 'Z' {
-			return false
-		}
-	}
-	for i := 4; i < 6; i++ {
-		if s[i] < 'A' || s[i] > 'Z' {
+	for i := 0; i < 6; i++ {
+		if !isUpperCaseLetter(s[i]) {
 			return false
 		}
 	}
 	for i := 6; i < n; i++ {
-		c := s[i]
-		if !((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) {
+		if !isAlphanumeric(s[i]) {
 			return false
 		}
 	}
 	return true
+}
+
+func isUpperCaseLetter(c byte) bool {
+	return c >= 'A' && c <= 'Z'
+}
+
+func isAlphanumeric(c byte) bool {
+	return (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
 }
 
 func ruleCron(field reflect.Value, _ string, _ bool) bool {
@@ -1275,29 +1267,34 @@ func isValidCronFieldZeroAlloc(field string) bool {
 	inRange := false
 	inStep := false
 	for i := 0; i < len(field); i++ {
-		c := field[i]
-		switch {
-		case c == ',':
-			inRange = false
-			inStep = false
-		case c == '/':
-			if inStep {
-				return false
-			}
-			inStep = true
-		case c == '-':
-			if inRange {
-				return false
-			}
-			inRange = true
-		case c == '*':
-			if i > 0 && field[i-1] != ',' && field[i-1] != '/' {
-				return false
-			}
-		case c >= '0' && c <= '9':
-		default:
+		if !validateCronFieldChar(field, i, &inRange, &inStep) {
 			return false
 		}
+	}
+	return true
+}
+
+func validateCronFieldChar(field string, i int, inRange, inStep *bool) bool {
+	c := field[i]
+	switch {
+	case c == ',':
+		*inRange = false
+		*inStep = false
+	case c == '/':
+		if *inStep {
+			return false
+		}
+		*inStep = true
+	case c == '-':
+		if *inRange {
+			return false
+		}
+		*inRange = true
+	case c == '*':
+		return i == 0 || field[i-1] == ',' || field[i-1] == '/'
+	case c >= '0' && c <= '9':
+	default:
+		return false
 	}
 	return true
 }
