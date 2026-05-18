@@ -719,24 +719,26 @@ func stringISSN(s string, _ string) bool {
 	return false
 }
 
+func isBICUpper(c byte) bool {
+	return c >= 'A' && c <= 'Z'
+}
+
+func isBICAlphanum(c byte) bool {
+	return isBICUpper(c) || (c >= '0' && c <= '9')
+}
+
 func stringBIC(s string, _ string) bool {
 	n := len(s)
 	if n != 8 && n != 11 {
 		return false
 	}
-	for i := 0; i < 4; i++ {
-		if s[i] < 'A' || s[i] > 'Z' {
-			return false
-		}
-	}
-	for i := 4; i < 6; i++ {
-		if s[i] < 'A' || s[i] > 'Z' {
+	for i := 0; i < 6; i++ {
+		if !isBICUpper(s[i]) {
 			return false
 		}
 	}
 	for i := 6; i < n; i++ {
-		c := s[i]
-		if !((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) {
+		if !isBICAlphanum(s[i]) {
 			return false
 		}
 	}
