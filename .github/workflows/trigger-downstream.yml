@@ -39,7 +39,7 @@ jobs:
       - name: Dispatch to ${{ matrix.repo }}
         uses: peter-evans/repository-dispatch@v3
         with:
-          token: ${{ secrets.GH_DISPATCH_PAT }}
+          token: ${{ secrets.GH_GPA_TOKEN }}
           repository: ${{ matrix.repo }}
           event-type: upstream-updated
           client-payload: >-

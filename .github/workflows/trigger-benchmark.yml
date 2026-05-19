@@ -18,6 +18,6 @@ jobs:
       - name: Dispatch benchmark workflow
         uses: peter-evans/repository-dispatch@v3
         with:
-          token: ${{ secrets.GH_DISPATCH_PAT }}
+          token: ${{ secrets.GH_GPA_TOKEN }}
           repository: kamalyes/go-argus-benchmark
           event-type: go-argus-updated
