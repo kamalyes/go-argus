@@ -1,0 +1,23 @@
+name: Trigger Benchmark
+
+on:
+  push:
+    branches: [master]
+    paths-ignore:
+      - "**.md"
+      - ".github/**"
+      - "docs/**"
+
+permissions:
+  actions: write
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch benchmark workflow
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.GH_DISPATCH_PAT }}
+          repository: kamalyes/go-argus-benchmark
+          event-type: go-argus-updated

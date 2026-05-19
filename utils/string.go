@@ -30,3 +30,14 @@ func SnakeCase(s string) string {
 	}
 	return strings.ToLower(out.String())
 }
+
+// JoinNS 拼接命名空间路径，空值一侧直接返回另一侧
+func JoinNS(parent string, child string) string {
+	if parent == "" {
+		return child
+	}
+	if child == "" {
+		return parent
+	}
+	return parent + "." + child
+}

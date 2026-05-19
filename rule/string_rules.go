@@ -15,8 +15,10 @@ import (
 	"github.com/kamalyes/go-argus/validate"
 )
 
+// StringRuleFunc 字符串规则函数签名
 type StringRuleFunc func(s string, param string) bool
 
+// StringRuleMap 字符串规则映射表，VarString 快速路径直接查表
 var StringRuleMap = map[string]StringRuleFunc{
 	"required":          StringRuleRequired,
 	"isdefault":         StringRuleIsDefault,

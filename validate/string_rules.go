@@ -763,3 +763,23 @@ func StringMongoDB(s string) bool {
 func StringDNSRFC1035Label(s string) bool {
 	return len(s) <= 63 && DNSLabelRegex.MatchString(s)
 }
+
+// StringOneOf 判断字符串是否在候选列表中（精确匹配）
+func StringOneOf(s string, parts []string) bool {
+	for _, item := range parts {
+		if s == item {
+			return true
+		}
+	}
+	return false
+}
+
+// StringOneOfCI 判断字符串是否在候选列表中（忽略大小写）
+func StringOneOfCI(s string, parts []string) bool {
+	for _, item := range parts {
+		if strings.EqualFold(s, item) {
+			return true
+		}
+	}
+	return false
+}

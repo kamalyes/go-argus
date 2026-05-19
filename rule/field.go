@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-06 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2026-05-18 00:00:00
+ * @LastEditTime: 2026-05-19 13:58:18
  * @FilePath: \go-argus\rule\field.go
  * @Description: 字段路径解析模块，支持 Go 字段名、json 名、snake_case 和嵌套字段访问
  *
@@ -128,6 +128,7 @@ func CompareValue(left reflect.Value, right reflect.Value, op string) bool {
 	}
 }
 
+// OneOfFast 判断字段值是否在候选列表中（精确匹配）
 func OneOfFast(field reflect.Value, parts []string) bool {
 	actual, ok := validate.ScalarString(field)
 	if !ok {
@@ -141,6 +142,7 @@ func OneOfFast(field reflect.Value, parts []string) bool {
 	return false
 }
 
+// OneOfCIFast 判断字段值是否在候选列表中（忽略大小写）
 func OneOfCIFast(field reflect.Value, parts []string) bool {
 	actual, ok := validate.ScalarString(field)
 	if !ok {
@@ -154,6 +156,7 @@ func OneOfCIFast(field reflect.Value, parts []string) bool {
 	return false
 }
 
+// IsRequiredWithAll 判断 required_with_all 条件是否触发（所有指定字段均非空）
 func IsRequiredWithAll(parent reflect.Value, parts []string) bool {
 	if len(parts) == 0 {
 		return false
@@ -167,6 +170,7 @@ func IsRequiredWithAll(parent reflect.Value, parts []string) bool {
 	return true
 }
 
+// IsRequiredWithout 判断 required_without 条件是否触发（任一指定字段为空）
 func IsRequiredWithout(parent reflect.Value, parts []string) bool {
 	for _, field := range parts {
 		value, ok := FieldByPath(parent, field)
@@ -177,6 +181,7 @@ func IsRequiredWithout(parent reflect.Value, parts []string) bool {
 	return false
 }
 
+// IsRequiredWithoutAll 判断 required_without_all 条件是否触发（所有指定字段均为空）
 func IsRequiredWithoutAll(parent reflect.Value, parts []string) bool {
 	if len(parts) == 0 {
 		return false
@@ -190,6 +195,7 @@ func IsRequiredWithoutAll(parent reflect.Value, parts []string) bool {
 	return true
 }
 
+// Range 判断起始字段值是否小于结束字段值
 func Range(parent reflect.Value, param string) bool {
 	sep := ","
 	if strings.Contains(param, "|") {
@@ -210,6 +216,7 @@ func Range(parent reflect.Value, param string) bool {
 	return CompareValue(start, end, "lt")
 }
 
+// FieldContains 判断当前字段字符串是否包含目标字段的值
 func FieldContains(field reflect.Value, parent reflect.Value, param string) bool {
 	other, ok := FieldByPath(parent, param)
 	if !ok {
@@ -223,6 +230,7 @@ func FieldContains(field reflect.Value, parent reflect.Value, param string) bool
 	return ok && strings.Contains(left, right)
 }
 
+// directField 直接根据字段名获取字段值，支持嵌套字段访问
 func directField(current reflect.Value, name string) (reflect.Value, bool) {
 	if idx, ok := fieldLookup(current.Type())[name]; ok {
 		return current.Field(idx), true
@@ -254,6 +262,7 @@ func fieldLookup(typ reflect.Type) map[string]int {
 	return actual.(map[string]int)
 }
 
+// addFieldLookupName 添加字段名到索引的映射，避免重复添加
 func addFieldLookupName(lookup map[string]int, name string, index int) {
 	if name == "" {
 		return
@@ -263,6 +272,7 @@ func addFieldLookupName(lookup map[string]int, name string, index int) {
 	}
 }
 
+// fieldNames 生成字段名的候选列表，包括 Go 字段名、json 名、snake_case
 func fieldNames(sf reflect.StructField) []string {
 	names := []string{sf.Name, utils.LowerCamel(sf.Name), utils.SnakeCase(sf.Name)}
 	if jsonName := strings.Split(sf.Tag.Get("json"), ",")[0]; jsonName != "" && jsonName != "-" {
@@ -271,6 +281,7 @@ func fieldNames(sf reflect.StructField) []string {
 	return names
 }
 
+// scalarString 获取字段值的字符串表示，支持指针和空值
 func scalarString(v reflect.Value) string {
 	v = validate.DerefReflect(v)
 	if !v.IsValid() {
@@ -279,6 +290,7 @@ func scalarString(v reflect.Value) string {
 	return validate.StringValue(v)
 }
 
+// floatValue 获取字段值的浮点数表示，支持指针和空值
 func floatValue(v reflect.Value) (float64, bool) {
 	v = validate.DerefReflect(v)
 	if !v.IsValid() {
@@ -296,6 +308,7 @@ func floatValue(v reflect.Value) (float64, bool) {
 	}
 }
 
+// compareFloat 对比两个浮点数是否符合指定操作符
 func compareFloat(left, right float64, op string) bool {
 	switch op {
 	case "eq":

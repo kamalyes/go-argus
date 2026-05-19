@@ -1,0 +1,46 @@
+name: Trigger Downstream
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  actions: write
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        repo:
+          - kamalyes/go-toolbox
+          - kamalyes/go-pbmo
+          - kamalyes/go-sqlbuilder
+          - kamalyes/go-wsc
+          - kamalyes/go-cachex
+          - kamalyes/go-config
+          - kamalyes/go-logger
+          - kamalyes/go-i18n
+          - kamalyes/go-natsx
+          - kamalyes/go-ossx
+          - kamalyes/go-logger-adapter
+          - kamalyes/go-namesilo
+          - kamalyes/go-phantom
+          - kamalyes/go-swagger
+          - kamalyes/go-casbin
+          - kamalyes/go-casbin-gorm-adapter
+          - kamalyes/go-casbin-kafka-adapter
+          - kamalyes/go-casbin-nats-adapter
+          - kamalyes/go-casbin-redis-adapter
+          - kamalyes/go-scope-provider
+          - kamalyes/go-argus-benchmark
+    steps:
+      - name: Dispatch to ${{ matrix.repo }}
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.GH_DISPATCH_PAT }}
+          repository: ${{ matrix.repo }}
+          event-type: upstream-updated
+          client-payload: >-
+            {"module": "github.com/kamalyes/go-argus", "version": "${{ github.ref_name }}", "sha": "${{ github.sha }}"}

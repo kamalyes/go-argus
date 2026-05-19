@@ -13,6 +13,8 @@ package validator
 import (
 	"context"
 	"testing"
+
+	"github.com/kamalyes/go-argus/validate"
 )
 
 func TestVarStringRequired(t *testing.T) {
@@ -170,21 +172,21 @@ func TestVarStringEmptyTag(t *testing.T) {
 
 func TestStringOneOfFunc(t *testing.T) {
 	parts := []string{"admin", "member", "guest"}
-	if !stringOneOf("admin", parts) {
-		t.Fatal("expected stringOneOf to find 'admin'")
+	if !validate.StringOneOf("admin", parts) {
+		t.Fatal("expected StringOneOf to find 'admin'")
 	}
-	if stringOneOf("root", parts) {
-		t.Fatal("expected stringOneOf to not find 'root'")
+	if validate.StringOneOf("root", parts) {
+		t.Fatal("expected StringOneOf to not find 'root'")
 	}
 }
 
 func TestStringOneOfCIFunc(t *testing.T) {
 	parts := []string{"admin", "member", "guest"}
-	if !stringOneOfCI("Admin", parts) {
-		t.Fatal("expected stringOneOfCI to find 'Admin' case-insensitively")
+	if !validate.StringOneOfCI("Admin", parts) {
+		t.Fatal("expected StringOneOfCI to find 'Admin' case-insensitively")
 	}
-	if stringOneOfCI("Root", parts) {
-		t.Fatal("expected stringOneOfCI to not find 'Root'")
+	if validate.StringOneOfCI("Root", parts) {
+		t.Fatal("expected StringOneOfCI to not find 'Root'")
 	}
 }
 

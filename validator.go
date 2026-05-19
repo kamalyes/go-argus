@@ -20,13 +20,17 @@ import (
 	"time"
 
 	"github.com/kamalyes/go-argus/rule"
+	"github.com/kamalyes/go-argus/utils"
 	"github.com/kamalyes/go-argus/validate"
 )
 
+// defaultTagName 默认校验标签名
 const defaultTagName = "validate"
 
+// bgCtx 默认后台上下文
 var bgCtx = context.Background()
 
+// errsPool 校验错误切片对象池
 var errsPool = sync.Pool{
 	New: func() interface{} {
 		s := make(ValidationErrors, 0, 8)
@@ -34,25 +38,30 @@ var errsPool = sync.Pool{
 	},
 }
 
+// fieldLevelPool 字段级别校验上下文对象池
 var fieldLevelPool = sync.Pool{
 	New: func() interface{} {
 		return &fieldLevel{}
 	},
 }
 
+// acquireErrors 从对象池获取错误切片
 func acquireErrors() *ValidationErrors {
 	return errsPool.Get().(*ValidationErrors)
 }
 
+// releaseErrors 清空并归还错误切片到对象池
 func releaseErrors(errs *ValidationErrors) {
 	*errs = (*errs)[:0]
 	errsPool.Put(errs)
 }
 
+// acquireFieldLevel 从对象池获取字段级别校验上下文
 func acquireFieldLevel() *fieldLevel {
 	return fieldLevelPool.Get().(*fieldLevel)
 }
 
+// releaseFieldLevel 重置并归还字段级别校验上下文到对象池
 func releaseFieldLevel(fl *fieldLevel) {
 	fl.top = reflect.Value{}
 	fl.parent = reflect.Value{}
@@ -204,6 +213,7 @@ func (v *Validate) VarStringCtx(ctx context.Context, field string, tag string) e
 	return v.varStringRules(ctx, field, v.cachedVarRules(tag), false)
 }
 
+// varStringRules 零反射快速路径，按规则列表校验字符串
 func (v *Validate) varStringRules(ctx context.Context, field string, rules []rule.RulePlan, wrapError bool) error {
 	for i := 0; i < len(rules); i++ {
 		r := rules[i]
@@ -240,6 +250,7 @@ func (v *Validate) varStringRules(ctx context.Context, field string, rules []rul
 	return nil
 }
 
+// evalStringOr 评估字符串或规则，任一通过即返回 true
 func (v *Validate) evalStringOr(ctx context.Context, field string, rules []rule.RulePlan) (bool, bool) {
 	for i := 0; i < len(rules); i++ {
 		ok, handled := evalStringRule(field, rules[i])
@@ -253,24 +264,26 @@ func (v *Validate) evalStringOr(ctx context.Context, field string, rules []rule.
 	return false, true
 }
 
+// evalStringRule 评估单条字符串规则，返回 (是否通过, 是否已处理)
 func evalStringRule(field string, r rule.RulePlan) (bool, bool) {
 	if fn, ok := rule.StringRuleMap[r.Name]; ok {
 		return fn == nil || fn(field, r.Param), true
 	}
 	switch r.Name {
 	case "oneof":
-		return stringOneOf(field, r.ParamParts), true
+		return validate.StringOneOf(field, r.ParamParts), true
 	case "oneofci":
-		return stringOneOfCI(field, r.ParamParts), true
+		return validate.StringOneOfCI(field, r.ParamParts), true
 	case "noneof":
-		return !stringOneOf(field, r.ParamParts), true
+		return !validate.StringOneOf(field, r.ParamParts), true
 	case "noneofci":
-		return !stringOneOfCI(field, r.ParamParts), true
+		return !validate.StringOneOfCI(field, r.ParamParts), true
 	default:
 		return false, false
 	}
 }
 
+// stringRuleError 构造字符串规则校验失败错误
 func (v *Validate) stringRuleError(field string, rule rule.RulePlan, wrap bool) error {
 	fe := &stringFieldError{tag: rule.Name, param: rule.Param, value: field}
 	if wrap {
@@ -279,6 +292,7 @@ func (v *Validate) stringRuleError(field string, rule rule.RulePlan, wrap bool) 
 	return fe
 }
 
+// varStringReflectPath 字符串回退到反射路径
 func (v *Validate) varStringReflectPath(ctx context.Context, field string, rules []rule.RulePlan) error {
 	rv := reflect.ValueOf(field)
 	errs := acquireErrors()
@@ -293,24 +307,7 @@ func (v *Validate) varStringReflectPath(ctx context.Context, field string, rules
 	return nil
 }
 
-func stringOneOf(s string, parts []string) bool {
-	for _, item := range parts {
-		if s == item {
-			return true
-		}
-	}
-	return false
-}
-
-func stringOneOfCI(s string, parts []string) bool {
-	for _, item := range parts {
-		if strings.EqualFold(s, item) {
-			return true
-		}
-	}
-	return false
-}
-
+// cachedVarRules 缓存变量规则解析结果
 func (v *Validate) cachedVarRules(tag string) []rule.RulePlan {
 	if cached, ok := v.varCache.Load(tag); ok {
 		return cached.([]rule.RulePlan)
@@ -320,6 +317,7 @@ func (v *Validate) cachedVarRules(tag string) []rule.RulePlan {
 	return actual.([]rule.RulePlan)
 }
 
+// validateStruct 递归校验结构体字段
 func (v *Validate) validateStruct(ctx context.Context, top reflect.Value, current reflect.Value, ns string, structNs string, errs *ValidationErrors) {
 	current = validate.DerefReflect(current)
 	if !current.IsValid() || current.Kind() != reflect.Struct {
@@ -332,10 +330,10 @@ func (v *Validate) validateStruct(ctx context.Context, top reflect.Value, curren
 		fieldNS := fp.NsPrefix
 		fieldStructNS := fp.StructNsPrefix
 		if fieldNS == "" {
-			fieldNS = joinNS(ns, fp.AltName)
+			fieldNS = utils.JoinNS(ns, fp.AltName)
 		}
 		if fieldStructNS == "" {
-			fieldStructNS = joinNS(structNs, fp.Name)
+			fieldStructNS = utils.JoinNS(structNs, fp.Name)
 		}
 
 		before := len(*errs)
@@ -353,6 +351,7 @@ func (v *Validate) validateStruct(ctx context.Context, top reflect.Value, curren
 	}
 }
 
+// applyRules 按规则列表校验单个字段
 func (v *Validate) applyRules(ctx context.Context, top reflect.Value, parent reflect.Value, field reflect.Value, ns string, structNs string, fieldName string, structFieldName string, rules []rule.RulePlan, errs *ValidationErrors) {
 	if len(rules) == 0 {
 		return
@@ -398,6 +397,7 @@ func (v *Validate) applyRules(ctx context.Context, top reflect.Value, parent ref
 	}
 }
 
+// applyDive 递归校验切片、数组和 map 元素
 func (v *Validate) applyDive(ctx context.Context, top reflect.Value, parent reflect.Value, field reflect.Value, ns string, structNs string, fieldName string, structFieldName string, rules []rule.RulePlan, errs *ValidationErrors) {
 	field = validate.DerefReflect(field)
 	if !field.IsValid() {
@@ -420,6 +420,7 @@ func (v *Validate) applyDive(ctx context.Context, top reflect.Value, parent refl
 	}
 }
 
+// evalRule 评估单条规则，优先查 dispatch 表，其次查 builtin 表，最后查自定义注册
 func (v *Validate) evalRule(ctx context.Context, top reflect.Value, parent reflect.Value, field reflect.Value, fieldName string, structFieldName string, plan rule.RulePlan) bool {
 	if action, ok := evalTable[plan.Name]; ok {
 		if action.dispatch != nil {
@@ -448,13 +449,16 @@ func (v *Validate) evalRule(ctx context.Context, top reflect.Value, parent refle
 	return result
 }
 
+// evalDispatchFn 规则分派函数签名
 type evalDispatchFn func(v *Validate, top, parent, field reflect.Value, plan rule.RulePlan) bool
 
+// evalAction 规则执行动作，dispatch 和 builtin 二选一
 type evalAction struct {
 	dispatch evalDispatchFn
 	builtin  rule.BuiltinRule
 }
 
+// evalTable 规则执行表，init 中合并 dispatch 表和 builtin 表
 var evalTable map[string]evalAction
 
 func init() {
@@ -598,6 +602,7 @@ func (v *Validate) evalNoneOfCI(top, parent, field reflect.Value, plan rule.Rule
 	return !rule.OneOfCIFast(field, plan.ParamParts)
 }
 
+// cmpFieldOps 跨字段比较规则到操作符的映射
 var cmpFieldOps = map[string]string{
 	"eqfield":     "eq",
 	"nefield":     "ne",
@@ -615,6 +620,7 @@ var cmpFieldOps = map[string]string{
 	"ltecsfield":  "lte",
 }
 
+// evalDispatchTable 需要跨字段访问的规则分派表
 var evalDispatchTable = map[string]evalDispatchFn{
 	"required_if":          (*Validate).evalRequiredIf,
 	"required_unless":      (*Validate).evalRequiredUnless,
@@ -679,6 +685,7 @@ func newFieldError(field reflect.Value, ns string, structNs string, fieldName st
 	}
 }
 
+// shouldDiveIntoStruct 判断字段是否需要递归进入结构体校验
 func shouldDiveIntoStruct(field reflect.Value, rules []rule.RulePlan) bool {
 	for _, rule := range rules {
 		switch rule.Name {
@@ -688,16 +695,6 @@ func shouldDiveIntoStruct(field reflect.Value, rules []rule.RulePlan) bool {
 	}
 	field = validate.DerefReflect(field)
 	return field.IsValid() && field.Kind() == reflect.Struct && !validate.IsTimeType(field.Type())
-}
-
-func joinNS(parent string, child string) string {
-	if parent == "" {
-		return child
-	}
-	if child == "" {
-		return parent
-	}
-	return parent + "." + child
 }
 
 func (v *Validate) compileStruct(t reflect.Type) *rule.StructPlan {
@@ -726,8 +723,8 @@ func (v *Validate) compileStruct(t reflect.Type) *rule.StructPlan {
 			Typ:            sf.Type,
 			Rules:          rule.ParseRules(tag),
 			HasValidate:    tag != "",
-			NsPrefix:       joinNS(typeName, altName),
-			StructNsPrefix: joinNS(typeName, sf.Name),
+			NsPrefix:       utils.JoinNS(typeName, altName),
+			StructNsPrefix: utils.JoinNS(typeName, sf.Name),
 		}
 		plan.Fields = append(plan.Fields, fp)
 	}

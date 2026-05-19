@@ -16,6 +16,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/kamalyes/go-argus/utils"
 )
 
 type scheduleRequest struct {
@@ -550,13 +552,13 @@ func TestAfterBefore(t *testing.T) {
 }
 
 func TestJoinNS(t *testing.T) {
-	if joinNS("", "child") != "child" {
+	if utils.JoinNS("", "child") != "child" {
 		t.Fatal("expected child for empty parent")
 	}
-	if joinNS("parent", "") != "parent" {
+	if utils.JoinNS("parent", "") != "parent" {
 		t.Fatal("expected parent for empty child")
 	}
-	if joinNS("parent", "child") != "parent.child" {
+	if utils.JoinNS("parent", "child") != "parent.child" {
 		t.Fatal("expected parent.child")
 	}
 }

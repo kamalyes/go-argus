@@ -20,8 +20,10 @@ import (
 	"github.com/kamalyes/go-argus/validate"
 )
 
+// BuiltinRule 内置规则函数签名，接收反射值、参数和 requiredStructEnabled 标志
 type BuiltinRule func(field reflect.Value, param string, requiredStructEnabled bool) bool
 
+// BuiltinRules 内置规则映射表，evalTable 在 init 中合并此表和 dispatch 表
 var BuiltinRules = map[string]BuiltinRule{
 	"required":          RuleRequired,
 	"isdefault":         RuleDefault,
