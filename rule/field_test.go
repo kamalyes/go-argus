@@ -15,6 +15,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/kamalyes/go-argus/utils"
 )
 
 type testStruct struct {
@@ -302,19 +304,19 @@ func TestCompareValueDefaultOp(t *testing.T) {
 }
 
 func TestLowerCamel(t *testing.T) {
-	if got := lowerCamel("UserName"); got != "userName" {
+	if got := utils.LowerCamel("UserName"); got != "userName" {
 		t.Fatalf("expected userName, got %s", got)
 	}
-	if got := lowerCamel(""); got != "" {
+	if got := utils.LowerCamel(""); got != "" {
 		t.Fatalf("expected empty, got %s", got)
 	}
 }
 
 func TestSnakeCase(t *testing.T) {
-	if got := snakeCase("UserName"); got != "user_name" {
+	if got := utils.SnakeCase("UserName"); got != "user_name" {
 		t.Fatalf("expected user_name, got %s", got)
 	}
-	if got := snakeCase("ID"); got != "i_d" {
+	if got := utils.SnakeCase("ID"); got != "i_d" {
 		t.Fatalf("expected i_d, got %s", got)
 	}
 }

@@ -14,6 +14,9 @@ import (
 	"os"
 	"reflect"
 	"testing"
+
+	"github.com/kamalyes/go-argus/rule"
+	"github.com/kamalyes/go-argus/validate"
 )
 
 func TestRuleRequired(t *testing.T) {
@@ -2498,7 +2501,7 @@ func TestBuiltinRuleISBN13NonDigit(t *testing.T) {
 		{"9780123456786", true}, // 有效的 ISBN13
 	}
 	for _, tc := range testCases {
-		result := ruleISBN13(reflect.ValueOf(tc.input), "", false)
+		result := rule.BuiltinRules["isbn13"](reflect.ValueOf(tc.input), "", false)
 		if result != tc.expected {
 			t.Errorf("ISBN13(%q) = %v, expected %v", tc.input, result, tc.expected)
 		}
@@ -2508,8 +2511,8 @@ func TestBuiltinRuleISBN13NonDigit(t *testing.T) {
 func TestBuiltinRuleISBN13WithNonDigitInMiddle(t *testing.T) {
 	input := "9780A12345678"
 	v := reflect.ValueOf(input)
-	s, ok := stringValue(v)
-	t.Logf("stringValue: %q, ok: %v", s, ok)
+	s, ok := validate.StringValueFromField(v)
+	t.Logf("StringValue: %q, ok: %v", s, ok)
 
 	for i, c := range s {
 		t.Logf("s[%d] = %q (byte=%d)", i, c, s[i])
@@ -2518,7 +2521,7 @@ func TestBuiltinRuleISBN13WithNonDigitInMiddle(t *testing.T) {
 		}
 	}
 
-	result := ruleISBN13(v, "", false)
+	result := rule.BuiltinRules["isbn13"](v, "", false)
 	t.Logf("ruleISBN13 result: %v", result)
 	if result {
 		t.Fatal("expected isbn13 to fail for non-digit char in middle")
@@ -2526,37 +2529,37 @@ func TestBuiltinRuleISBN13WithNonDigitInMiddle(t *testing.T) {
 }
 
 func TestBuiltinRuleISSNTooManyDigits(t *testing.T) {
-	if ruleISSN(reflect.ValueOf("0-317-8471-2"), "", false) {
+	if rule.BuiltinRules["issn"](reflect.ValueOf("0-317-8471-2"), "", false) {
 		t.Fatal("expected issn to fail for too many digits")
 	}
 }
 
 func TestBuiltinRuleBICBranchInvalidChar(t *testing.T) {
-	if ruleBIC(reflect.ValueOf("CHASUS3!"), "", false) {
+	if rule.BuiltinRules["bic"](reflect.ValueOf("CHASUS3!"), "", false) {
 		t.Fatal("expected bic to fail for invalid branch code char")
 	}
 }
 
 func TestBuiltinRuleDataURIParamsNonASCII(t *testing.T) {
-	if ruleDataURI(reflect.ValueOf("data:text/plain;chars\x00et=utf-8,hello"), "", false) {
+	if rule.BuiltinRules["datauri"](reflect.ValueOf("data:text/plain;chars\x00et=utf-8,hello"), "", false) {
 		t.Fatal("expected datauri to fail for non-ASCII in params")
 	}
 }
 
 func TestBuiltinRuleBCP47VariantNonAlphanum(t *testing.T) {
-	if ruleBCP47(reflect.ValueOf("en-US-variant!"), "", false) {
+	if rule.BuiltinRules["bcp47"](reflect.ValueOf("en-US-variant!"), "", false) {
 		t.Fatal("expected bcp47 to fail for non-alphanum in variant")
 	}
 }
 
 func TestBuiltinRuleBtcAddrLegacyTooShort(t *testing.T) {
-	if ruleBtcAddr(reflect.ValueOf("1A"), "", false) {
+	if rule.BuiltinRules["btc_addr"](reflect.ValueOf("1A"), "", false) {
 		t.Fatal("expected btc_addr to fail for too short legacy address")
 	}
 }
 
 func TestBuiltinRuleSemverPatchFail(t *testing.T) {
-	if ruleSemver(reflect.ValueOf("1.2."), "", false) {
+	if rule.BuiltinRules["semver"](reflect.ValueOf("1.2."), "", false) {
 		t.Fatal("expected semver to fail for empty patch")
 	}
 }

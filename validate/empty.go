@@ -94,6 +94,12 @@ func DerefReflect(v reflect.Value) reflect.Value {
 	return v
 }
 
+var timeType = reflect.TypeOf(time.Time{})
+
+func IsTimeType(t reflect.Type) bool {
+	return t == timeType
+}
+
 // StringValue 将 reflect.Value 转为字符串
 func StringValue(v reflect.Value) string {
 	v = DerefReflect(v)

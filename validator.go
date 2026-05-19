@@ -1,8 +1,8 @@
-/*
+﻿/*
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-06 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2023-12-06 00:00:00
+ * @LastEditTime: 2026-05-19 13:16:11
  * @FilePath: \go-argus\validator.go
  * @Description: Argus 根校验器，提供 struct tag 校验、变量校验、自定义规则和兼容入口
  *
@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/kamalyes/go-argus/rule"
+	"github.com/kamalyes/go-argus/validate"
 )
 
 const defaultTagName = "validate"
@@ -136,7 +137,7 @@ func (v *Validate) StructCtx(ctx context.Context, s interface{}) error {
 	if !current.IsValid() {
 		return &InvalidValidationError{}
 	}
-	current = derefValue(current)
+	current = validate.DerefReflect(current)
 	if !current.IsValid() || current.Kind() != reflect.Struct {
 		return &InvalidValidationError{Type: reflect.TypeOf(s)}
 	}
@@ -166,8 +167,24 @@ func (v *Validate) VarString(field string, tag string) error {
 // VarCtx 按标签表达式校验单个变量，并传递 context
 func (v *Validate) VarCtx(ctx context.Context, field interface{}, tag string) error {
 	rules := v.cachedVarRules(tag)
-	if s, ok := field.(string); ok {
-		return v.varStringRules(ctx, s, rules, true)
+	switch val := field.(type) {
+	case string:
+		return v.varStringRules(ctx, val, rules, true)
+	case *string:
+		if val == nil {
+			rv := reflect.ValueOf(field)
+			errs := acquireErrors()
+			v.applyRules(ctx, reflect.Value{}, rv, rv, "", "", "", "", rules, errs)
+			if len(*errs) > 0 {
+				result := make(ValidationErrors, len(*errs))
+				copy(result, *errs)
+				releaseErrors(errs)
+				return result
+			}
+			releaseErrors(errs)
+			return nil
+		}
+		return v.varStringRules(ctx, *val, rules, true)
 	}
 	rv := reflect.ValueOf(field)
 	errs := acquireErrors()
@@ -187,12 +204,12 @@ func (v *Validate) VarStringCtx(ctx context.Context, field string, tag string) e
 	return v.varStringRules(ctx, field, v.cachedVarRules(tag), false)
 }
 
-func (v *Validate) varStringRules(ctx context.Context, field string, rules []rulePlan, wrapError bool) error {
+func (v *Validate) varStringRules(ctx context.Context, field string, rules []rule.RulePlan, wrapError bool) error {
 	for i := 0; i < len(rules); i++ {
 		r := rules[i]
-		switch r.name {
+		switch r.Name {
 		case "omitempty", "omitzero":
-			if isBlankString(field) {
+			if validate.IsBlankString(field) {
 				return nil
 			}
 			continue
@@ -201,8 +218,8 @@ func (v *Validate) varStringRules(ctx context.Context, field string, rules []rul
 		case "structonly", "nostructlevel", "":
 			continue
 		}
-		if len(r.orRules) > 0 {
-			ok, handled := v.evalStringOr(ctx, field, r.orRules)
+		if len(r.OrRules) > 0 {
+			ok, handled := v.evalStringOr(ctx, field, r.OrRules)
 			if !handled {
 				return v.varStringReflectPath(ctx, field, rules)
 			}
@@ -223,7 +240,7 @@ func (v *Validate) varStringRules(ctx context.Context, field string, rules []rul
 	return nil
 }
 
-func (v *Validate) evalStringOr(ctx context.Context, field string, rules []rulePlan) (bool, bool) {
+func (v *Validate) evalStringOr(ctx context.Context, field string, rules []rule.RulePlan) (bool, bool) {
 	for i := 0; i < len(rules); i++ {
 		ok, handled := evalStringRule(field, rules[i])
 		if !handled {
@@ -236,33 +253,33 @@ func (v *Validate) evalStringOr(ctx context.Context, field string, rules []ruleP
 	return false, true
 }
 
-func evalStringRule(field string, r rulePlan) (bool, bool) {
-	if fn, ok := stringRuleMap[r.name]; ok {
-		return fn == nil || fn(field, r.param), true
+func evalStringRule(field string, r rule.RulePlan) (bool, bool) {
+	if fn, ok := rule.StringRuleMap[r.Name]; ok {
+		return fn == nil || fn(field, r.Param), true
 	}
-	switch r.name {
+	switch r.Name {
 	case "oneof":
-		return stringOneOf(field, r.paramParts), true
+		return stringOneOf(field, r.ParamParts), true
 	case "oneofci":
-		return stringOneOfCI(field, r.paramParts), true
+		return stringOneOfCI(field, r.ParamParts), true
 	case "noneof":
-		return !stringOneOf(field, r.paramParts), true
+		return !stringOneOf(field, r.ParamParts), true
 	case "noneofci":
-		return !stringOneOfCI(field, r.paramParts), true
+		return !stringOneOfCI(field, r.ParamParts), true
 	default:
 		return false, false
 	}
 }
 
-func (v *Validate) stringRuleError(field string, rule rulePlan, wrap bool) error {
-	fe := &stringFieldError{tag: rule.name, param: rule.param, value: field}
+func (v *Validate) stringRuleError(field string, rule rule.RulePlan, wrap bool) error {
+	fe := &stringFieldError{tag: rule.Name, param: rule.Param, value: field}
 	if wrap {
 		return ValidationErrors{fe}
 	}
 	return fe
 }
 
-func (v *Validate) varStringReflectPath(ctx context.Context, field string, rules []rulePlan) error {
+func (v *Validate) varStringReflectPath(ctx context.Context, field string, rules []rule.RulePlan) error {
 	rv := reflect.ValueOf(field)
 	errs := acquireErrors()
 	v.applyRules(ctx, reflect.Value{}, rv, rv, "", "", "", "", rules, errs)
@@ -294,41 +311,41 @@ func stringOneOfCI(s string, parts []string) bool {
 	return false
 }
 
-func (v *Validate) cachedVarRules(tag string) []rulePlan {
+func (v *Validate) cachedVarRules(tag string) []rule.RulePlan {
 	if cached, ok := v.varCache.Load(tag); ok {
-		return cached.([]rulePlan)
+		return cached.([]rule.RulePlan)
 	}
-	rules := parseRules(tag)
+	rules := rule.ParseRules(tag)
 	actual, _ := v.varCache.LoadOrStore(tag, rules)
-	return actual.([]rulePlan)
+	return actual.([]rule.RulePlan)
 }
 
 func (v *Validate) validateStruct(ctx context.Context, top reflect.Value, current reflect.Value, ns string, structNs string, errs *ValidationErrors) {
-	current = derefValue(current)
+	current = validate.DerefReflect(current)
 	if !current.IsValid() || current.Kind() != reflect.Struct {
 		return
 	}
 
 	plan := v.compileStruct(current.Type())
-	for _, fp := range plan.fields {
-		field := current.FieldByIndex(fp.index)
-		fieldNS := fp.nsPrefix
-		fieldStructNS := fp.structNsPrefix
+	for _, fp := range plan.Fields {
+		field := current.FieldByIndex(fp.Index)
+		fieldNS := fp.NsPrefix
+		fieldStructNS := fp.StructNsPrefix
 		if fieldNS == "" {
-			fieldNS = joinNS(ns, fp.altName)
+			fieldNS = joinNS(ns, fp.AltName)
 		}
 		if fieldStructNS == "" {
-			fieldStructNS = joinNS(structNs, fp.name)
+			fieldStructNS = joinNS(structNs, fp.Name)
 		}
 
 		before := len(*errs)
-		v.applyRules(ctx, top, current, field, fieldNS, fieldStructNS, fp.altName, fp.name, fp.rules, errs)
+		v.applyRules(ctx, top, current, field, fieldNS, fieldStructNS, fp.AltName, fp.Name, fp.Rules, errs)
 		if len(*errs) != before {
 			continue
 		}
 
-		if shouldDiveIntoStruct(field, fp.rules) {
-			nested := derefValue(field)
+		if shouldDiveIntoStruct(field, fp.Rules) {
+			nested := validate.DerefReflect(field)
 			if nested.IsValid() && nested.Kind() == reflect.Struct {
 				v.validateStruct(ctx, top, nested, fieldNS, fieldStructNS, errs)
 			}
@@ -336,21 +353,21 @@ func (v *Validate) validateStruct(ctx context.Context, top reflect.Value, curren
 	}
 }
 
-func (v *Validate) applyRules(ctx context.Context, top reflect.Value, parent reflect.Value, field reflect.Value, ns string, structNs string, fieldName string, structFieldName string, rules []rulePlan, errs *ValidationErrors) {
+func (v *Validate) applyRules(ctx context.Context, top reflect.Value, parent reflect.Value, field reflect.Value, ns string, structNs string, fieldName string, structFieldName string, rules []rule.RulePlan, errs *ValidationErrors) {
 	if len(rules) == 0 {
 		return
 	}
-	derefed := derefValue(field)
+	derefed := validate.DerefReflect(field)
 	for i := 0; i < len(rules); i++ {
 		rule := rules[i]
-		switch rule.name {
+		switch rule.Name {
 		case "omitempty", "omitzero":
-			if isEmptyValue(derefed, v.requiredStructEnabled) {
+			if validate.IsEmptyValueWithStruct(derefed, v.requiredStructEnabled) {
 				return
 			}
 			continue
 		case "omitnil":
-			if isNilValue(field) {
+			if validate.IsNilValue(field) {
 				return
 			}
 			continue
@@ -364,9 +381,9 @@ func (v *Validate) applyRules(ctx context.Context, top reflect.Value, parent ref
 		}
 
 		ok := false
-		if len(rule.orRules) > 0 {
-			for j := 0; j < len(rule.orRules); j++ {
-				if v.evalRule(ctx, top, parent, derefed, fieldName, structFieldName, rule.orRules[j]) {
+		if len(rule.OrRules) > 0 {
+			for j := 0; j < len(rule.OrRules); j++ {
+				if v.evalRule(ctx, top, parent, derefed, fieldName, structFieldName, rule.OrRules[j]) {
 					ok = true
 					break
 				}
@@ -381,8 +398,8 @@ func (v *Validate) applyRules(ctx context.Context, top reflect.Value, parent ref
 	}
 }
 
-func (v *Validate) applyDive(ctx context.Context, top reflect.Value, parent reflect.Value, field reflect.Value, ns string, structNs string, fieldName string, structFieldName string, rules []rulePlan, errs *ValidationErrors) {
-	field = derefValue(field)
+func (v *Validate) applyDive(ctx context.Context, top reflect.Value, parent reflect.Value, field reflect.Value, ns string, structNs string, fieldName string, structFieldName string, rules []rule.RulePlan, errs *ValidationErrors) {
+	field = validate.DerefReflect(field)
 	if !field.IsValid() {
 		return
 	}
@@ -395,7 +412,7 @@ func (v *Validate) applyDive(ctx context.Context, top reflect.Value, parent refl
 		}
 	case reflect.Map:
 		for _, key := range field.MapKeys() {
-			keyText := toStringValue(key)
+			keyText := validate.StringValue(key)
 			childNS := ns + "[" + keyText + "]"
 			childStructNS := structNs + "[" + keyText + "]"
 			v.applyRules(ctx, top, parent, field.MapIndex(key), childNS, childStructNS, fieldName, structFieldName, rules, errs)
@@ -403,17 +420,16 @@ func (v *Validate) applyDive(ctx context.Context, top reflect.Value, parent refl
 	}
 }
 
-func (v *Validate) evalRule(ctx context.Context, top reflect.Value, parent reflect.Value, field reflect.Value, fieldName string, structFieldName string, plan rulePlan) bool {
-	if disp, ok := evalDispatchTable[plan.name]; ok {
-		return disp(v, top, parent, field, plan)
-	}
-
-	if fn, ok := builtinRules[plan.name]; ok {
-		return fn(field, plan.param, v.requiredStructEnabled)
+func (v *Validate) evalRule(ctx context.Context, top reflect.Value, parent reflect.Value, field reflect.Value, fieldName string, structFieldName string, plan rule.RulePlan) bool {
+	if action, ok := evalTable[plan.Name]; ok {
+		if action.dispatch != nil {
+			return action.dispatch(v, top, parent, field, plan)
+		}
+		return action.builtin(field, plan.Param, v.requiredStructEnabled)
 	}
 
 	v.mu.RLock()
-	fn := v.validations[plan.name]
+	fn := v.validations[plan.Name]
 	v.mu.RUnlock()
 	if fn == nil {
 		return false
@@ -422,145 +438,164 @@ func (v *Validate) evalRule(ctx context.Context, top reflect.Value, parent refle
 	fl := acquireFieldLevel()
 	fl.top = top
 	fl.parent = parent
-	fl.field = derefValue(field)
+	fl.field = validate.DerefReflect(field)
 	fl.fieldName = fieldName
 	fl.structFieldName = structFieldName
-	fl.tag = plan.name
-	fl.param = plan.param
+	fl.tag = plan.Name
+	fl.param = plan.Param
 	result := fn(ctx, fl)
 	releaseFieldLevel(fl)
 	return result
 }
 
-type evalDispatchFn func(v *Validate, top, parent, field reflect.Value, plan rulePlan) bool
+type evalDispatchFn func(v *Validate, top, parent, field reflect.Value, plan rule.RulePlan) bool
 
-func (v *Validate) evalRequiredIf(top, parent, field reflect.Value, plan rulePlan) bool {
-	if !rule.IsRequiredIfFast(parent, plan.paramParts) {
-		return true
-	}
-	return !isEmptyValue(field, v.requiredStructEnabled)
+type evalAction struct {
+	dispatch evalDispatchFn
+	builtin  rule.BuiltinRule
 }
 
-func (v *Validate) evalRequiredUnless(top, parent, field reflect.Value, plan rulePlan) bool {
-	if rule.IsRequiredIfFast(parent, plan.paramParts) {
-		return true
+var evalTable map[string]evalAction
+
+func init() {
+	evalTable = make(map[string]evalAction, len(evalDispatchTable)+len(rule.BuiltinRules))
+	for name, fn := range evalDispatchTable {
+		evalTable[name] = evalAction{dispatch: fn}
 	}
-	return !isEmptyValue(field, v.requiredStructEnabled)
+	for name, fn := range rule.BuiltinRules {
+		if _, exists := evalTable[name]; !exists {
+			evalTable[name] = evalAction{builtin: fn}
+		}
+	}
 }
 
-func (v *Validate) evalRequiredWith(top, parent, field reflect.Value, plan rulePlan) bool {
-	if !rule.IsRequiredWith(parent, plan.param) {
+func (v *Validate) evalRequiredIf(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+	if !rule.IsRequiredIfFast(parent, plan.ParamParts) {
 		return true
 	}
-	return !isEmptyValue(field, v.requiredStructEnabled)
+	return !validate.IsEmptyValueWithStruct(field, v.requiredStructEnabled)
 }
 
-func (v *Validate) evalRequiredWithAll(top, parent, field reflect.Value, plan rulePlan) bool {
-	if !ruleRequiredWithAllFast(parent, plan.paramParts) {
+func (v *Validate) evalRequiredUnless(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+	if rule.IsRequiredIfFast(parent, plan.ParamParts) {
 		return true
 	}
-	return !isEmptyValue(field, v.requiredStructEnabled)
+	return !validate.IsEmptyValueWithStruct(field, v.requiredStructEnabled)
 }
 
-func (v *Validate) evalRequiredWithout(top, parent, field reflect.Value, plan rulePlan) bool {
-	if !ruleRequiredWithoutFast(parent, plan.paramParts) {
+func (v *Validate) evalRequiredWith(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+	if !rule.IsRequiredWith(parent, plan.Param) {
 		return true
 	}
-	return !isEmptyValue(field, v.requiredStructEnabled)
+	return !validate.IsEmptyValueWithStruct(field, v.requiredStructEnabled)
 }
 
-func (v *Validate) evalRequiredWithoutAll(top, parent, field reflect.Value, plan rulePlan) bool {
-	if !ruleRequiredWithoutAllFast(parent, plan.paramParts) {
+func (v *Validate) evalRequiredWithAll(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+	if !rule.IsRequiredWithAll(parent, plan.ParamParts) {
 		return true
 	}
-	return !isEmptyValue(field, v.requiredStructEnabled)
+	return !validate.IsEmptyValueWithStruct(field, v.requiredStructEnabled)
 }
 
-func (v *Validate) evalExcludedIf(top, parent, field reflect.Value, plan rulePlan) bool {
-	if !rule.IsRequiredIfFast(parent, plan.paramParts) {
+func (v *Validate) evalRequiredWithout(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+	if !rule.IsRequiredWithout(parent, plan.ParamParts) {
 		return true
 	}
-	return isEmptyValue(field, v.requiredStructEnabled)
+	return !validate.IsEmptyValueWithStruct(field, v.requiredStructEnabled)
 }
 
-func (v *Validate) evalExcludedUnless(top, parent, field reflect.Value, plan rulePlan) bool {
-	if rule.IsRequiredIfFast(parent, plan.paramParts) {
+func (v *Validate) evalRequiredWithoutAll(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+	if !rule.IsRequiredWithoutAll(parent, plan.ParamParts) {
 		return true
 	}
-	return isEmptyValue(field, v.requiredStructEnabled)
+	return !validate.IsEmptyValueWithStruct(field, v.requiredStructEnabled)
 }
 
-func (v *Validate) evalExcludedWith(top, parent, field reflect.Value, plan rulePlan) bool {
-	if !rule.IsRequiredWith(parent, plan.param) {
+func (v *Validate) evalExcludedIf(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+	if !rule.IsRequiredIfFast(parent, plan.ParamParts) {
 		return true
 	}
-	return isEmptyValue(field, v.requiredStructEnabled)
+	return validate.IsEmptyValueWithStruct(field, v.requiredStructEnabled)
 }
 
-func (v *Validate) evalExcludedWithAll(top, parent, field reflect.Value, plan rulePlan) bool {
-	if !ruleRequiredWithAllFast(parent, plan.paramParts) {
+func (v *Validate) evalExcludedUnless(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+	if rule.IsRequiredIfFast(parent, plan.ParamParts) {
 		return true
 	}
-	return isEmptyValue(field, v.requiredStructEnabled)
+	return validate.IsEmptyValueWithStruct(field, v.requiredStructEnabled)
 }
 
-func (v *Validate) evalExcludedWithout(top, parent, field reflect.Value, plan rulePlan) bool {
-	if !ruleRequiredWithoutFast(parent, plan.paramParts) {
+func (v *Validate) evalExcludedWith(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+	if !rule.IsRequiredWith(parent, plan.Param) {
 		return true
 	}
-	return isEmptyValue(field, v.requiredStructEnabled)
+	return validate.IsEmptyValueWithStruct(field, v.requiredStructEnabled)
 }
 
-func (v *Validate) evalExcludedWithoutAll(top, parent, field reflect.Value, plan rulePlan) bool {
-	if !ruleRequiredWithoutAllFast(parent, plan.paramParts) {
+func (v *Validate) evalExcludedWithAll(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+	if !rule.IsRequiredWithAll(parent, plan.ParamParts) {
 		return true
 	}
-	return isEmptyValue(field, v.requiredStructEnabled)
+	return validate.IsEmptyValueWithStruct(field, v.requiredStructEnabled)
 }
 
-func (v *Validate) evalCmpField(top, parent, field reflect.Value, plan rulePlan) bool {
-	op := cmpFieldOps[plan.name]
+func (v *Validate) evalExcludedWithout(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+	if !rule.IsRequiredWithout(parent, plan.ParamParts) {
+		return true
+	}
+	return validate.IsEmptyValueWithStruct(field, v.requiredStructEnabled)
+}
+
+func (v *Validate) evalExcludedWithoutAll(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+	if !rule.IsRequiredWithoutAll(parent, plan.ParamParts) {
+		return true
+	}
+	return validate.IsEmptyValueWithStruct(field, v.requiredStructEnabled)
+}
+
+func (v *Validate) evalCmpField(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+	op := cmpFieldOps[plan.Name]
 	target := parent
-	if strings.HasSuffix(plan.name, "csfield") {
+	if strings.HasSuffix(plan.Name, "csfield") {
 		target = top
 	}
-	return rule.CompareField(field, target, plan.param, op)
+	return rule.CompareField(field, target, plan.Param, op)
 }
 
-func (v *Validate) evalFieldContains(top, parent, field reflect.Value, plan rulePlan) bool {
-	return ruleFieldContains(field, parent, plan.param)
+func (v *Validate) evalFieldContains(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+	return rule.FieldContains(field, parent, plan.Param)
 }
 
-func (v *Validate) evalFieldExcludes(top, parent, field reflect.Value, plan rulePlan) bool {
-	return !ruleFieldContains(field, parent, plan.param)
+func (v *Validate) evalFieldExcludes(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+	return !rule.FieldContains(field, parent, plan.Param)
 }
 
-func (v *Validate) evalAfter(top, parent, field reflect.Value, plan rulePlan) bool {
-	return rule.CompareTimeExpr(field, plan.param, "gt", time.Now())
+func (v *Validate) evalAfter(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+	return rule.CompareTimeExpr(field, plan.Param, "gt", time.Now())
 }
 
-func (v *Validate) evalBefore(top, parent, field reflect.Value, plan rulePlan) bool {
-	return rule.CompareTimeExpr(field, plan.param, "lt", time.Now())
+func (v *Validate) evalBefore(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+	return rule.CompareTimeExpr(field, plan.Param, "lt", time.Now())
 }
 
-func (v *Validate) evalRange(top, parent, field reflect.Value, plan rulePlan) bool {
-	return ruleRange(parent, plan.param)
+func (v *Validate) evalRange(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+	return rule.Range(parent, plan.Param)
 }
 
-func (v *Validate) evalOneOf(top, parent, field reflect.Value, plan rulePlan) bool {
-	return ruleOneOfFast(field, plan.paramParts)
+func (v *Validate) evalOneOf(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+	return rule.OneOfFast(field, plan.ParamParts)
 }
 
-func (v *Validate) evalOneOfCI(top, parent, field reflect.Value, plan rulePlan) bool {
-	return ruleOneOfCIFast(field, plan.paramParts)
+func (v *Validate) evalOneOfCI(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+	return rule.OneOfCIFast(field, plan.ParamParts)
 }
 
-func (v *Validate) evalNoneOf(top, parent, field reflect.Value, plan rulePlan) bool {
-	return !ruleOneOfFast(field, plan.paramParts)
+func (v *Validate) evalNoneOf(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+	return !rule.OneOfFast(field, plan.ParamParts)
 }
 
-func (v *Validate) evalNoneOfCI(top, parent, field reflect.Value, plan rulePlan) bool {
-	return !ruleOneOfCIFast(field, plan.paramParts)
+func (v *Validate) evalNoneOfCI(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+	return !rule.OneOfCIFast(field, plan.ParamParts)
 }
 
 var cmpFieldOps = map[string]string{
@@ -618,104 +653,9 @@ var evalDispatchTable = map[string]evalDispatchFn{
 	"noneofci":             (*Validate).evalNoneOfCI,
 }
 
-func ruleOneOfFast(field reflect.Value, parts []string) bool {
-	actual, ok := scalarString(field)
-	if !ok {
-		return false
-	}
-	for _, item := range parts {
-		if actual == item {
-			return true
-		}
-	}
-	return false
-}
-
-func ruleOneOfCIFast(field reflect.Value, parts []string) bool {
-	actual, ok := scalarString(field)
-	if !ok {
-		return false
-	}
-	for _, item := range parts {
-		if strings.EqualFold(actual, item) {
-			return true
-		}
-	}
-	return false
-}
-
-func ruleRequiredWithAllFast(parent reflect.Value, parts []string) bool {
-	if len(parts) == 0 {
-		return false
-	}
-	for _, field := range parts {
-		value, ok := rule.FieldByPath(parent, field)
-		if !ok || isEmptyValue(value, true) {
-			return false
-		}
-	}
-	return true
-}
-
-func ruleRequiredWithoutFast(parent reflect.Value, parts []string) bool {
-	for _, field := range parts {
-		value, ok := rule.FieldByPath(parent, field)
-		if !ok || isEmptyValue(value, true) {
-			return true
-		}
-	}
-	return false
-}
-
-func ruleRequiredWithoutAllFast(parent reflect.Value, parts []string) bool {
-	if len(parts) == 0 {
-		return false
-	}
-	for _, field := range parts {
-		value, ok := rule.FieldByPath(parent, field)
-		if ok && !isEmptyValue(value, true) {
-			return false
-		}
-	}
-	return true
-}
-
-func ruleRange(parent reflect.Value, param string) bool {
-	sep := ","
-	if strings.Contains(param, "|") {
-		sep = "|"
-	}
-	parts := strings.Split(param, sep)
-	if len(parts) != 2 {
-		return false
-	}
-	start, ok := rule.FieldByPath(parent, strings.TrimSpace(parts[0]))
-	if !ok {
-		return false
-	}
-	end, ok := rule.FieldByPath(parent, strings.TrimSpace(parts[1]))
-	if !ok {
-		return false
-	}
-	return rule.CompareValue(start, end, "lt")
-}
-
-func ruleFieldContains(field reflect.Value, parent reflect.Value, param string) bool {
-	other, ok := rule.FieldByPath(parent, param)
-	if !ok {
-		return false
-	}
-	left, ok := stringValue(field)
-	if !ok {
-		return false
-	}
-	right, ok := scalarString(other)
-	return ok && strings.Contains(left, right)
-}
-
-func newFieldError(field reflect.Value, ns string, structNs string, fieldName string, structFieldName string, rule rulePlan) FieldError {
+func newFieldError(field reflect.Value, ns string, structNs string, fieldName string, structFieldName string, rule rule.RulePlan) FieldError {
 	value := interface{}(nil)
-	current := derefValue(field)
+	current := validate.DerefReflect(field)
 	if current.IsValid() && current.CanInterface() {
 		value = current.Interface()
 	}
@@ -726,28 +666,28 @@ func newFieldError(field reflect.Value, ns string, structNs string, fieldName st
 		typ = current.Type()
 	}
 	return &fieldError{
-		tag:         rule.name,
-		actualTag:   rule.name,
+		tag:         rule.Name,
+		actualTag:   rule.Name,
 		ns:          ns,
 		structNs:    structNs,
 		field:       fieldName,
 		structField: structFieldName,
 		value:       value,
-		param:       rule.param,
+		param:       rule.Param,
 		kind:        kind,
 		typ:         typ,
 	}
 }
 
-func shouldDiveIntoStruct(field reflect.Value, rules []rulePlan) bool {
+func shouldDiveIntoStruct(field reflect.Value, rules []rule.RulePlan) bool {
 	for _, rule := range rules {
-		switch rule.name {
+		switch rule.Name {
 		case "dive", "nostructlevel", "structonly":
 			return false
 		}
 	}
-	field = derefValue(field)
-	return field.IsValid() && field.Kind() == reflect.Struct && !isTimeType(field.Type())
+	field = validate.DerefReflect(field)
+	return field.IsValid() && field.Kind() == reflect.Struct && !validate.IsTimeType(field.Type())
 }
 
 func joinNS(parent string, child string) string {
@@ -758,4 +698,55 @@ func joinNS(parent string, child string) string {
 		return parent
 	}
 	return parent + "." + child
+}
+
+func (v *Validate) compileStruct(t reflect.Type) *rule.StructPlan {
+	if cached, ok := v.structCache.Load(t); ok {
+		return cached.(*rule.StructPlan)
+	}
+
+	typeName := t.Name()
+	plan := &rule.StructPlan{Name: typeName, Fields: make([]rule.FieldPlan, 0, t.NumField())}
+	for i := 0; i < t.NumField(); i++ {
+		sf := t.Field(i)
+		if sf.PkgPath != "" && !v.privateFieldValidation {
+			continue
+		}
+
+		tag := sf.Tag.Get(v.tagName)
+		if tag == "-" {
+			continue
+		}
+
+		altName := v.resolveFieldName(sf)
+		fp := rule.FieldPlan{
+			Index:          sf.Index,
+			Name:           sf.Name,
+			AltName:        altName,
+			Typ:            sf.Type,
+			Rules:          rule.ParseRules(tag),
+			HasValidate:    tag != "",
+			NsPrefix:       joinNS(typeName, altName),
+			StructNsPrefix: joinNS(typeName, sf.Name),
+		}
+		plan.Fields = append(plan.Fields, fp)
+	}
+
+	actual, _ := v.structCache.LoadOrStore(t, plan)
+	return actual.(*rule.StructPlan)
+}
+
+func (v *Validate) resolveFieldName(sf reflect.StructField) string {
+	if v.tagNameFunc != nil {
+		if name := v.tagNameFunc(sf); name != "" {
+			return name
+		}
+	}
+	if jsonTag := sf.Tag.Get("json"); jsonTag != "" {
+		name := strings.Split(jsonTag, ",")[0]
+		if name != "" && name != "-" {
+			return name
+		}
+	}
+	return sf.Name
 }

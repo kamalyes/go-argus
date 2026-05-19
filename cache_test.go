@@ -13,6 +13,8 @@ package validator
 import (
 	"reflect"
 	"testing"
+
+	"github.com/kamalyes/go-argus/rule"
 )
 
 type cacheTestStruct struct {
@@ -33,11 +35,11 @@ type cacheTestSkip struct {
 func TestCompileStructBasic(t *testing.T) {
 	v := New()
 	plan := v.compileStruct(reflect.TypeOf(cacheTestStruct{}))
-	if plan.name != "cacheTestStruct" {
-		t.Fatalf("expected struct name cacheTestStruct, got %s", plan.name)
+	if plan.Name != "cacheTestStruct" {
+		t.Fatalf("expected struct name cacheTestStruct, got %s", plan.Name)
 	}
-	if len(plan.fields) != 2 {
-		t.Fatalf("expected 2 fields, got %d", len(plan.fields))
+	if len(plan.Fields) != 2 {
+		t.Fatalf("expected 2 fields, got %d", len(plan.Fields))
 	}
 }
 
@@ -54,21 +56,21 @@ func TestCompileStructCaching(t *testing.T) {
 func TestCompileStructPrivateField(t *testing.T) {
 	v := New()
 	plan := v.compileStruct(reflect.TypeOf(cacheTestPrivate{}))
-	if len(plan.fields) != 0 {
-		t.Fatalf("expected 0 fields without private validation, got %d", len(plan.fields))
+	if len(plan.Fields) != 0 {
+		t.Fatalf("expected 0 fields without private validation, got %d", len(plan.Fields))
 	}
 	vPrivate := New(WithPrivateFieldValidation())
 	planPrivate := vPrivate.compileStruct(reflect.TypeOf(cacheTestPrivate{}))
-	if len(planPrivate.fields) != 1 {
-		t.Fatalf("expected 1 field with private validation, got %d", len(planPrivate.fields))
+	if len(planPrivate.Fields) != 1 {
+		t.Fatalf("expected 1 field with private validation, got %d", len(planPrivate.Fields))
 	}
 }
 
 func TestCompileStructSkipTag(t *testing.T) {
 	v := New()
 	plan := v.compileStruct(reflect.TypeOf(cacheTestSkip{}))
-	for _, f := range plan.fields {
-		if f.name == "Skip" {
+	for _, f := range plan.Fields {
+		if f.Name == "Skip" {
 			t.Fatal("expected Skip field to be skipped")
 		}
 	}
@@ -80,37 +82,37 @@ func TestResolveFieldNameWithTagFunc(t *testing.T) {
 		return "custom_" + sf.Name
 	})
 	plan := v.compileStruct(reflect.TypeOf(cacheTestStruct{}))
-	if plan.fields[0].altName != "custom_Name" {
-		t.Fatalf("expected custom_Name, got %s", plan.fields[0].altName)
+	if plan.Fields[0].AltName != "custom_Name" {
+		t.Fatalf("expected custom_Name, got %s", plan.Fields[0].AltName)
 	}
 }
 
 func TestResolveFieldNameWithJSONTag(t *testing.T) {
 	v := New()
 	plan := v.compileStruct(reflect.TypeOf(cacheTestStruct{}))
-	if plan.fields[0].altName != "name" {
-		t.Fatalf("expected name from json tag, got %s", plan.fields[0].altName)
+	if plan.Fields[0].AltName != "name" {
+		t.Fatalf("expected name from json tag, got %s", plan.Fields[0].AltName)
 	}
-	if plan.fields[1].altName != "Email" {
-		t.Fatalf("expected Email (no json tag), got %s", plan.fields[1].altName)
+	if plan.Fields[1].AltName != "Email" {
+		t.Fatalf("expected Email (no json tag), got %s", plan.Fields[1].AltName)
 	}
 }
 
 func TestParseRules(t *testing.T) {
-	rules := parseRules("required,min=2,max=16")
+	rules := rule.ParseRules("required,min=2,max=16")
 	if len(rules) != 3 {
 		t.Fatalf("expected 3 rules, got %d", len(rules))
 	}
-	if rules[0].name != "required" {
-		t.Fatalf("expected first rule required, got %s", rules[0].name)
+	if rules[0].Name != "required" {
+		t.Fatalf("expected first rule required, got %s", rules[0].Name)
 	}
-	if rules[1].name != "min" || rules[1].param != "2" {
-		t.Fatalf("expected min=2, got %s=%s", rules[1].name, rules[1].param)
+	if rules[1].Name != "min" || rules[1].Param != "2" {
+		t.Fatalf("expected min=2, got %s=%s", rules[1].Name, rules[1].Param)
 	}
 }
 
 func TestParseRulesEmpty(t *testing.T) {
-	rules := parseRules("")
+	rules := rule.ParseRules("")
 	if len(rules) != 0 {
 		t.Fatalf("expected 0 rules for empty tag, got %d", len(rules))
 	}

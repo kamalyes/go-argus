@@ -15,6 +15,7 @@ import (
 	"bytes"
 	"fmt"
 	"net"
+	"regexp"
 	"strings"
 
 	"github.com/kamalyes/go-argus/i18n"
@@ -231,4 +232,69 @@ func splitIPPatterns(pattern string) []string {
 		out = append(out, strings.Fields(line)...)
 	}
 	return out
+}
+
+var HostnameLabelRegex = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$`)
+
+func IsHostname(host string) bool {
+	if host == "" || len(host) > 253 {
+		return false
+	}
+	start := 0
+	for i := 0; i <= len(host); i++ {
+		if i == len(host) || host[i] == '.' {
+			label := host[start:i]
+			if !HostnameLabelRegex.MatchString(label) {
+				return false
+			}
+			start = i + 1
+		}
+	}
+	return true
+}
+
+func TrimSpaceIfNeeded(s string) string {
+	if len(s) > 0 && (s[0] == ' ' || s[0] == '\t' || s[len(s)-1] == ' ' || s[len(s)-1] == '\t') {
+		return strings.TrimSpace(s)
+	}
+	return s
+}
+
+func HasSchemeAndHost(s string) bool {
+	colon := strings.Index(s, ":")
+	if colon < 1 {
+		return false
+	}
+	return HasHostAfterScheme(s, colon)
+}
+
+func HasHostAfterScheme(s string, colonIdx int) bool {
+	if len(s) <= colonIdx+2 || s[colonIdx+1] != '/' || s[colonIdx+2] != '/' {
+		return false
+	}
+	hostStart := colonIdx + 3
+	if hostStart >= len(s) {
+		return false
+	}
+	for i := hostStart; i < len(s); i++ {
+		if IsHostTerminator(s[i]) {
+			break
+		}
+		if !IsValidHostChar(s, hostStart, i) {
+			return false
+		}
+	}
+	return true
+}
+
+func IsHostTerminator(c byte) bool {
+	return c == '/' || c == '?' || c == '#'
+}
+
+func IsValidHostChar(s string, hostStart, i int) bool {
+	c := s[i]
+	if c == ':' || c == '@' {
+		return true
+	}
+	return !(hostStart == i && (c == '.' || c == '-'))
 }

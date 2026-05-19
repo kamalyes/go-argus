@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-06 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2023-12-06 00:00:00
+ * @LastEditTime: 2026-05-19 08:57:16
  * @FilePath: \go-argus\reexport.go
  * @Description: 根包兼容入口，统一转发 validate 子包的所有导出能力
  *
@@ -294,26 +294,6 @@ func NewEnumValidator[T comparable](values ...T) *validate.EnumValidator[T] {
 // IsEmptyValue 判断 reflect.Value 是否为空值
 func IsEmptyValue(v reflect.Value) bool {
 	return validate.IsEmptyValue(v)
-}
-
-func isEmptyValue(v reflect.Value, requiredStructEnabled bool) bool {
-	return validate.IsEmptyValueWithStruct(v, requiredStructEnabled)
-}
-
-func isNilValue(v reflect.Value) bool {
-	return validate.IsNilValue(v)
-}
-
-func derefValue(v reflect.Value) reflect.Value {
-	return validate.DerefReflect(v)
-}
-
-func isTimeType(t reflect.Type) bool {
-	return t == reflect.TypeOf(time.Time{})
-}
-
-func toStringValue(v reflect.Value) string {
-	return validate.StringValue(v)
 }
 
 // IsTimeEmpty 判断时间是否为空或早于 Unix epoch

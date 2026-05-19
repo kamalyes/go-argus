@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-06 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2023-12-06 00:00:00
+ * @LastEditTime: 2026-05-18 00:00:00
  * @FilePath: \go-argus\rule\field.go
  * @Description: 字段路径解析模块，支持 Go 字段名、json 名、snake_case 和嵌套字段访问
  *
@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/kamalyes/go-argus/utils"
 	"github.com/kamalyes/go-argus/validate"
 )
 
@@ -58,6 +59,7 @@ func IsRequiredIf(parent reflect.Value, param string) bool {
 	return isRequiredIfParts(parent, parts)
 }
 
+// IsRequiredIfFast 判断 required_if 条件是否触发（预拆分参数版本）
 func IsRequiredIfFast(parent reflect.Value, parts []string) bool {
 	return isRequiredIfParts(parent, parts)
 }
@@ -126,6 +128,101 @@ func CompareValue(left reflect.Value, right reflect.Value, op string) bool {
 	}
 }
 
+func OneOfFast(field reflect.Value, parts []string) bool {
+	actual, ok := validate.ScalarString(field)
+	if !ok {
+		return false
+	}
+	for _, item := range parts {
+		if actual == item {
+			return true
+		}
+	}
+	return false
+}
+
+func OneOfCIFast(field reflect.Value, parts []string) bool {
+	actual, ok := validate.ScalarString(field)
+	if !ok {
+		return false
+	}
+	for _, item := range parts {
+		if strings.EqualFold(actual, item) {
+			return true
+		}
+	}
+	return false
+}
+
+func IsRequiredWithAll(parent reflect.Value, parts []string) bool {
+	if len(parts) == 0 {
+		return false
+	}
+	for _, field := range parts {
+		value, ok := FieldByPath(parent, field)
+		if !ok || validate.IsEmptyValueWithStruct(value, true) {
+			return false
+		}
+	}
+	return true
+}
+
+func IsRequiredWithout(parent reflect.Value, parts []string) bool {
+	for _, field := range parts {
+		value, ok := FieldByPath(parent, field)
+		if !ok || validate.IsEmptyValueWithStruct(value, true) {
+			return true
+		}
+	}
+	return false
+}
+
+func IsRequiredWithoutAll(parent reflect.Value, parts []string) bool {
+	if len(parts) == 0 {
+		return false
+	}
+	for _, field := range parts {
+		value, ok := FieldByPath(parent, field)
+		if ok && !validate.IsEmptyValueWithStruct(value, true) {
+			return false
+		}
+	}
+	return true
+}
+
+func Range(parent reflect.Value, param string) bool {
+	sep := ","
+	if strings.Contains(param, "|") {
+		sep = "|"
+	}
+	parts := strings.Split(param, sep)
+	if len(parts) != 2 {
+		return false
+	}
+	start, ok := FieldByPath(parent, strings.TrimSpace(parts[0]))
+	if !ok {
+		return false
+	}
+	end, ok := FieldByPath(parent, strings.TrimSpace(parts[1]))
+	if !ok {
+		return false
+	}
+	return CompareValue(start, end, "lt")
+}
+
+func FieldContains(field reflect.Value, parent reflect.Value, param string) bool {
+	other, ok := FieldByPath(parent, param)
+	if !ok {
+		return false
+	}
+	left, ok := validate.StringValueFromField(field)
+	if !ok {
+		return false
+	}
+	right, ok := validate.ScalarString(other)
+	return ok && strings.Contains(left, right)
+}
+
 func directField(current reflect.Value, name string) (reflect.Value, bool) {
 	if idx, ok := fieldLookup(current.Type())[name]; ok {
 		return current.Field(idx), true
@@ -133,6 +230,7 @@ func directField(current reflect.Value, name string) (reflect.Value, bool) {
 	return reflect.Value{}, false
 }
 
+// fieldLookup 构建字段名到索引的映射，缓存结构体字段查找表
 func fieldLookup(typ reflect.Type) map[string]int {
 	if cached, ok := fieldLookupCache.Load(typ); ok {
 		return cached.(map[string]int)
@@ -149,8 +247,8 @@ func fieldLookup(typ reflect.Type) map[string]int {
 				addFieldLookupName(lookup, jsonName, i)
 			}
 		}
-		addFieldLookupName(lookup, lowerCamel(sf.Name), i)
-		addFieldLookupName(lookup, snakeCase(sf.Name), i)
+		addFieldLookupName(lookup, utils.LowerCamel(sf.Name), i)
+		addFieldLookupName(lookup, utils.SnakeCase(sf.Name), i)
 	}
 	actual, _ := fieldLookupCache.LoadOrStore(typ, lookup)
 	return actual.(map[string]int)
@@ -166,7 +264,7 @@ func addFieldLookupName(lookup map[string]int, name string, index int) {
 }
 
 func fieldNames(sf reflect.StructField) []string {
-	names := []string{sf.Name, lowerCamel(sf.Name), snakeCase(sf.Name)}
+	names := []string{sf.Name, utils.LowerCamel(sf.Name), utils.SnakeCase(sf.Name)}
 	if jsonName := strings.Split(sf.Tag.Get("json"), ",")[0]; jsonName != "" && jsonName != "-" {
 		names = append(names, jsonName)
 	}
@@ -215,22 +313,4 @@ func compareFloat(left, right float64, op string) bool {
 	default:
 		return false
 	}
-}
-
-func lowerCamel(s string) string {
-	if s == "" {
-		return s
-	}
-	return strings.ToLower(s[:1]) + s[1:]
-}
-
-func snakeCase(s string) string {
-	var out strings.Builder
-	for i, r := range s {
-		if i > 0 && r >= 'A' && r <= 'Z' {
-			out.WriteByte('_')
-		}
-		out.WriteRune(r)
-	}
-	return strings.ToLower(out.String())
 }

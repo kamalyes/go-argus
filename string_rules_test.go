@@ -13,19 +13,118 @@ package validator
 import (
 	"os"
 	"testing"
+
+	"github.com/kamalyes/go-argus/rule"
+	"github.com/kamalyes/go-argus/validate"
+)
+
+var (
+	stringRequired        = rule.StringRuleMap["required"]
+	stringIsDefault       = rule.StringRuleMap["isdefault"]
+	stringMin             = rule.StringRuleMap["min"]
+	stringMax             = rule.StringRuleMap["max"]
+	stringLen             = rule.StringRuleMap["len"]
+	stringEq              = rule.StringRuleMap["eq"]
+	stringEqIgnoreCase    = rule.StringRuleMap["eq_ignore_case"]
+	stringNe              = rule.StringRuleMap["ne"]
+	stringNeIgnoreCase    = rule.StringRuleMap["ne_ignore_case"]
+	stringGt              = rule.StringRuleMap["gt"]
+	stringGte             = rule.StringRuleMap["gte"]
+	stringLt              = rule.StringRuleMap["lt"]
+	stringLte             = rule.StringRuleMap["lte"]
+	stringAlpha           = rule.StringRuleMap["alpha"]
+	stringAlphaSpace      = rule.StringRuleMap["alphaspace"]
+	stringAlphanum        = rule.StringRuleMap["alphanum"]
+	stringAlphanumSpace   = rule.StringRuleMap["alphanumspace"]
+	stringAlphaUnicode    = rule.StringRuleMap["alphaunicode"]
+	stringAlphanumUnicode = rule.StringRuleMap["alphanumunicode"]
+	stringASCII           = rule.StringRuleMap["ascii"]
+	stringPrintASCII      = rule.StringRuleMap["printascii"]
+	stringMultibyte       = rule.StringRuleMap["multibyte"]
+	stringHexadecimal     = rule.StringRuleMap["hexadecimal"]
+	stringHexColor        = rule.StringRuleMap["hexcolor"]
+	stringRGB             = rule.StringRuleMap["rgb"]
+	stringRGBA            = rule.StringRuleMap["rgba"]
+	stringHSL             = rule.StringRuleMap["hsl"]
+	stringHSLA            = rule.StringRuleMap["hsla"]
+	stringEmail           = rule.StringRuleMap["email"]
+	stringE164            = rule.StringRuleMap["e164"]
+	stringIP              = rule.StringRuleMap["ip"]
+	stringIPv4            = rule.StringRuleMap["ipv4"]
+	stringIPv6            = rule.StringRuleMap["ipv6"]
+	stringCIDR            = rule.StringRuleMap["cidr"]
+	stringCIDRv4          = rule.StringRuleMap["cidrv4"]
+	stringCIDRv6          = rule.StringRuleMap["cidrv6"]
+	stringMAC             = rule.StringRuleMap["mac"]
+	stringHostname        = rule.StringRuleMap["hostname"]
+	stringFQDN            = rule.StringRuleMap["fqdn"]
+	stringHostnamePort    = rule.StringRuleMap["hostname_port"]
+	stringPort            = rule.StringRuleMap["port"]
+	stringURL             = rule.StringRuleMap["url"]
+	stringURI             = rule.StringRuleMap["uri"]
+	stringHTTPURL         = rule.StringRuleMap["http_url"]
+	stringHTTPSURL        = rule.StringRuleMap["https_url"]
+	stringURLEncoded      = rule.StringRuleMap["url_encoded"]
+	stringHTML            = rule.StringRuleMap["html"]
+	stringHTMLEncoded     = rule.StringRuleMap["html_encoded"]
+	stringUUID            = rule.StringRuleMap["uuid"]
+	stringUUID3           = rule.StringRuleMap["uuid3"]
+	stringUUID4           = rule.StringRuleMap["uuid4"]
+	stringUUID5           = rule.StringRuleMap["uuid5"]
+	stringBase32          = rule.StringRuleMap["base32"]
+	stringBase64          = rule.StringRuleMap["base64"]
+	stringBase64URL       = rule.StringRuleMap["base64url"]
+	stringBase64RawURL    = rule.StringRuleMap["base64rawurl"]
+	stringJSON            = rule.StringRuleMap["json"]
+	stringUnique          = rule.StringRuleMap["unique"]
+	stringStartsWith      = rule.StringRuleMap["startswith"]
+	stringEndsWith        = rule.StringRuleMap["endswith"]
+	stringStartsNotWith   = rule.StringRuleMap["startsnotwith"]
+	stringEndsNotWith     = rule.StringRuleMap["endsnotwith"]
+	stringContains        = rule.StringRuleMap["contains"]
+	stringContainsAny     = rule.StringRuleMap["containsany"]
+	stringContainsRune    = rule.StringRuleMap["containsrune"]
+	stringExcludes        = rule.StringRuleMap["excludes"]
+	stringExcludesAll     = rule.StringRuleMap["excludesall"]
+	stringExcludesRune    = rule.StringRuleMap["excludesrune"]
+	stringLowercase       = rule.StringRuleMap["lowercase"]
+	stringUppercase       = rule.StringRuleMap["uppercase"]
+	stringBoolean         = rule.StringRuleMap["boolean"]
+	stringNumber          = rule.StringRuleMap["number"]
+	stringDatetime        = rule.StringRuleMap["datetime"]
+	stringTimezone        = rule.StringRuleMap["timezone"]
+	stringLatitude        = rule.StringRuleMap["latitude"]
+	stringLongitude       = rule.StringRuleMap["longitude"]
+	stringFile            = rule.StringRuleMap["file"]
+	stringFilePath        = rule.StringRuleMap["filepath"]
+	stringDir             = rule.StringRuleMap["dir"]
+	stringDirPath         = rule.StringRuleMap["dirpath"]
+	stringMongoDB         = rule.StringRuleMap["mongodb"]
+	stringLuhnChecksum    = rule.StringRuleMap["luhn_checksum"]
+	stringSemver          = rule.StringRuleMap["semver"]
+	stringISBN10          = rule.StringRuleMap["isbn10"]
+	stringISBN13          = rule.StringRuleMap["isbn13"]
+	stringISSN            = rule.StringRuleMap["issn"]
+	stringBIC             = rule.StringRuleMap["bic"]
+	stringCron            = rule.StringRuleMap["cron"]
+	stringDataURI         = rule.StringRuleMap["datauri"]
+	stringBCP47           = rule.StringRuleMap["bcp47"]
+	stringEthAddr         = rule.StringRuleMap["eth_addr"]
+	stringBtcAddr         = rule.StringRuleMap["btc_addr"]
+	stringDNSRFC1035Label = rule.StringRuleMap["dns_rfc1035_label"]
 )
 
 func TestIsBlankString(t *testing.T) {
-	if !isBlankString("") {
+	if !validate.IsBlankString("") {
 		t.Fatal("expected empty string to be blank")
 	}
-	if !isBlankString("   ") {
+	if !validate.IsBlankString("   ") {
 		t.Fatal("expected spaces to be blank")
 	}
-	if !isBlankString("\t\n\r") {
+	if !validate.IsBlankString("\t\n\r") {
 		t.Fatal("expected whitespace to be blank")
 	}
-	if isBlankString("a") {
+	if validate.IsBlankString("a") {
 		t.Fatal("expected non-whitespace to not be blank")
 	}
 }
@@ -1073,8 +1172,8 @@ func TestStringRuleMapCompleteness(t *testing.T) {
 		"eth_addr", "btc_addr",
 	}
 	for _, name := range requiredRules {
-		if _, ok := stringRuleMap[name]; !ok {
-			t.Errorf("stringRuleMap missing rule: %s", name)
+		if _, ok := rule.StringRuleMap[name]; !ok {
+			t.Errorf("rule.StringRuleMap missing rule: %s", name)
 		}
 	}
 }

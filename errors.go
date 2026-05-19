@@ -131,3 +131,25 @@ func (fe *fieldError) Type() reflect.Type {
 func (fe *fieldError) Error() string {
 	return fmt.Sprintf(fieldErrMsg, fe.ns, fe.field, fe.tag)
 }
+
+var _ FieldError = (*stringFieldError)(nil)
+
+type stringFieldError struct {
+	tag   string
+	param string
+	value string
+}
+
+func (e *stringFieldError) Tag() string             { return e.tag }
+func (e *stringFieldError) ActualTag() string       { return e.tag }
+func (e *stringFieldError) Namespace() string       { return "" }
+func (e *stringFieldError) StructNamespace() string { return "" }
+func (e *stringFieldError) Field() string           { return "" }
+func (e *stringFieldError) StructField() string     { return "" }
+func (e *stringFieldError) Value() interface{}      { return e.value }
+func (e *stringFieldError) Param() string           { return e.param }
+func (e *stringFieldError) Kind() reflect.Kind      { return reflect.String }
+func (e *stringFieldError) Type() reflect.Type      { return reflect.TypeOf("") }
+func (e *stringFieldError) Error() string {
+	return fmt.Sprintf(fieldErrMsg, "", "", e.tag)
+}

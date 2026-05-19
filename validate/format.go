@@ -210,6 +210,47 @@ func IsValidCronField(field string) bool {
 	return true
 }
 
+func LuhnDouble(n int) int {
+	n *= 2
+	if n > 9 {
+		return n - 9
+	}
+	return n
+}
+
+func IsISBN10CheckDigit(c byte, sum int) bool {
+	if c == 'X' || c == 'x' {
+		return (sum+10)%11 == 0
+	}
+	if c < '0' || c > '9' {
+		return false
+	}
+	return (sum+int(c-'0'))%11 == 0
+}
+
+func IsLuhnChecksum(s string) bool {
+	sum := 0
+	double := false
+	digits := 0
+	for i := len(s) - 1; i >= 0; i-- {
+		r := s[i]
+		if r == ' ' || r == '-' {
+			continue
+		}
+		if r < '0' || r > '9' {
+			return false
+		}
+		n := int(r - '0')
+		if double {
+			n = LuhnDouble(n)
+		}
+		sum += n
+		double = !double
+		digits++
+	}
+	return digits > 0 && sum%10 == 0
+}
+
 func isSemver(s string) bool {
 	i := 0
 	if i < len(s) && s[i] == 'v' {
