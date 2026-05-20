@@ -34,3 +34,5 @@ go.work.sum
 /tests/*.png
 /tests/*.jpg
 /tests/*.jpeg
+
+__debug_bin.*

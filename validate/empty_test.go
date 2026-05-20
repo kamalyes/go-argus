@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-06 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2023-12-06 00:00:00
+ * @LastEditTime: 2026-05-20 22:34:24
  * @FilePath: \go-argus\validate\empty_test.go
  * @Description: empty.go 测试，覆盖空值判断、时间有效性、解引用、归一化和字段名安全校验
  *
@@ -597,6 +597,12 @@ func TestNormalizeFilterValueSliceValues(t *testing.T) {
 	if len(result) != 2 {
 		t.Fatal("expected 2 elements")
 	}
+	if result[0] != "a" {
+		t.Fatal("expected a")
+	}
+	if result[1] != "b" {
+		t.Fatal("expected b")
+	}
 }
 
 func TestNormalizeFilterValueIfNotEmpty(t *testing.T) {
@@ -607,5 +613,13 @@ func TestNormalizeFilterValueIfNotEmpty(t *testing.T) {
 	_, empty = NormalizeFilterValueIfNotEmpty("")
 	if !empty {
 		t.Fatal("expected empty value")
+	}
+}
+
+func TestNormalizeFilterValueIfEmptySlice(t *testing.T) {
+	s := []interface{}{}
+	result := NormalizeFilterValueSlice(s)
+	if len(result) != 0 {
+		t.Fatal("expected empty slice to normalize to empty slice")
 	}
 }

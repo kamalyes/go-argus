@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-06 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2026-05-19 13:58:18
+ * @LastEditTime: 2026-05-20 22:26:07
  * @FilePath: \go-argus\rule\field.go
  * @Description: 字段路径解析模块，支持 Go 字段名、json 名、snake_case 和嵌套字段访问
  *
@@ -13,6 +13,7 @@ package rule
 
 import (
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -54,27 +55,49 @@ func FieldByPath(root reflect.Value, path string) (reflect.Value, bool) {
 }
 
 // IsRequiredIf 判断 required_if 条件是否触发
-func IsRequiredIf(parent reflect.Value, param string) bool {
-	parts := strings.Fields(param)
-	return isRequiredIfParts(parent, parts)
-}
-
-// IsRequiredIfFast 判断 required_if 条件是否触发（预拆分参数版本）
-func IsRequiredIfFast(parent reflect.Value, parts []string) bool {
-	return isRequiredIfParts(parent, parts)
-}
-
-func isRequiredIfParts(parent reflect.Value, parts []string) bool {
+func IsRequiredIf(parent reflect.Value, parts []string) bool {
 	if len(parts) < 2 || len(parts)%2 != 0 {
 		return false
 	}
 	for i := 0; i < len(parts); i += 2 {
 		value, ok := FieldByPath(parent, parts[i])
-		if !ok || scalarString(value) != parts[i+1] {
+		if !ok || !matchScalarString(value, parts[i+1]) {
 			return false
 		}
 	}
 	return true
+}
+
+// matchScalarString 判断字段值是否与目标字符串匹配
+// 同时支持数字字符串（如 "2"）和枚举名称（如 "TRACKING_TYPE_ADJUST"），
+// 以兼容 proto 枚举类型的 required_if 校验
+func matchScalarString(v reflect.Value, target string) bool {
+	s, _ := validate.ScalarString(v)
+	if s == target {
+		return true
+	}
+	v = validate.DerefReflect(v)
+	if !v.IsValid() || !v.CanInterface() {
+		return false
+	}
+	// 对整数类型，额外尝试数字字符串匹配（fmt.Sprint 对实现了 String() 的枚举会返回枚举名而非数字）
+	switch v.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		if strconv.FormatInt(v.Int(), 10) == target {
+			return true
+		}
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		if strconv.FormatUint(v.Uint(), 10) == target {
+			return true
+		}
+	}
+	// 额外尝试 String() 方法（proto 枚举实现了 String()）
+	if stringer, ok := v.Interface().(interface{ String() string }); ok {
+		if stringer.String() == target {
+			return true
+		}
+	}
+	return false
 }
 
 // IsRequiredWith 判断 required_with 条件是否触发
@@ -86,15 +109,6 @@ func IsRequiredWith(parent reflect.Value, param string) bool {
 		}
 	}
 	return false
-}
-
-// CompareField 将当前字段和目标字段按操作符比较
-func CompareField(current reflect.Value, parent reflect.Value, targetPath string, op string) bool {
-	target, ok := FieldByPath(parent, targetPath)
-	if !ok {
-		return false
-	}
-	return CompareValue(current, target, op)
 }
 
 // CompareFieldDerefed 将已解引用的当前字段和目标字段按操作符比较
@@ -109,53 +123,23 @@ func CompareFieldDerefed(current reflect.Value, parent reflect.Value, targetPath
 
 // CompareValue 按操作符比较两个值，优先支持时间，其次支持数值和字符串
 func CompareValue(left reflect.Value, right reflect.Value, op string) bool {
+	cmpOp := validate.CmpOpFromStr(op)
 	if lt, lok := TimeValue(left, ""); lok {
 		rt, rok := TimeValue(right, "")
-		return rok && compareFloat(float64(lt.UnixNano()), float64(rt.UnixNano()), op)
+		return rok && validate.CompareOp(float64(lt.UnixNano()), float64(rt.UnixNano()), cmpOp)
 	}
-	lf, lok := floatValue(left)
-	rf, rok := floatValue(right)
+	lf, lok := validate.NumericValue(left)
+	rf, rok := validate.NumericValue(right)
 	if lok && rok {
-		return compareFloat(lf, rf, op)
+		return validate.CompareOp(lf, rf, cmpOp)
 	}
 	// 快速路径：两边都是字符串时直接比较，避免 ScalarString 中的 fmt.Sprint 开销
 	if left.Kind() == reflect.String && right.Kind() == reflect.String {
-		ls, rs := left.String(), right.String()
-		switch op {
-		case "eq":
-			return ls == rs
-		case "ne":
-			return ls != rs
-		case "gt":
-			return ls > rs
-		case "gte":
-			return ls >= rs
-		case "lt":
-			return ls < rs
-		case "lte":
-			return ls <= rs
-		default:
-			return false
-		}
+		return validate.CompareStringsOp(left.String(), right.String(), cmpOp)
 	}
-	ls := scalarString(left)
-	rs := scalarString(right)
-	switch op {
-	case "eq":
-		return ls == rs
-	case "ne":
-		return ls != rs
-	case "gt":
-		return ls > rs
-	case "gte":
-		return ls >= rs
-	case "lt":
-		return ls < rs
-	case "lte":
-		return ls <= rs
-	default:
-		return false
-	}
+	ls, _ := validate.ScalarString(left)
+	rs, _ := validate.ScalarString(right)
+	return validate.CompareStringsOp(ls, rs, cmpOp)
 }
 
 // OneOfFast 判断字段值是否在候选列表中（精确匹配）
@@ -299,61 +283,5 @@ func addFieldLookupName(lookup map[string]int, name string, index int) {
 	}
 	if _, exists := lookup[name]; !exists {
 		lookup[name] = index
-	}
-}
-
-// fieldNames 生成字段名的候选列表，包括 Go 字段名、json 名、snake_case
-func fieldNames(sf reflect.StructField) []string {
-	names := []string{sf.Name, utils.LowerCamel(sf.Name), utils.SnakeCase(sf.Name)}
-	if jsonName := strings.Split(sf.Tag.Get("json"), ",")[0]; jsonName != "" && jsonName != "-" {
-		names = append(names, jsonName)
-	}
-	return names
-}
-
-// scalarString 获取字段值的字符串表示，支持指针和空值
-func scalarString(v reflect.Value) string {
-	v = validate.DerefReflect(v)
-	if !v.IsValid() {
-		return ""
-	}
-	return validate.StringValue(v)
-}
-
-// floatValue 获取字段值的浮点数表示，支持指针和空值
-func floatValue(v reflect.Value) (float64, bool) {
-	v = validate.DerefReflect(v)
-	if !v.IsValid() {
-		return 0, false
-	}
-	switch v.Kind() {
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return float64(v.Int()), true
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
-		return float64(v.Uint()), true
-	case reflect.Float32, reflect.Float64:
-		return v.Float(), true
-	default:
-		return 0, false
-	}
-}
-
-// compareFloat 对比两个浮点数是否符合指定操作符
-func compareFloat(left, right float64, op string) bool {
-	switch op {
-	case "eq":
-		return left == right
-	case "ne":
-		return left != right
-	case "gt":
-		return left > right
-	case "gte":
-		return left >= right
-	case "lt":
-		return left < right
-	case "lte":
-		return left <= right
-	default:
-		return false
 	}
 }

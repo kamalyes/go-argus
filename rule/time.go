@@ -90,7 +90,7 @@ func CompareTimeExpr(field reflect.Value, expr string, op string, now time.Time)
 		return false
 	}
 	right, ok := ResolveTimeExpr(expr, now)
-	return ok && compareFloat(float64(left.UnixNano()), float64(right.UnixNano()), op)
+	return ok && validate.CompareOp(float64(left.UnixNano()), float64(right.UnixNano()), validate.CmpOpFromStr(op))
 }
 
 func parseTimeString(value string, layout string) (time.Time, bool) {

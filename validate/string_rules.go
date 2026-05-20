@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2026-05-19 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2026-05-19 00:00:00
+ * @LastEditTime: 2026-05-20 22:28:14
  * @FilePath: \go-argus\validate\string_rules.go
  * @Description: 字符串规则校验实现，所有逻辑集中于此
  *
@@ -36,6 +36,46 @@ const (
 	CmpGTE
 	CmpNE
 )
+
+// CmpOpFromStr 将字符串操作符转换为 CmpOp，未匹配返回 -1
+func CmpOpFromStr(op string) CmpOp {
+	switch op {
+	case "eq":
+		return CmpEQ
+	case "ne":
+		return CmpNE
+	case "gt":
+		return CmpGT
+	case "gte":
+		return CmpGTE
+	case "lt":
+		return CmpLT
+	case "lte":
+		return CmpLTE
+	default:
+		return -1
+	}
+}
+
+// CompareStringsOp 按操作符比较两个字符串（字典序）
+func CompareStringsOp(left, right string, op CmpOp) bool {
+	switch op {
+	case CmpEQ:
+		return left == right
+	case CmpNE:
+		return left != right
+	case CmpGT:
+		return left > right
+	case CmpGTE:
+		return left >= right
+	case CmpLT:
+		return left < right
+	case CmpLTE:
+		return left <= right
+	default:
+		return false
+	}
+}
 
 // CompareOp 比较运算符实现
 func CompareOp(actual, expect float64, op CmpOp) bool {
@@ -773,6 +813,140 @@ func StringMongoDB(s string) bool {
 
 func StringDNSRFC1035Label(s string) bool {
 	return len(s) <= 63 && DNSLabelRegex.MatchString(s)
+}
+
+// StringISSN 验证 ISSN 格式
+func StringISSN(s string) bool { return IsISSN(s) }
+
+// StringBIC 验证 BIC/SWIFT 代码
+func StringBIC(s string) bool { return IsBIC(s) }
+
+// StringCron 验证 cron 表达式
+func StringCron(s string) bool { return IsCron(s) }
+
+// StringDataURI 验证 Data URI 格式
+func StringDataURI(s string) bool { return IsDataURI(s) }
+
+// StringBCP47 验证 BCP47 语言标签
+func StringBCP47(s string) bool { return IsBCP47(s) }
+
+// StringEthAddr 验证以太坊地址
+func StringEthAddr(s string) bool { return IsEthAddr(s) }
+
+// StringBtcAddr 验证比特币地址
+func StringBtcAddr(s string) bool { return IsBtcAddr(s) }
+
+// StringRuleFunc 字符串规则函数签名
+type StringRuleFunc func(s string, param string) bool
+
+// noParamAdapter 将无参数的字符串校验函数适配为 StringRuleFunc
+func noParamAdapter(fn func(string) bool) StringRuleFunc {
+	return func(s string, _ string) bool { return fn(s) }
+}
+
+// StringRuleMap 字符串规则映射表，VarString 快速路径直接查表
+var StringRuleMap = map[string]StringRuleFunc{
+	"required":          noParamAdapter(StringRequired),
+	"isdefault":         noParamAdapter(StringIsDefault),
+	"min":               StringMin,
+	"max":               StringMax,
+	"len":               StringLen,
+	"eq":                StringEq,
+	"eq_ignore_case":    StringEqIgnoreCase,
+	"ne":                StringNe,
+	"ne_ignore_case":    StringNeIgnoreCase,
+	"gt":                StringGt,
+	"gte":               StringGte,
+	"lt":                StringLt,
+	"lte":               StringLte,
+	"alpha":             noParamAdapter(StringAlpha),
+	"alphaspace":        noParamAdapter(StringAlphaSpace),
+	"alphanum":          noParamAdapter(StringAlphanum),
+	"alphanumspace":     noParamAdapter(StringAlphanumSpace),
+	"alphaunicode":      noParamAdapter(StringAlphaUnicode),
+	"alphanumunicode":   noParamAdapter(StringAlphanumUnicode),
+	"ascii":             noParamAdapter(StringASCII),
+	"printascii":        noParamAdapter(StringPrintASCII),
+	"multibyte":         noParamAdapter(StringMultibyte),
+	"hexadecimal":       noParamAdapter(StringHexadecimal),
+	"hexcolor":          noParamAdapter(StringHexColor),
+	"rgb":               noParamAdapter(StringRGB),
+	"rgba":              noParamAdapter(StringRGBA),
+	"hsl":               noParamAdapter(StringHSL),
+	"hsla":              noParamAdapter(StringHSLA),
+	"email":             noParamAdapter(IsEmail),
+	"e164":              noParamAdapter(StringE164),
+	"ip":                noParamAdapter(StringIP),
+	"ip_addr":           noParamAdapter(StringIP),
+	"ipv4":              noParamAdapter(StringIPv4),
+	"ipv6":              noParamAdapter(StringIPv6),
+	"cidr":              noParamAdapter(StringCIDR),
+	"cidrv4":            noParamAdapter(StringCIDRv4),
+	"cidrv6":            noParamAdapter(StringCIDRv6),
+	"mac":               noParamAdapter(StringMAC),
+	"hostname":          noParamAdapter(StringHostname),
+	"hostname_rfc1123":  noParamAdapter(StringHostname),
+	"fqdn":              noParamAdapter(StringFQDN),
+	"hostname_port":     noParamAdapter(StringHostnamePort),
+	"port":              noParamAdapter(StringPort),
+	"url":               noParamAdapter(StringURL),
+	"uri":               noParamAdapter(StringURI),
+	"http_url":          noParamAdapter(StringHTTPURL),
+	"https_url":         noParamAdapter(StringHTTPSURL),
+	"url_encoded":       noParamAdapter(StringURLEncoded),
+	"html":              noParamAdapter(StringHTML),
+	"html_encoded":      noParamAdapter(StringHTMLEncoded),
+	"uuid":              noParamAdapter(StringUUID),
+	"uuid3":             noParamAdapter(StringUUID3),
+	"uuid4":             noParamAdapter(StringUUID4),
+	"uuid5":             noParamAdapter(StringUUID5),
+	"uuid_rfc4122":      noParamAdapter(StringUUID),
+	"uuid3_rfc4122":     noParamAdapter(StringUUID3),
+	"uuid4_rfc4122":     noParamAdapter(StringUUID4),
+	"uuid5_rfc4122":     noParamAdapter(StringUUID5),
+	"base32":            noParamAdapter(StringBase32),
+	"base64":            noParamAdapter(StringBase64),
+	"base64url":         noParamAdapter(StringBase64URL),
+	"base64rawurl":      noParamAdapter(StringBase64RawURL),
+	"json":              noParamAdapter(StringJSON),
+	"unique":            noParamAdapter(StringUnique),
+	"startswith":        StringStartsWith,
+	"endswith":          StringEndsWith,
+	"startsnotwith":     StringStartsNotWith,
+	"endsnotwith":       StringEndsNotWith,
+	"contains":          StringContains,
+	"containsany":       StringContainsAny,
+	"containsrune":      StringContainsRune,
+	"excludes":          StringExcludes,
+	"excludesall":       StringExcludesAll,
+	"excludesrune":      StringExcludesRune,
+	"lowercase":         noParamAdapter(StringLowercase),
+	"uppercase":         noParamAdapter(StringUppercase),
+	"boolean":           noParamAdapter(StringBoolean),
+	"number":            noParamAdapter(StringNumber),
+	"numeric":           noParamAdapter(StringNumber),
+	"datetime":          StringDatetime,
+	"timezone":          noParamAdapter(StringTimezone),
+	"latitude":          noParamAdapter(StringLatitude),
+	"longitude":         noParamAdapter(StringLongitude),
+	"file":              noParamAdapter(StringFile),
+	"filepath":          noParamAdapter(StringFilePath),
+	"dir":               noParamAdapter(StringDir),
+	"dirpath":           noParamAdapter(StringDirPath),
+	"mongodb":           noParamAdapter(StringMongoDB),
+	"luhn_checksum":     noParamAdapter(IsLuhnChecksum),
+	"credit_card":       noParamAdapter(IsLuhnChecksum),
+	"dns_rfc1035_label": noParamAdapter(StringDNSRFC1035Label),
+	"semver":            noParamAdapter(IsSemver),
+	"isbn10":            noParamAdapter(IsISBN10),
+	"isbn13":            noParamAdapter(IsISBN13),
+	"issn":              noParamAdapter(StringISSN),
+	"bic":               noParamAdapter(StringBIC),
+	"cron":              noParamAdapter(StringCron),
+	"datauri":           noParamAdapter(StringDataURI),
+	"bcp47":             noParamAdapter(StringBCP47),
+	"eth_addr":          noParamAdapter(StringEthAddr),
+	"btc_addr":          noParamAdapter(StringBtcAddr),
 }
 
 // StringOneOf 判断字符串是否在候选列表中（精确匹配）

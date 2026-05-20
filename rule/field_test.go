@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/kamalyes/go-argus/utils"
+	"github.com/kamalyes/go-argus/validate"
 )
 
 type testStruct struct {
@@ -140,7 +141,7 @@ func TestFieldByPathNilPointer(t *testing.T) {
 
 func TestIsRequiredIfTrue(t *testing.T) {
 	s := testStruct{Name: "schedule", Age: 0}
-	result := IsRequiredIf(reflect.ValueOf(s), "Name schedule")
+	result := IsRequiredIf(reflect.ValueOf(s), []string{"Name", "schedule"})
 	if !result {
 		t.Fatal("expected required_if to trigger")
 	}
@@ -148,7 +149,7 @@ func TestIsRequiredIfTrue(t *testing.T) {
 
 func TestIsRequiredIfFalse(t *testing.T) {
 	s := testStruct{Name: "instant", Age: 0}
-	result := IsRequiredIf(reflect.ValueOf(s), "Name schedule")
+	result := IsRequiredIf(reflect.ValueOf(s), []string{"Name", "schedule"})
 	if result {
 		t.Fatal("expected required_if not to trigger")
 	}
@@ -156,7 +157,7 @@ func TestIsRequiredIfFalse(t *testing.T) {
 
 func TestIsRequiredIfOddParts(t *testing.T) {
 	s := testStruct{Name: "schedule"}
-	result := IsRequiredIf(reflect.ValueOf(s), "Name")
+	result := IsRequiredIf(reflect.ValueOf(s), []string{"Name"})
 	if result {
 		t.Fatal("expected false for odd number of parts")
 	}
@@ -164,7 +165,7 @@ func TestIsRequiredIfOddParts(t *testing.T) {
 
 func TestIsRequiredIfEmptyParam(t *testing.T) {
 	s := testStruct{Name: "schedule"}
-	result := IsRequiredIf(reflect.ValueOf(s), "")
+	result := IsRequiredIf(reflect.ValueOf(s), []string{})
 	if result {
 		t.Fatal("expected false for empty param")
 	}
@@ -199,22 +200,6 @@ func TestIsRequiredWithMissingField(t *testing.T) {
 	result := IsRequiredWith(reflect.ValueOf(s), "NonExistent")
 	if result {
 		t.Fatal("expected missing field to not trigger")
-	}
-}
-
-func TestCompareFieldSuccess(t *testing.T) {
-	s := testStruct{Name: "hello", Age: 10}
-	result := CompareField(reflect.ValueOf("hello"), reflect.ValueOf(s), "Name", "eq")
-	if !result {
-		t.Fatal("expected eq comparison to succeed")
-	}
-}
-
-func TestCompareFieldNotFound(t *testing.T) {
-	s := testStruct{Name: "hello"}
-	result := CompareField(reflect.ValueOf("hello"), reflect.ValueOf(s), "Missing", "eq")
-	if result {
-		t.Fatal("expected false for missing field")
 	}
 }
 
@@ -338,69 +323,72 @@ func TestSnakeCase(t *testing.T) {
 }
 
 func TestCompareFloatOps(t *testing.T) {
-	if !compareFloat(1, 1, "eq") {
+	cmp := func(left, right float64, op string) bool {
+		return validate.CompareOp(left, right, validate.CmpOpFromStr(op))
+	}
+	if !cmp(1, 1, "eq") {
 		t.Fatal("eq failed")
 	}
-	if compareFloat(1, 2, "eq") {
+	if cmp(1, 2, "eq") {
 		t.Fatal("eq should be false")
 	}
-	if !compareFloat(1, 2, "ne") {
+	if !cmp(1, 2, "ne") {
 		t.Fatal("ne failed")
 	}
-	if !compareFloat(2, 1, "gt") {
+	if !cmp(2, 1, "gt") {
 		t.Fatal("gt failed")
 	}
-	if !compareFloat(2, 2, "gte") {
+	if !cmp(2, 2, "gte") {
 		t.Fatal("gte failed")
 	}
-	if !compareFloat(1, 2, "lt") {
+	if !cmp(1, 2, "lt") {
 		t.Fatal("lt failed")
 	}
-	if !compareFloat(2, 2, "lte") {
+	if !cmp(2, 2, "lte") {
 		t.Fatal("lte failed")
 	}
-	if compareFloat(1, 2, "unknown") {
+	if cmp(1, 2, "unknown") {
 		t.Fatal("unknown op should be false")
 	}
 }
 
 func TestFloatValueInvalid(t *testing.T) {
-	_, ok := floatValue(reflect.ValueOf("abc"))
+	_, ok := validate.NumericValue(reflect.ValueOf("abc"))
 	if ok {
-		t.Fatal("expected string to fail floatValue")
+		t.Fatal("expected non-numeric string to fail NumericValue")
 	}
 }
 
 func TestFloatValueUint(t *testing.T) {
-	v, ok := floatValue(reflect.ValueOf(uint(42)))
+	v, ok := validate.NumericValue(reflect.ValueOf(uint(42)))
 	if !ok || v != 42 {
 		t.Fatalf("expected 42, got %f ok=%v", v, ok)
 	}
 }
 
 func TestFloatValueFloat(t *testing.T) {
-	v, ok := floatValue(reflect.ValueOf(3.14))
+	v, ok := validate.NumericValue(reflect.ValueOf(3.14))
 	if !ok || v != 3.14 {
 		t.Fatalf("expected 3.14, got %f ok=%v", v, ok)
 	}
 }
 
 func TestFloatValueInvalidKind(t *testing.T) {
-	_, ok := floatValue(reflect.ValueOf([]int{1}))
+	_, ok := validate.NumericValue(reflect.ValueOf([]int{1}))
 	if ok {
-		t.Fatal("expected slice to fail floatValue")
+		t.Fatal("expected slice to fail NumericValue")
 	}
 }
 
 func TestFloatValueInvalidValue(t *testing.T) {
-	_, ok := floatValue(reflect.Value{})
+	_, ok := validate.NumericValue(reflect.Value{})
 	if ok {
-		t.Fatal("expected invalid value to fail floatValue")
+		t.Fatal("expected invalid value to fail NumericValue")
 	}
 }
 
 func TestScalarStringInvalid(t *testing.T) {
-	got := scalarString(reflect.Value{})
+	got, _ := validate.ScalarString(reflect.Value{})
 	if got != "" {
 		t.Fatalf("expected empty string, got %q", got)
 	}
@@ -410,9 +398,9 @@ func TestScalarStringInvalid(t *testing.T) {
 
 func TestIsRequiredIfFast(t *testing.T) {
 	s := testStruct{Name: "schedule", Age: 0}
-	result := IsRequiredIfFast(reflect.ValueOf(s), []string{"Name", "schedule"})
+	result := IsRequiredIf(reflect.ValueOf(s), []string{"Name", "schedule"})
 	if !result {
-		t.Fatal("expected required_if_fast to trigger")
+		t.Fatal("expected required_if to trigger")
 	}
 }
 
@@ -614,5 +602,87 @@ func TestFieldByPathNonStructRoot(t *testing.T) {
 	_, ok := FieldByPath(reflect.ValueOf("hello"), "Name")
 	if ok {
 		t.Fatal("expected false for non-struct root")
+	}
+}
+
+// --- 模拟 proto 枚举类型测试 ---
+
+// protoEnum 模拟 protobuf 生成的枚举类型，实现了 String() 方法
+type protoEnum int32
+
+const (
+	protoEnum_UNSPECIFIED protoEnum = 0
+	protoEnum_SCHEDULED   protoEnum = 2
+	protoEnum_ADJUST      protoEnum = 1
+)
+
+func (e protoEnum) String() string {
+	switch e {
+	case 0:
+		return "UNSPECIFIED"
+	case 1:
+		return "ADJUST"
+	case 2:
+		return "SCHEDULED"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+type enumStruct struct {
+	Timing protoEnum `json:"timing"`
+	Name   string    `json:"name"`
+}
+
+func TestIsRequiredIfWithProtoEnumByNumber(t *testing.T) {
+	// required_if=timing 2 → 当 timing == 2 (SCHEDULED) 时触发
+	s := enumStruct{Timing: protoEnum_SCHEDULED, Name: "test"}
+	result := IsRequiredIf(reflect.ValueOf(s), []string{"timing", "2"})
+	if !result {
+		t.Fatal("expected required_if to trigger with numeric value for proto enum")
+	}
+}
+
+func TestIsRequiredIfWithProtoEnumByName(t *testing.T) {
+	// required_if=timing SCHEDULED → 当 timing.String() == "SCHEDULED" 时触发
+	s := enumStruct{Timing: protoEnum_SCHEDULED, Name: "test"}
+	result := IsRequiredIf(reflect.ValueOf(s), []string{"timing", "SCHEDULED"})
+	if !result {
+		t.Fatal("expected required_if to trigger with enum name for proto enum")
+	}
+}
+
+func TestIsRequiredIfWithProtoEnumNotMatch(t *testing.T) {
+	// timing == 0 (UNSPECIFIED), 不匹配 SCHEDULED
+	s := enumStruct{Timing: protoEnum_UNSPECIFIED, Name: "test"}
+	result := IsRequiredIf(reflect.ValueOf(s), []string{"timing", "SCHEDULED"})
+	if result {
+		t.Fatal("expected required_if not to trigger when enum value doesn't match")
+	}
+}
+
+func TestIsRequiredIfWithProtoEnumNumberNotMatch(t *testing.T) {
+	// timing == 0, 不匹配 "2"
+	s := enumStruct{Timing: protoEnum_UNSPECIFIED, Name: "test"}
+	result := IsRequiredIf(reflect.ValueOf(s), []string{"timing", "2"})
+	if result {
+		t.Fatal("expected required_if not to trigger when numeric value doesn't match")
+	}
+}
+
+func TestMatchScalarStringWithProtoEnum(t *testing.T) {
+	// 测试 matchScalarString 同时支持数字和枚举名称
+	v := reflect.ValueOf(protoEnum_SCHEDULED)
+	if !matchScalarString(v, "2") {
+		t.Fatal("expected matchScalarString to match numeric string '2'")
+	}
+	if !matchScalarString(v, "SCHEDULED") {
+		t.Fatal("expected matchScalarString to match enum name 'SCHEDULED'")
+	}
+	if matchScalarString(v, "1") {
+		t.Fatal("expected matchScalarString not to match '1'")
+	}
+	if matchScalarString(v, "ADJUST") {
+		t.Fatal("expected matchScalarString not to match 'ADJUST'")
 	}
 }

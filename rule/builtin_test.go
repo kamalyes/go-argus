@@ -14,7 +14,18 @@ package rule
 import (
 	"reflect"
 	"testing"
+
+	"github.com/kamalyes/go-argus/validate"
 )
+
+// callBuiltin 辅助函数：从 BuiltinRules 查表调用
+func callBuiltin(name string, field reflect.Value, param string) bool {
+	fn := BuiltinRules[name]
+	if fn == nil {
+		panic("builtin rule not found: " + name)
+	}
+	return fn(field, param, false)
+}
 
 func TestRuleRequired(t *testing.T) {
 	if !RuleRequired(reflect.ValueOf("hello"), "", true) {
@@ -95,58 +106,60 @@ func TestRuleLt(t *testing.T) {
 }
 
 func TestRuleAlpha(t *testing.T) {
-	if !RuleAlpha(reflect.ValueOf("abc"), "", false) {
+	if !callBuiltin("alpha", reflect.ValueOf("abc"), "") {
 		t.Fatal("expected alpha to pass")
 	}
-	if RuleAlpha(reflect.ValueOf("abc123"), "", false) {
+	if callBuiltin("alpha", reflect.ValueOf("abc123"), "") {
 		t.Fatal("expected alpha to fail for alphanum")
 	}
 }
 
 func TestRuleAlphanum(t *testing.T) {
-	if !RuleAlphanum(reflect.ValueOf("abc123"), "", false) {
+	if !callBuiltin("alphanum", reflect.ValueOf("abc123"), "") {
 		t.Fatal("expected alphanum to pass")
 	}
 }
 
-func TestRuleEmail(t *testing.T) {
-	if !RuleEmail(reflect.ValueOf("test@example.com"), "", false) {
+// --- 通过 BuiltinRules 查表测试适配器生成的规则 ---
+
+func TestBuiltinEmail(t *testing.T) {
+	if !callBuiltin("email", reflect.ValueOf("test@example.com"), "") {
 		t.Fatal("expected email to pass")
 	}
-	if RuleEmail(reflect.ValueOf("not-email"), "", false) {
+	if callBuiltin("email", reflect.ValueOf("not-email"), "") {
 		t.Fatal("expected email to fail")
 	}
 }
 
-func TestRuleIP(t *testing.T) {
-	if !RuleIP(reflect.ValueOf("192.168.1.1"), "", false) {
+func TestBuiltinIP(t *testing.T) {
+	if !callBuiltin("ip", reflect.ValueOf("192.168.1.1"), "") {
 		t.Fatal("expected IP to pass")
 	}
-	if RuleIP(reflect.ValueOf("not-ip"), "", false) {
+	if callBuiltin("ip", reflect.ValueOf("not-ip"), "") {
 		t.Fatal("expected IP to fail")
 	}
 }
 
-func TestRuleHostname(t *testing.T) {
-	if !RuleHostname(reflect.ValueOf("example.com"), "", false) {
+func TestBuiltinHostname(t *testing.T) {
+	if !callBuiltin("hostname", reflect.ValueOf("example.com"), "") {
 		t.Fatal("expected hostname to pass")
 	}
 }
 
-func TestRuleFQDN(t *testing.T) {
-	if !RuleFQDN(reflect.ValueOf("example.com."), "", false) {
+func TestBuiltinFQDN(t *testing.T) {
+	if !callBuiltin("fqdn", reflect.ValueOf("example.com."), "") {
 		t.Fatal("expected fqdn to pass")
 	}
 }
 
-func TestRuleURL(t *testing.T) {
-	if !RuleURL(reflect.ValueOf("http://example.com"), "", false) {
+func TestBuiltinURL(t *testing.T) {
+	if !callBuiltin("url", reflect.ValueOf("http://example.com"), "") {
 		t.Fatal("expected url to pass")
 	}
 }
 
-func TestRuleUUID(t *testing.T) {
-	if !RuleUUID(reflect.ValueOf("6ba7b810-9dad-11d1-80b4-00c04fd430c8"), "", false) {
+func TestBuiltinUUID(t *testing.T) {
+	if !callBuiltin("uuid", reflect.ValueOf("6ba7b810-9dad-11d1-80b4-00c04fd430c8"), "") {
 		t.Fatal("expected uuid to pass")
 	}
 }
@@ -160,20 +173,20 @@ func TestRuleJSON(t *testing.T) {
 	}
 }
 
-func TestRuleStartsWith(t *testing.T) {
-	if !RuleStartsWith(reflect.ValueOf("hello world"), "hello", false) {
+func TestBuiltinStartsWith(t *testing.T) {
+	if !callBuiltin("startswith", reflect.ValueOf("hello world"), "hello") {
 		t.Fatal("expected startsWith to pass")
 	}
 }
 
-func TestRuleContains(t *testing.T) {
-	if !RuleContains(reflect.ValueOf("hello world"), "world", false) {
+func TestBuiltinContains(t *testing.T) {
+	if !callBuiltin("contains", reflect.ValueOf("hello world"), "world") {
 		t.Fatal("expected contains to pass")
 	}
 }
 
-func TestRuleLowercase(t *testing.T) {
-	if !RuleLowercase(reflect.ValueOf("hello"), "", false) {
+func TestBuiltinLowercase(t *testing.T) {
+	if !callBuiltin("lowercase", reflect.ValueOf("hello"), "") {
 		t.Fatal("expected lowercase to pass")
 	}
 }
@@ -211,19 +224,19 @@ func TestResolveFieldValueBool(t *testing.T) {
 }
 
 func TestCompareOp(t *testing.T) {
-	if !CompareOp(5, 3, CmpGT) {
+	if !validate.CompareOp(5, 3, validate.CmpGT) {
 		t.Fatal("expected 5 > 3")
 	}
-	if !CompareOp(5, 5, CmpGTE) {
+	if !validate.CompareOp(5, 5, validate.CmpGTE) {
 		t.Fatal("expected 5 >= 5")
 	}
-	if !CompareOp(3, 5, CmpLT) {
+	if !validate.CompareOp(3, 5, validate.CmpLT) {
 		t.Fatal("expected 3 < 5")
 	}
-	if !CompareOp(3, 3, CmpLTE) {
+	if !validate.CompareOp(3, 3, validate.CmpLTE) {
 		t.Fatal("expected 3 <= 3")
 	}
-	if !CompareOp(5, 5, CmpEQ) {
+	if !validate.CompareOp(5, 5, validate.CmpEQ) {
 		t.Fatal("expected 5 == 5")
 	}
 }
@@ -263,10 +276,10 @@ func TestRuleNeIgnoreCase(t *testing.T) {
 }
 
 func TestRuleGteLte(t *testing.T) {
-	if !RuleGte(reflect.ValueOf(5), "5", false) {
+	if !callBuiltin("gte", reflect.ValueOf(5), "5") {
 		t.Fatal("expected gte to pass")
 	}
-	if !RuleLte(reflect.ValueOf(5), "5", false) {
+	if !callBuiltin("lte", reflect.ValueOf(5), "5") {
 		t.Fatal("expected lte to pass")
 	}
 }
@@ -292,212 +305,213 @@ func TestRuleLenInvalidParam(t *testing.T) {
 }
 
 func TestRuleEqInvalidField(t *testing.T) {
-	// ScalarString 对 int 返回 "42"，所以 eq 实际会通过
 	if !RuleEq(reflect.ValueOf(42), "42", false) {
 		t.Fatal("expected eq to pass for int 42 via ScalarString")
 	}
 }
 
 func TestRuleAlphaSpace(t *testing.T) {
-	if !RuleAlphaSpace(reflect.ValueOf("hello world"), "", false) {
+	if !callBuiltin("alphaspace", reflect.ValueOf("hello world"), "") {
 		t.Fatal("expected alphaspace to pass")
 	}
 }
 
 func TestRuleAlphanumSpace(t *testing.T) {
-	if !RuleAlphanumSpace(reflect.ValueOf("hello 123"), "", false) {
+	if !callBuiltin("alphanumspace", reflect.ValueOf("hello 123"), "") {
 		t.Fatal("expected alphanumspace to pass")
 	}
 }
 
 func TestRuleAlphaUnicode(t *testing.T) {
-	if !RuleAlphaUnicode(reflect.ValueOf("你好"), "", false) {
+	if !callBuiltin("alphaunicode", reflect.ValueOf("你好"), "") {
 		t.Fatal("expected alphaunicode to pass")
 	}
 }
 
 func TestRuleAlphanumUnicode(t *testing.T) {
-	if !RuleAlphanumUnicode(reflect.ValueOf("你好123"), "", false) {
+	if !callBuiltin("alphanumunicode", reflect.ValueOf("你好123"), "") {
 		t.Fatal("expected alphanumunicode to pass")
 	}
 }
 
 func TestRuleASCII(t *testing.T) {
-	if !RuleASCII(reflect.ValueOf("hello"), "", false) {
+	if !callBuiltin("ascii", reflect.ValueOf("hello"), "") {
 		t.Fatal("expected ascii to pass")
 	}
 }
 
 func TestRulePrintASCII(t *testing.T) {
-	if !RulePrintASCII(reflect.ValueOf("hello"), "", false) {
+	if !callBuiltin("printascii", reflect.ValueOf("hello"), "") {
 		t.Fatal("expected printascii to pass")
 	}
 }
 
 func TestRuleHexadecimal(t *testing.T) {
-	if !RuleHexadecimal(reflect.ValueOf("abcdef0123456789"), "", false) {
+	if !callBuiltin("hexadecimal", reflect.ValueOf("abcdef0123456789"), "") {
 		t.Fatal("expected hexadecimal to pass")
 	}
 }
 
-func TestRuleHexColor(t *testing.T) {
-	if !RuleHexColor(reflect.ValueOf("#ff0000"), "", false) {
+// --- 适配器生成的规则通过 BuiltinRules 查表测试 ---
+
+func TestBuiltinHexColor(t *testing.T) {
+	if !callBuiltin("hexcolor", reflect.ValueOf("#ff0000"), "") {
 		t.Fatal("expected hexcolor to pass")
 	}
 }
 
-func TestRuleRGB(t *testing.T) {
-	if !RuleRGB(reflect.ValueOf("rgb(255,0,0)"), "", false) {
+func TestBuiltinRGB(t *testing.T) {
+	if !callBuiltin("rgb", reflect.ValueOf("rgb(255,0,0)"), "") {
 		t.Fatal("expected rgb to pass")
 	}
 }
 
-func TestRuleRGBA(t *testing.T) {
-	if !RuleRGBA(reflect.ValueOf("rgba(255,0,0,0.5)"), "", false) {
+func TestBuiltinRGBA(t *testing.T) {
+	if !callBuiltin("rgba", reflect.ValueOf("rgba(255,0,0,0.5)"), "") {
 		t.Fatal("expected rgba to pass")
 	}
 }
 
-func TestRuleHSL(t *testing.T) {
-	if !RuleHSL(reflect.ValueOf("hsl(120,100%,50%)"), "", false) {
+func TestBuiltinHSL(t *testing.T) {
+	if !callBuiltin("hsl", reflect.ValueOf("hsl(120,100%,50%)"), "") {
 		t.Fatal("expected hsl to pass")
 	}
 }
 
-func TestRuleHSLA(t *testing.T) {
-	if !RuleHSLA(reflect.ValueOf("hsla(120,100%,50%,0.5)"), "", false) {
+func TestBuiltinHSLA(t *testing.T) {
+	if !callBuiltin("hsla", reflect.ValueOf("hsla(120,100%,50%,0.5)"), "") {
 		t.Fatal("expected hsla to pass")
 	}
 }
 
-func TestRuleE164(t *testing.T) {
-	if !RuleE164(reflect.ValueOf("+1234567890"), "", false) {
+func TestBuiltinE164(t *testing.T) {
+	if !callBuiltin("e164", reflect.ValueOf("+1234567890"), "") {
 		t.Fatal("expected e164 to pass")
 	}
 }
 
-func TestRuleIPv4(t *testing.T) {
-	if !RuleIPv4(reflect.ValueOf("192.168.1.1"), "", false) {
+func TestBuiltinIPv4(t *testing.T) {
+	if !callBuiltin("ipv4", reflect.ValueOf("192.168.1.1"), "") {
 		t.Fatal("expected ipv4 to pass")
 	}
 }
 
-func TestRuleIPv6(t *testing.T) {
-	if !RuleIPv6(reflect.ValueOf("::1"), "", false) {
+func TestBuiltinIPv6(t *testing.T) {
+	if !callBuiltin("ipv6", reflect.ValueOf("::1"), "") {
 		t.Fatal("expected ipv6 to pass")
 	}
 }
 
-func TestRuleCIDR(t *testing.T) {
-	if !RuleCIDR(reflect.ValueOf("10.0.0.0/8"), "", false) {
+func TestBuiltinCIDR(t *testing.T) {
+	if !callBuiltin("cidr", reflect.ValueOf("10.0.0.0/8"), "") {
 		t.Fatal("expected cidr to pass")
 	}
 }
 
-func TestRuleCIDRv4(t *testing.T) {
-	if !RuleCIDRv4(reflect.ValueOf("10.0.0.0/8"), "", false) {
+func TestBuiltinCIDRv4(t *testing.T) {
+	if !callBuiltin("cidrv4", reflect.ValueOf("10.0.0.0/8"), "") {
 		t.Fatal("expected cidrv4 to pass")
 	}
 }
 
-func TestRuleCIDRv6(t *testing.T) {
-	if !RuleCIDRv6(reflect.ValueOf("::1/128"), "", false) {
+func TestBuiltinCIDRv6(t *testing.T) {
+	if !callBuiltin("cidrv6", reflect.ValueOf("::1/128"), "") {
 		t.Fatal("expected cidrv6 to pass")
 	}
 }
 
-func TestRuleMAC(t *testing.T) {
-	if !RuleMAC(reflect.ValueOf("00:11:22:33:44:55"), "", false) {
+func TestBuiltinMAC(t *testing.T) {
+	if !callBuiltin("mac", reflect.ValueOf("00:11:22:33:44:55"), "") {
 		t.Fatal("expected mac to pass")
 	}
 }
 
-func TestRuleHostnamePort(t *testing.T) {
-	if !RuleHostnamePort(reflect.ValueOf("example.com:8080"), "", false) {
+func TestBuiltinHostnamePort(t *testing.T) {
+	if !callBuiltin("hostname_port", reflect.ValueOf("example.com:8080"), "") {
 		t.Fatal("expected hostname_port to pass")
 	}
 }
 
-func TestRulePort(t *testing.T) {
-	if !RulePort(reflect.ValueOf("443"), "", false) {
+func TestBuiltinPort(t *testing.T) {
+	if !callBuiltin("port", reflect.ValueOf("443"), "") {
 		t.Fatal("expected port to pass")
 	}
 }
 
-func TestRuleURI(t *testing.T) {
-	if !RuleURI(reflect.ValueOf("http://example.com/path"), "", false) {
+func TestBuiltinURI(t *testing.T) {
+	if !callBuiltin("uri", reflect.ValueOf("http://example.com/path"), "") {
 		t.Fatal("expected uri to pass")
 	}
 }
 
-func TestRuleHTTPURL(t *testing.T) {
-	if !RuleHTTPURL(reflect.ValueOf("http://example.com"), "", false) {
+func TestBuiltinHTTPURL(t *testing.T) {
+	if !callBuiltin("http_url", reflect.ValueOf("http://example.com"), "") {
 		t.Fatal("expected http_url to pass")
 	}
 }
 
-func TestRuleHTTPSURL(t *testing.T) {
-	if !RuleHTTPSURL(reflect.ValueOf("https://example.com"), "", false) {
+func TestBuiltinHTTPSURL(t *testing.T) {
+	if !callBuiltin("https_url", reflect.ValueOf("https://example.com"), "") {
 		t.Fatal("expected https_url to pass")
 	}
 }
 
-func TestRuleURLEncoded(t *testing.T) {
-	if !RuleURLEncoded(reflect.ValueOf("hello%20world"), "", false) {
+func TestBuiltinURLEncoded(t *testing.T) {
+	if !callBuiltin("url_encoded", reflect.ValueOf("hello%20world"), "") {
 		t.Fatal("expected url_encoded to pass")
 	}
 }
 
-func TestRuleHTML(t *testing.T) {
-	if !RuleHTML(reflect.ValueOf("<b>hello</b>"), "", false) {
+func TestBuiltinHTML(t *testing.T) {
+	if !callBuiltin("html", reflect.ValueOf("<b>hello</b>"), "") {
 		t.Fatal("expected html to pass")
 	}
 }
 
-func TestRuleHTMLEncoded(t *testing.T) {
-	if !RuleHTMLEncoded(reflect.ValueOf("&lt;b&gt;"), "", false) {
+func TestBuiltinHTMLEncoded(t *testing.T) {
+	if !callBuiltin("html_encoded", reflect.ValueOf("&lt;b&gt;"), "") {
 		t.Fatal("expected html_encoded to pass")
 	}
 }
 
-func TestRuleUUID3(t *testing.T) {
-	if !RuleUUID3(reflect.ValueOf("6ba7b810-9dad-31d1-80b4-00c04fd430c8"), "", false) {
+func TestBuiltinUUID3(t *testing.T) {
+	if !callBuiltin("uuid3", reflect.ValueOf("6ba7b810-9dad-31d1-80b4-00c04fd430c8"), "") {
 		t.Fatal("expected uuid3 to pass")
 	}
 }
 
-func TestRuleUUID4(t *testing.T) {
-	if !RuleUUID4(reflect.ValueOf("6ba7b810-9dad-41d1-80b4-00c04fd430c8"), "", false) {
+func TestBuiltinUUID4(t *testing.T) {
+	if !callBuiltin("uuid4", reflect.ValueOf("6ba7b810-9dad-41d1-80b4-00c04fd430c8"), "") {
 		t.Fatal("expected uuid4 to pass")
 	}
 }
 
-func TestRuleUUID5(t *testing.T) {
-	if !RuleUUID5(reflect.ValueOf("6ba7b810-9dad-51d1-80b4-00c04fd430c8"), "", false) {
+func TestBuiltinUUID5(t *testing.T) {
+	if !callBuiltin("uuid5", reflect.ValueOf("6ba7b810-9dad-51d1-80b4-00c04fd430c8"), "") {
 		t.Fatal("expected uuid5 to pass")
 	}
 }
 
-func TestRuleBase32(t *testing.T) {
-	if !RuleBase32(reflect.ValueOf("JBSWY3DPEE======"), "", false) {
+func TestBuiltinBase32(t *testing.T) {
+	if !callBuiltin("base32", reflect.ValueOf("JBSWY3DPEE======"), "") {
 		t.Fatal("expected base32 to pass")
 	}
 }
 
-func TestRuleBase64(t *testing.T) {
-	if !RuleBase64(reflect.ValueOf("SGVsbG8="), "", false) {
+func TestBuiltinBase64(t *testing.T) {
+	if !callBuiltin("base64", reflect.ValueOf("SGVsbG8="), "") {
 		t.Fatal("expected base64 to pass")
 	}
 }
 
-func TestRuleBase64URL(t *testing.T) {
-	if !RuleBase64URL(reflect.ValueOf("SGVsbG8="), "", false) {
+func TestBuiltinBase64URL(t *testing.T) {
+	if !callBuiltin("base64url", reflect.ValueOf("SGVsbG8="), "") {
 		t.Fatal("expected base64url to pass")
 	}
 }
 
-func TestRuleBase64RawURL(t *testing.T) {
-	if !RuleBase64RawURL(reflect.ValueOf("SGVsbG8"), "", false) {
+func TestBuiltinBase64RawURL(t *testing.T) {
+	if !callBuiltin("base64rawurl", reflect.ValueOf("SGVsbG8"), "") {
 		t.Fatal("expected base64rawurl to pass")
 	}
 }
@@ -514,56 +528,56 @@ func TestRuleUniqueInvalidValue(t *testing.T) {
 	}
 }
 
-func TestRuleEndsWith(t *testing.T) {
-	if !RuleEndsWith(reflect.ValueOf("hello world"), "world", false) {
+func TestBuiltinEndsWith(t *testing.T) {
+	if !callBuiltin("endswith", reflect.ValueOf("hello world"), "world") {
 		t.Fatal("expected endswith to pass")
 	}
 }
 
-func TestRuleStartsNotWith(t *testing.T) {
-	if !RuleStartsNotWith(reflect.ValueOf("hello"), "xyz", false) {
+func TestBuiltinStartsNotWith(t *testing.T) {
+	if !callBuiltin("startsnotwith", reflect.ValueOf("hello"), "xyz") {
 		t.Fatal("expected startsnotwith to pass")
 	}
 }
 
-func TestRuleEndsNotWith(t *testing.T) {
-	if !RuleEndsNotWith(reflect.ValueOf("hello"), "xyz", false) {
+func TestBuiltinEndsNotWith(t *testing.T) {
+	if !callBuiltin("endsnotwith", reflect.ValueOf("hello"), "xyz") {
 		t.Fatal("expected endsnotwith to pass")
 	}
 }
 
-func TestRuleContainsAny(t *testing.T) {
-	if !RuleContainsAny(reflect.ValueOf("hello"), "ae", false) {
+func TestBuiltinContainsAny(t *testing.T) {
+	if !callBuiltin("containsany", reflect.ValueOf("hello"), "ae") {
 		t.Fatal("expected containsany to pass")
 	}
 }
 
-func TestRuleContainsRune(t *testing.T) {
-	if !RuleContainsRune(reflect.ValueOf("hello"), "e", false) {
+func TestBuiltinContainsRune(t *testing.T) {
+	if !callBuiltin("containsrune", reflect.ValueOf("hello"), "e") {
 		t.Fatal("expected containsrune to pass")
 	}
 }
 
-func TestRuleExcludes(t *testing.T) {
-	if !RuleExcludes(reflect.ValueOf("hello"), "xyz", false) {
+func TestBuiltinExcludes(t *testing.T) {
+	if !callBuiltin("excludes", reflect.ValueOf("hello"), "xyz") {
 		t.Fatal("expected excludes to pass")
 	}
 }
 
-func TestRuleExcludesAll(t *testing.T) {
-	if !RuleExcludesAll(reflect.ValueOf("hello"), "xyz", false) {
+func TestBuiltinExcludesAll(t *testing.T) {
+	if !callBuiltin("excludesall", reflect.ValueOf("hello"), "xyz") {
 		t.Fatal("expected excludesall to pass")
 	}
 }
 
-func TestRuleExcludesRune(t *testing.T) {
-	if !RuleExcludesRune(reflect.ValueOf("hello"), "z", false) {
+func TestBuiltinExcludesRune(t *testing.T) {
+	if !callBuiltin("excludesrune", reflect.ValueOf("hello"), "z") {
 		t.Fatal("expected excludesrune to pass")
 	}
 }
 
-func TestRuleUppercase(t *testing.T) {
-	if !RuleUppercase(reflect.ValueOf("HELLO"), "", false) {
+func TestBuiltinUppercase(t *testing.T) {
+	if !callBuiltin("uppercase", reflect.ValueOf("HELLO"), "") {
 		t.Fatal("expected uppercase to pass")
 	}
 }
@@ -583,14 +597,14 @@ func TestRuleNumberInvalidValue(t *testing.T) {
 	}
 }
 
-func TestRuleDatetime(t *testing.T) {
-	if !RuleDatetime(reflect.ValueOf("2024-01-01"), "2006-01-02", false) {
+func TestBuiltinDatetime(t *testing.T) {
+	if !callBuiltin("datetime", reflect.ValueOf("2024-01-01"), "2006-01-02") {
 		t.Fatal("expected datetime to pass")
 	}
 }
 
-func TestRuleTimezone(t *testing.T) {
-	if !RuleTimezone(reflect.ValueOf("UTC"), "", false) {
+func TestBuiltinTimezone(t *testing.T) {
+	if !callBuiltin("timezone", reflect.ValueOf("UTC"), "") {
 		t.Fatal("expected timezone to pass")
 	}
 }
@@ -607,102 +621,100 @@ func TestRuleLongitudeNumeric(t *testing.T) {
 	}
 }
 
-func TestRuleFile(t *testing.T) {
-	_ = RuleFile(reflect.ValueOf("nonexistent.txt"), "", false)
+func TestBuiltinFile(t *testing.T) {
+	_ = callBuiltin("file", reflect.ValueOf("nonexistent.txt"), "")
 }
 
-func TestRuleFilePath(t *testing.T) {
-	if !RuleFilePath(reflect.ValueOf("/test/file.txt"), "", false) && !RuleFilePath(reflect.ValueOf("C:\\test\\file.txt"), "", false) {
+func TestBuiltinFilePath(t *testing.T) {
+	if !callBuiltin("filepath", reflect.ValueOf("/test/file.txt"), "") && !callBuiltin("filepath", reflect.ValueOf("C:\\test\\file.txt"), "") {
 		t.Fatal("expected filepath to pass")
 	}
 }
 
-func TestRuleDir(t *testing.T) {
-	_ = RuleDir(reflect.ValueOf("nonexistent_dir"), "", false)
+func TestBuiltinDir(t *testing.T) {
+	_ = callBuiltin("dir", reflect.ValueOf("nonexistent_dir"), "")
 }
 
-func TestRuleDirPath(t *testing.T) {
-	if !RuleDirPath(reflect.ValueOf("/test/"), "", false) && !RuleDirPath(reflect.ValueOf("C:\\test\\"), "", false) {
+func TestBuiltinDirPath(t *testing.T) {
+	if !callBuiltin("dirpath", reflect.ValueOf("/test/"), "") && !callBuiltin("dirpath", reflect.ValueOf("C:\\test\\"), "") {
 		t.Fatal("expected dirpath to pass")
 	}
 }
 
-func TestRuleMongoDB(t *testing.T) {
-	if !RuleMongoDB(reflect.ValueOf("507f1f77bcf86cd799439011"), "", false) {
+func TestBuiltinMongoDB(t *testing.T) {
+	if !callBuiltin("mongodb", reflect.ValueOf("507f1f77bcf86cd799439011"), "") {
 		t.Fatal("expected mongodb to pass")
 	}
 }
 
-func TestRuleLuhnChecksum(t *testing.T) {
-	if !RuleLuhnChecksum(reflect.ValueOf("49927398716"), "", false) {
+func TestBuiltinLuhnChecksum(t *testing.T) {
+	if !callBuiltin("luhn_checksum", reflect.ValueOf("49927398716"), "") {
 		t.Fatal("expected luhn_checksum to pass")
 	}
 }
 
-func TestRuleDNSRFC1035Label(t *testing.T) {
-	if !RuleDNSRFC1035Label(reflect.ValueOf("example"), "", false) {
+func TestBuiltinDNSRFC1035Label(t *testing.T) {
+	if !callBuiltin("dns_rfc1035_label", reflect.ValueOf("example"), "") {
 		t.Fatal("expected dns_rfc1035_label to pass")
 	}
 }
 
-func TestRuleSemver(t *testing.T) {
-	if !RuleSemver(reflect.ValueOf("1.2.3"), "", false) {
+func TestBuiltinSemver(t *testing.T) {
+	if !callBuiltin("semver", reflect.ValueOf("1.2.3"), "") {
 		t.Fatal("expected semver to pass")
 	}
 }
 
-func TestRuleISBN10(t *testing.T) {
-	if !RuleISBN10(reflect.ValueOf("080442957X"), "", false) {
+func TestBuiltinISBN10(t *testing.T) {
+	if !callBuiltin("isbn10", reflect.ValueOf("080442957X"), "") {
 		t.Fatal("expected isbn10 to pass")
 	}
 }
 
-func TestRuleISBN13(t *testing.T) {
-	if !RuleISBN13(reflect.ValueOf("9780306406157"), "", false) {
+func TestBuiltinISBN13(t *testing.T) {
+	if !callBuiltin("isbn13", reflect.ValueOf("9780306406157"), "") {
 		t.Fatal("expected isbn13 to pass")
 	}
 }
 
-func TestRuleISSN(t *testing.T) {
-	// ISSN 0317-8471: 0*8 + 3*7 + 1*6 + 7*5 + 8*4 + 4*3 + 7*2 = 0+21+6+35+32+12+14 = 120, 120%11=10 -> X
-	// 使用一个校验位正确的 ISSN
-	if !RuleISSN(reflect.ValueOf("0317-847X"), "", false) {
+func TestBuiltinISSN(t *testing.T) {
+	if !callBuiltin("issn", reflect.ValueOf("0317-847X"), "") {
 		t.Fatal("expected issn to pass")
 	}
 }
 
-func TestRuleBIC(t *testing.T) {
-	if !RuleBIC(reflect.ValueOf("CHASUS33"), "", false) {
+func TestBuiltinBIC(t *testing.T) {
+	if !callBuiltin("bic", reflect.ValueOf("CHASUS33"), "") {
 		t.Fatal("expected bic to pass")
 	}
 }
 
-func TestRuleCron(t *testing.T) {
-	if !RuleCron(reflect.ValueOf("0 * * * *"), "", false) {
+func TestBuiltinCron(t *testing.T) {
+	if !callBuiltin("cron", reflect.ValueOf("0 * * * *"), "") {
 		t.Fatal("expected cron to pass")
 	}
 }
 
-func TestRuleDataURI(t *testing.T) {
-	if !RuleDataURI(reflect.ValueOf("data:text/plain;base64,SGVsbG8="), "", false) {
+func TestBuiltinDataURI(t *testing.T) {
+	if !callBuiltin("datauri", reflect.ValueOf("data:text/plain;base64,SGVsbG8="), "") {
 		t.Fatal("expected datauri to pass")
 	}
 }
 
-func TestRuleBCP47(t *testing.T) {
-	if !RuleBCP47(reflect.ValueOf("en-US"), "", false) {
+func TestBuiltinBCP47(t *testing.T) {
+	if !callBuiltin("bcp47", reflect.ValueOf("en-US"), "") {
 		t.Fatal("expected bcp47 to pass")
 	}
 }
 
-func TestRuleEthAddr(t *testing.T) {
-	if !RuleEthAddr(reflect.ValueOf("0x742d35Cc6634C0532925a3b844Bc9e7595f2bD38"), "", false) {
+func TestBuiltinEthAddr(t *testing.T) {
+	if !callBuiltin("eth_addr", reflect.ValueOf("0x742d35Cc6634C0532925a3b844Bc9e7595f2bD38"), "") {
 		t.Fatal("expected eth_addr to pass")
 	}
 }
 
-func TestRuleBtcAddr(t *testing.T) {
-	if !RuleBtcAddr(reflect.ValueOf("1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"), "", false) {
+func TestBuiltinBtcAddr(t *testing.T) {
+	if !callBuiltin("btc_addr", reflect.ValueOf("1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"), "") {
 		t.Fatal("expected btc_addr to pass")
 	}
 }
@@ -714,13 +726,12 @@ func TestRuleJSONBytes(t *testing.T) {
 }
 
 func TestRuleMultibyteInvalid(t *testing.T) {
-	if RuleMultibyte(reflect.ValueOf(42), "", false) {
+	if callBuiltin("multibyte", reflect.ValueOf(42), "") {
 		t.Fatal("expected multibyte to fail for int")
 	}
 }
 
 func TestRuleEqIgnoreCaseFail(t *testing.T) {
-	// ScalarString 对 int 返回 "42"，所以 eq_ignore_case 实际会通过
 	if !RuleEqIgnoreCase(reflect.ValueOf(42), "42", false) {
 		t.Fatal("expected eq_ignore_case to pass for int via ScalarString")
 	}
@@ -786,7 +797,7 @@ func TestResolveFieldValueFloat(t *testing.T) {
 }
 
 func TestCompareLengthOrNumberInvalid(t *testing.T) {
-	if CompareLengthOrNumber(reflect.Value{}, 5, CmpGTE) {
+	if CompareLengthOrNumber(reflect.Value{}, 5, validate.CmpGTE) {
 		t.Fatal("expected invalid value to fail")
 	}
 }

@@ -496,14 +496,14 @@ func init() {
 }
 
 func (v *Validate) evalRequiredIf(top, parent, field reflect.Value, plan rule.RulePlan) bool {
-	if !rule.IsRequiredIfFast(parent, plan.ParamParts) {
+	if !rule.IsRequiredIf(parent, plan.ParamParts) {
 		return true
 	}
 	return !validate.IsEmptyValueWithStruct(field, v.requiredStructEnabled)
 }
 
 func (v *Validate) evalRequiredUnless(top, parent, field reflect.Value, plan rule.RulePlan) bool {
-	if rule.IsRequiredIfFast(parent, plan.ParamParts) {
+	if rule.IsRequiredIf(parent, plan.ParamParts) {
 		return true
 	}
 	return !validate.IsEmptyValueWithStruct(field, v.requiredStructEnabled)
@@ -538,14 +538,14 @@ func (v *Validate) evalRequiredWithoutAll(top, parent, field reflect.Value, plan
 }
 
 func (v *Validate) evalExcludedIf(top, parent, field reflect.Value, plan rule.RulePlan) bool {
-	if !rule.IsRequiredIfFast(parent, plan.ParamParts) {
+	if !rule.IsRequiredIf(parent, plan.ParamParts) {
 		return true
 	}
 	return validate.IsEmptyValueWithStruct(field, v.requiredStructEnabled)
 }
 
 func (v *Validate) evalExcludedUnless(top, parent, field reflect.Value, plan rule.RulePlan) bool {
-	if rule.IsRequiredIfFast(parent, plan.ParamParts) {
+	if rule.IsRequiredIf(parent, plan.ParamParts) {
 		return true
 	}
 	return validate.IsEmptyValueWithStruct(field, v.requiredStructEnabled)

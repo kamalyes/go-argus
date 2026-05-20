@@ -317,6 +317,11 @@ func NormalizeFilterValueSlice(values []interface{}) []interface{} {
 	if values == nil {
 		return nil
 	}
+
+	if len(values) == 0 {
+		return nil
+	}
+
 	out := make([]interface{}, len(values))
 	for i, value := range values {
 		out[i] = NormalizeFilterValue(value)
