@@ -218,6 +218,22 @@ func TestCompareFieldNotFound(t *testing.T) {
 	}
 }
 
+func TestCompareFieldDerefedSuccess(t *testing.T) {
+	s := testStruct{Name: "hello", Age: 10}
+	result := CompareFieldDerefed(reflect.ValueOf("hello"), reflect.ValueOf(s), "Name", "eq")
+	if !result {
+		t.Fatal("expected derefed eq comparison to succeed")
+	}
+}
+
+func TestCompareFieldDerefedNotFound(t *testing.T) {
+	s := testStruct{Name: "hello"}
+	result := CompareFieldDerefed(reflect.ValueOf("hello"), reflect.ValueOf(s), "Missing", "eq")
+	if result {
+		t.Fatal("expected false for missing field in derefed")
+	}
+}
+
 func TestCompareValueNumbers(t *testing.T) {
 	if !CompareValue(reflect.ValueOf(10), reflect.ValueOf(5), "gt") {
 		t.Fatal("expected 10 > 5")
@@ -387,5 +403,216 @@ func TestScalarStringInvalid(t *testing.T) {
 	got := scalarString(reflect.Value{})
 	if got != "" {
 		t.Fatalf("expected empty string, got %q", got)
+	}
+}
+
+// --- 补充 field.go 未覆盖函数测试 ---
+
+func TestIsRequiredIfFast(t *testing.T) {
+	s := testStruct{Name: "schedule", Age: 0}
+	result := IsRequiredIfFast(reflect.ValueOf(s), []string{"Name", "schedule"})
+	if !result {
+		t.Fatal("expected required_if_fast to trigger")
+	}
+}
+
+func TestIsRequiredWithAllTrue(t *testing.T) {
+	s := testStruct{Name: "argus", Age: 10}
+	result := IsRequiredWithAll(reflect.ValueOf(s), []string{"Name", "Age"})
+	if !result {
+		t.Fatal("expected required_with_all to trigger")
+	}
+}
+
+func TestIsRequiredWithAllFalse(t *testing.T) {
+	s := testStruct{Name: "argus", Age: 0}
+	result := IsRequiredWithAll(reflect.ValueOf(s), []string{"Name", "Age"})
+	if result {
+		t.Fatal("expected required_with_all to not trigger when one is zero")
+	}
+}
+
+func TestIsRequiredWithAllEmpty(t *testing.T) {
+	s := testStruct{Name: "argus"}
+	result := IsRequiredWithAll(reflect.ValueOf(s), []string{})
+	if result {
+		t.Fatal("expected required_with_all to not trigger for empty parts")
+	}
+}
+
+func TestIsRequiredWithoutTrue(t *testing.T) {
+	s := testStruct{Name: "", Age: 0}
+	result := IsRequiredWithout(reflect.ValueOf(s), []string{"Name", "Age"})
+	if !result {
+		t.Fatal("expected required_without to trigger when field is empty")
+	}
+}
+
+func TestIsRequiredWithoutFalse(t *testing.T) {
+	s := testStruct{Name: "argus", Age: 10}
+	result := IsRequiredWithout(reflect.ValueOf(s), []string{"Name", "Age"})
+	if result {
+		t.Fatal("expected required_without to not trigger when all fields are non-empty")
+	}
+}
+
+func TestIsRequiredWithoutAllTrue(t *testing.T) {
+	s := testStruct{Name: "", Age: 0}
+	result := IsRequiredWithoutAll(reflect.ValueOf(s), []string{"Name", "Age"})
+	if !result {
+		t.Fatal("expected required_without_all to trigger when all fields are empty")
+	}
+}
+
+func TestIsRequiredWithoutAllFalse(t *testing.T) {
+	s := testStruct{Name: "argus", Age: 0}
+	result := IsRequiredWithoutAll(reflect.ValueOf(s), []string{"Name", "Age"})
+	if result {
+		t.Fatal("expected required_without_all to not trigger when some fields are non-empty")
+	}
+}
+
+func TestIsRequiredWithoutAllEmpty(t *testing.T) {
+	s := testStruct{Name: "argus"}
+	result := IsRequiredWithoutAll(reflect.ValueOf(s), []string{})
+	if result {
+		t.Fatal("expected required_without_all to not trigger for empty parts")
+	}
+}
+
+func TestRangeSuccess(t *testing.T) {
+	type rangeStruct struct {
+		Start int `json:"start"`
+		End   int `json:"end"`
+	}
+	s := rangeStruct{Start: 1, End: 10}
+	result := Range(reflect.ValueOf(s), "start,end")
+	if !result {
+		t.Fatal("expected range to pass when start < end")
+	}
+}
+
+func TestRangePipeSeparator(t *testing.T) {
+	type rangeStruct struct {
+		Start int `json:"start"`
+		End   int `json:"end"`
+	}
+	s := rangeStruct{Start: 1, End: 10}
+	result := Range(reflect.ValueOf(s), "start|end")
+	if !result {
+		t.Fatal("expected range with pipe separator to pass")
+	}
+}
+
+func TestRangeFail(t *testing.T) {
+	type rangeStruct struct {
+		Start int `json:"start"`
+		End   int `json:"end"`
+	}
+	s := rangeStruct{Start: 10, End: 1}
+	result := Range(reflect.ValueOf(s), "start,end")
+	if result {
+		t.Fatal("expected range to fail when start >= end")
+	}
+}
+
+func TestRangeInvalidParts(t *testing.T) {
+	s := testStruct{Name: "argus"}
+	result := Range(reflect.ValueOf(s), "Name")
+	if result {
+		t.Fatal("expected range to fail for single part")
+	}
+}
+
+func TestRangeMissingField(t *testing.T) {
+	s := testStruct{Name: "argus"}
+	result := Range(reflect.ValueOf(s), "Name,Missing")
+	if result {
+		t.Fatal("expected range to fail for missing field")
+	}
+}
+
+func TestFieldContainsSuccess(t *testing.T) {
+	s := testStruct{Name: "hello world"}
+	result := FieldContains(reflect.ValueOf("hello world"), reflect.ValueOf(s), "Name")
+	if !result {
+		t.Fatal("expected field contains to pass")
+	}
+}
+
+func TestFieldContainsFail(t *testing.T) {
+	s := testStruct{Name: "hello"}
+	result := FieldContains(reflect.ValueOf("hello"), reflect.ValueOf(s), "Missing")
+	if result {
+		t.Fatal("expected field contains to fail for missing field")
+	}
+}
+
+func TestFieldContainsNonString(t *testing.T) {
+	s := testStruct{Age: 10}
+	result := FieldContains(reflect.ValueOf(10), reflect.ValueOf(s), "Age")
+	if result {
+		t.Fatal("expected field contains to fail for non-string field")
+	}
+}
+
+func TestOneOfFast(t *testing.T) {
+	if !OneOfFast(reflect.ValueOf("a"), []string{"a", "b", "c"}) {
+		t.Fatal("expected oneof to pass")
+	}
+	if OneOfFast(reflect.ValueOf("d"), []string{"a", "b", "c"}) {
+		t.Fatal("expected oneof to fail")
+	}
+}
+
+func TestOneOfFastNonString(t *testing.T) {
+	// ScalarString 对 int 返回 "42"，所以 OneOfFast 实际会通过
+	if !OneOfFast(reflect.ValueOf(42), []string{"42"}) {
+		t.Fatal("expected oneof to pass for int via ScalarString")
+	}
+}
+
+func TestOneOfCIFast(t *testing.T) {
+	if !OneOfCIFast(reflect.ValueOf("A"), []string{"a", "b", "c"}) {
+		t.Fatal("expected oneofci to pass")
+	}
+	if OneOfCIFast(reflect.ValueOf("D"), []string{"a", "b", "c"}) {
+		t.Fatal("expected oneofci to fail")
+	}
+}
+
+func TestOneOfCIFastNonString(t *testing.T) {
+	// ScalarString 对 int 返回 "42"，所以 OneOfCIFast 实际会通过
+	if !OneOfCIFast(reflect.ValueOf(42), []string{"42"}) {
+		t.Fatal("expected oneofci to pass for int via ScalarString")
+	}
+}
+
+func TestCompareValueScalarStringPath(t *testing.T) {
+	// 测试非字符串类型走 scalarString 路径
+	if !CompareValue(reflect.ValueOf(10), reflect.ValueOf(10), "eq") {
+		t.Fatal("expected scalar string eq to pass")
+	}
+	if !CompareValue(reflect.ValueOf(10), reflect.ValueOf(5), "gt") {
+		t.Fatal("expected scalar string gt to pass")
+	}
+	if !CompareValue(reflect.ValueOf(5), reflect.ValueOf(10), "lt") {
+		t.Fatal("expected scalar string lt to pass")
+	}
+	if !CompareValue(reflect.ValueOf(5), reflect.ValueOf(5), "gte") {
+		t.Fatal("expected scalar string gte to pass")
+	}
+	if !CompareValue(reflect.ValueOf(5), reflect.ValueOf(5), "lte") {
+		t.Fatal("expected scalar string lte to pass")
+	}
+	if !CompareValue(reflect.ValueOf(5), reflect.ValueOf(10), "ne") {
+		t.Fatal("expected scalar string ne to pass")
+	}
+}
+
+func TestFieldByPathNonStructRoot(t *testing.T) {
+	_, ok := FieldByPath(reflect.ValueOf("hello"), "Name")
+	if ok {
+		t.Fatal("expected false for non-struct root")
 	}
 }

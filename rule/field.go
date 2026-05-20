@@ -97,6 +97,16 @@ func CompareField(current reflect.Value, parent reflect.Value, targetPath string
 	return CompareValue(current, target, op)
 }
 
+// CompareFieldDerefed 将已解引用的当前字段和目标字段按操作符比较
+// 调用方已对 current 做 DerefReflect，避免重复解引用
+func CompareFieldDerefed(current reflect.Value, parent reflect.Value, targetPath string, op string) bool {
+	target, ok := FieldByPath(parent, targetPath)
+	if !ok {
+		return false
+	}
+	return CompareValue(current, target, op)
+}
+
 // CompareValue 按操作符比较两个值，优先支持时间，其次支持数值和字符串
 func CompareValue(left reflect.Value, right reflect.Value, op string) bool {
 	if lt, lok := TimeValue(left, ""); lok {
@@ -107,6 +117,26 @@ func CompareValue(left reflect.Value, right reflect.Value, op string) bool {
 	rf, rok := floatValue(right)
 	if lok && rok {
 		return compareFloat(lf, rf, op)
+	}
+	// 快速路径：两边都是字符串时直接比较，避免 ScalarString 中的 fmt.Sprint 开销
+	if left.Kind() == reflect.String && right.Kind() == reflect.String {
+		ls, rs := left.String(), right.String()
+		switch op {
+		case "eq":
+			return ls == rs
+		case "ne":
+			return ls != rs
+		case "gt":
+			return ls > rs
+		case "gte":
+			return ls >= rs
+		case "lt":
+			return ls < rs
+		case "lte":
+			return ls <= rs
+		default:
+			return false
+		}
 	}
 	ls := scalarString(left)
 	rs := scalarString(right)

@@ -1683,3 +1683,52 @@ func TestEmptyRuleName(t *testing.T) {
 		t.Fatalf("expected empty rule name to be skipped: %v", err)
 	}
 }
+
+func TestGetCustomValidationNil(t *testing.T) {
+	v := New()
+	// getCustomValidation 返回 nil 时 evalRule 返回 false，导致校验失败
+	if err := v.Var("test", "nonexistent_custom_rule"); err == nil {
+		t.Fatal("expected unknown custom rule to fail")
+	}
+}
+
+func TestCompareFieldDerefedViaEvalCmpField(t *testing.T) {
+	type req struct {
+		A string `validate:"eqfield=B"`
+		B string `validate:""`
+	}
+	v := New()
+	if err := v.Struct(req{A: "hello", B: "hello"}); err != nil {
+		t.Fatalf("expected eqfield to pass: %v", err)
+	}
+	if err := v.Struct(req{A: "hello", B: "world"}); err == nil {
+		t.Fatal("expected eqfield to fail for different values")
+	}
+}
+
+func TestCompareFieldDerefedViaEqCsField(t *testing.T) {
+	type inner struct {
+		Value string `validate:"eqcsfield=Value"`
+	}
+	type outer struct {
+		Value string `validate:""`
+		Inner inner  `validate:""`
+	}
+	v := New()
+	if err := v.Struct(outer{Value: "same", Inner: inner{Value: "same"}}); err != nil {
+		t.Fatalf("expected eqcsfield to pass: %v", err)
+	}
+}
+
+func TestApplyDiveWithIdxBuf(t *testing.T) {
+	type req struct {
+		Items []string `validate:"dive,min=1"`
+	}
+	v := New()
+	if err := v.Struct(req{Items: []string{"a", "b", "c"}}); err != nil {
+		t.Fatalf("expected dive to pass for valid items: %v", err)
+	}
+	if err := v.Struct(req{Items: []string{"a", "", "c"}}); err == nil {
+		t.Fatal("expected dive to fail for empty item")
+	}
+}

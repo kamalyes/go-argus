@@ -1,4 +1,4 @@
-﻿/*
+/*
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-06 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
@@ -382,7 +382,19 @@ func (v *Validate) applyRules(ctx context.Context, top reflect.Value, parent ref
 		ok := false
 		if len(rule.OrRules) > 0 {
 			for j := 0; j < len(rule.OrRules); j++ {
-				if v.evalRule(ctx, top, parent, derefed, fieldName, structFieldName, rule.OrRules[j]) {
+				orRule := rule.OrRules[j]
+				// 快速路径：or 规则通常是 builtin，直接查表避免完整 evalRule 开销
+				if action, found := evalTable[orRule.Name]; found {
+					if action.dispatch != nil {
+						if action.dispatch(v, top, parent, derefed, orRule) {
+							ok = true
+							break
+						}
+					} else if action.builtin(derefed, orRule.Param, v.requiredStructEnabled) {
+						ok = true
+						break
+					}
+				} else if v.evalRule(ctx, top, parent, derefed, fieldName, structFieldName, orRule) {
 					ok = true
 					break
 				}
@@ -405,9 +417,12 @@ func (v *Validate) applyDive(ctx context.Context, top reflect.Value, parent refl
 	}
 	switch field.Kind() {
 	case reflect.Slice, reflect.Array:
+		// 复用 []byte 缓冲区避免 strconv.Itoa 分配
+		var idxBuf []byte
 		for i := 0; i < field.Len(); i++ {
-			childNS := ns + "[" + strconv.Itoa(i) + "]"
-			childStructNS := structNs + "[" + strconv.Itoa(i) + "]"
+			idxBuf = strconv.AppendInt(idxBuf[:0], int64(i), 10)
+			childNS := ns + "[" + string(idxBuf) + "]"
+			childStructNS := structNs + "[" + string(idxBuf) + "]"
 			v.applyRules(ctx, top, parent, field.Index(i), childNS, childStructNS, fieldName, structFieldName, rules, errs)
 		}
 	case reflect.Map:
@@ -429,9 +444,8 @@ func (v *Validate) evalRule(ctx context.Context, top reflect.Value, parent refle
 		return action.builtin(field, plan.Param, v.requiredStructEnabled)
 	}
 
-	v.mu.RLock()
-	fn := v.validations[plan.Name]
-	v.mu.RUnlock()
+	// 仅在 builtin/dispatch 未命中时才加读锁查自定义规则
+	fn := v.getCustomValidation(plan.Name)
 	if fn == nil {
 		return false
 	}
@@ -447,6 +461,14 @@ func (v *Validate) evalRule(ctx context.Context, top reflect.Value, parent refle
 	result := fn(ctx, fl)
 	releaseFieldLevel(fl)
 	return result
+}
+
+// getCustomValidation 读取自定义规则，使用 RLock 保护
+func (v *Validate) getCustomValidation(name string) FuncCtx {
+	v.mu.RLock()
+	fn := v.validations[name]
+	v.mu.RUnlock()
+	return fn
 }
 
 // evalDispatchFn 规则分派函数签名
@@ -563,7 +585,9 @@ func (v *Validate) evalCmpField(top, parent, field reflect.Value, plan rule.Rule
 	if strings.HasSuffix(plan.Name, "csfield") {
 		target = top
 	}
-	return rule.CompareField(field, target, plan.Param, op)
+	// 预解引用，避免 CompareValue 内部重复 DerefReflect
+	derefed := validate.DerefReflect(field)
+	return rule.CompareFieldDerefed(derefed, target, plan.Param, op)
 }
 
 func (v *Validate) evalFieldContains(top, parent, field reflect.Value, plan rule.RulePlan) bool {

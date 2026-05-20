@@ -6,6 +6,7 @@
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/kamalyes/go-argus.svg)](https://pkg.go.dev/github.com/kamalyes/go-argus)
 [![Go Report Card](https://goreportcard.com/badge/github.com/kamalyes/go-argus)](https://goreportcard.com/report/github.com/kamalyes/go-argus)
+[![Coverage](https://codecov.io/gh/kamalyes/go-argus/branch/master/graph/badge.svg)](https://codecov.io/gh/kamalyes/go-argus)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 [English](README.md) · [中文](README_ZH.md)

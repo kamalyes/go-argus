@@ -257,7 +257,11 @@ func StringMAC(s string) bool {
 }
 
 func StringHostname(s string) bool {
-	s = strings.TrimSpace(s)
+	// 内联 TrimSpace：仅当首尾有空白时才分配
+	if len(s) > 0 && (s[0] == ' ' || s[0] == '\t' || s[len(s)-1] == ' ' || s[len(s)-1] == '\t') {
+		s = strings.TrimSpace(s)
+	}
+	// hostname 允许尾部点号（FQDN 形式），去掉后再验证
 	if len(s) > 0 && s[len(s)-1] == '.' {
 		s = s[:len(s)-1]
 	}
@@ -265,8 +269,15 @@ func StringHostname(s string) bool {
 }
 
 func StringFQDN(s string) bool {
-	s = strings.TrimSpace(s)
-	return len(s) > 0 && s[len(s)-1] == '.' && IsHostname(s[:len(s)-1])
+	// 内联 TrimSpace
+	if len(s) > 0 && (s[0] == ' ' || s[0] == '\t' || s[len(s)-1] == ' ' || s[len(s)-1] == '\t') {
+		s = strings.TrimSpace(s)
+	}
+	n := len(s)
+	if n == 0 || s[n-1] != '.' {
+		return false
+	}
+	return IsHostname(s[:n-1])
 }
 
 func StringHostnamePort(s string) bool {

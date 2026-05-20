@@ -15,7 +15,6 @@ import (
 	"bytes"
 	"fmt"
 	"net"
-	"regexp"
 	"strings"
 
 	"github.com/kamalyes/go-argus/i18n"
@@ -234,8 +233,34 @@ func splitIPPatterns(pattern string) []string {
 	return out
 }
 
-var HostnameLabelRegex = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$`)
+// isHostnameLabel 判断单个 label 是否符合 hostname 规范（零正则、零分配）
+// 规则：首尾必须是字母或数字，中间允许字母、数字、连字符，长度 1-63
+func isHostnameLabel(label string) bool {
+	n := len(label)
+	if n == 0 || n > 63 {
+		return false
+	}
+	// 首字符必须是字母或数字
+	c := label[0]
+	if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) {
+		return false
+	}
+	// 尾字符必须是字母或数字
+	c = label[n-1]
+	if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) {
+		return false
+	}
+	// 中间字符允许字母、数字、连字符
+	for i := 1; i < n-1; i++ {
+		c = label[i]
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-') {
+			return false
+		}
+	}
+	return true
+}
 
+// IsHostname 判断字符串是否为合法 hostname（零正则、零分配）
 func IsHostname(host string) bool {
 	if host == "" || len(host) > 253 {
 		return false
@@ -243,8 +268,7 @@ func IsHostname(host string) bool {
 	start := 0
 	for i := 0; i <= len(host); i++ {
 		if i == len(host) || host[i] == '.' {
-			label := host[start:i]
-			if !HostnameLabelRegex.MatchString(label) {
+			if !isHostnameLabel(host[start:i]) {
 				return false
 			}
 			start = i + 1
