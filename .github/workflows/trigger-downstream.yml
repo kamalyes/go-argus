@@ -51,24 +51,7 @@ jobs:
     strategy:
       matrix:
         repo:
-          - kamalyes/go-cachex
-          - kamalyes/go-casbin
-          - kamalyes/go-casbin-gorm-adapter
-          - kamalyes/go-casbin-kafka-adapter
-          - kamalyes/go-casbin-nats-adapter
-          - kamalyes/go-casbin-redis-adapter
-          - kamalyes/go-config
-          - kamalyes/go-i18n
-          - kamalyes/go-logger
-          - kamalyes/go-logger-adapter
-          - kamalyes/go-natsx
-          - kamalyes/go-pbmo
-          - kamalyes/go-rpc-gateway
-          - kamalyes/go-scope-provider
-          - kamalyes/go-sqlbuilder
-          - kamalyes/go-swagger
           - kamalyes/go-toolbox
-          - kamalyes/go-wsc
     steps:
       - name: Dispatch to ${{ matrix.repo }}
         uses: peter-evans/repository-dispatch@v3
