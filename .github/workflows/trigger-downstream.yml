@@ -51,28 +51,24 @@ jobs:
     strategy:
       matrix:
         repo:
-          - kamalyes/go-toolbox
-          - kamalyes/go-pbmo
-          - kamalyes/go-rpc-gateway
-          - kamalyes/go-sqlbuilder
-          - kamalyes/go-wsc
           - kamalyes/go-cachex
-          - kamalyes/go-config
-          - kamalyes/go-logger
-          - kamalyes/go-i18n
-          - kamalyes/go-natsx
-          - kamalyes/go-ossx
-          - kamalyes/go-logger-adapter
-          - kamalyes/go-namesilo
-          - kamalyes/go-phantom
-          - kamalyes/go-swagger
           - kamalyes/go-casbin
           - kamalyes/go-casbin-gorm-adapter
           - kamalyes/go-casbin-kafka-adapter
           - kamalyes/go-casbin-nats-adapter
           - kamalyes/go-casbin-redis-adapter
+          - kamalyes/go-config
+          - kamalyes/go-i18n
+          - kamalyes/go-logger
+          - kamalyes/go-logger-adapter
+          - kamalyes/go-natsx
+          - kamalyes/go-pbmo
+          - kamalyes/go-rpc-gateway
           - kamalyes/go-scope-provider
-          - kamalyes/go-argus-benchmark
+          - kamalyes/go-sqlbuilder
+          - kamalyes/go-swagger
+          - kamalyes/go-toolbox
+          - kamalyes/go-wsc
     steps:
       - name: Dispatch to ${{ matrix.repo }}
         uses: peter-evans/repository-dispatch@v3
@@ -81,4 +77,4 @@ jobs:
           repository: ${{ matrix.repo }}
           event-type: upstream-updated
           client-payload: >-
-            {"module": "github.com/kamalyes/go-argus", "version": "${{ github.ref_name }}", "sha": "${{ github.sha }}"}
+            {"module":"github.com/kamalyes/go-argus","version":"${{ github.ref_name }}","sha":"${{ github.sha }}","commit_message":"📦 deps: 同步上游依赖 ${{ github.ref_name }}\n\n- 📦 更新 github.com/kamalyes/go-argus 到 ${{ github.ref_name }} (go.mod, go.sum)\n- 🔄 自动联动下游版本标签 (bump-upstream.yml)\n\nsync upstream ${{ github.ref_name }}"}
