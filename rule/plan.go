@@ -25,7 +25,7 @@ type RulePlan struct {
 	Param      string     // 规则参数原始值
 	ParamParts []string   // 规则参数按空白拆分
 	OrRules    []RulePlan // 或规则列表（对应 | 分隔符）
-	CmpOp      validate.CmpOp
+	CmpOp      constants.CmpOp
 	HasCmpOp   bool
 	FieldIndex []int
 	Number     float64
@@ -98,7 +98,7 @@ func PrepareRulePlan(rp RulePlan) RulePlan {
 		}
 	}
 	if constants.IsScalarCompareRule(rp.Name) {
-		rp.CmpOp = ScalarCmpOpForRule(rp.Name)
+		rp.CmpOp = CmpOpForRule(rp.Name)
 		rp.HasCmpOp = true
 		if rp.Param != "" {
 			rp.Number, rp.HasNumber = validate.ParseFloat(rp.Param)
@@ -111,22 +111,13 @@ func PrepareRulePlan(rp RulePlan) RulePlan {
 	return rp
 }
 
-// ScalarCmpOpForRule maps scalar length/number rules to comparison operators.
-func ScalarCmpOpForRule(name string) validate.CmpOp {
+// CmpOpForRule maps validation rules to comparison operators.
+func CmpOpForRule(name string) constants.CmpOp {
 	op := constants.CompareOperatorForRule(name)
 	if op == constants.RuleEmpty {
 		return -1
 	}
-	return validate.CmpOpFromStr(op)
-}
-
-// CmpOpForRule maps cross-field rules to comparison operators.
-func CmpOpForRule(name string) validate.CmpOp {
-	op := constants.CompareOperatorForRule(name)
-	if op == constants.RuleEmpty {
-		return -1
-	}
-	return validate.CmpOpFromStr(op)
+	return constants.CmpOpFromStr(op)
 }
 
 // SplitRuleOr 按 | 分隔或规则，支持转义符

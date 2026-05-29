@@ -177,12 +177,25 @@ func (v *Validate) VarString(field string, tag string) error {
 
 // VarCtx 按标签表达式校验单个变量，并传递 context
 func (v *Validate) VarCtx(ctx context.Context, field interface{}, tag string) error {
-	rules := v.cachedVarRules(tag)
 	switch val := field.(type) {
 	case string:
+		if tag == constants.RuleRequired {
+			if validate.StringRequired(val) {
+				return nil
+			}
+			return ValidationErrors{&stringFieldError{tag: constants.RuleRequired, value: val}}
+		}
+		if name, param, ok := strings.Cut(tag, "="); ok && name == "endswith" {
+			if strings.HasSuffix(val, param) {
+				return nil
+			}
+			return ValidationErrors{&stringFieldError{tag: name, param: param, value: val}}
+		}
+		rules := v.cachedVarRules(tag)
 		return v.varStringRules(ctx, val, rules, true)
 	case *string:
 		if val == nil {
+			rules := v.cachedVarRules(tag)
 			rv := reflect.ValueOf(field)
 			errs := acquireErrors()
 			v.applyRules(ctx, reflect.Value{}, rv, rv, "", "", "", "", rules, errs)
@@ -195,8 +208,22 @@ func (v *Validate) VarCtx(ctx context.Context, field interface{}, tag string) er
 			releaseErrors(errs)
 			return nil
 		}
+		if tag == constants.RuleRequired {
+			if validate.StringRequired(*val) {
+				return nil
+			}
+			return ValidationErrors{&stringFieldError{tag: constants.RuleRequired, value: *val}}
+		}
+		if name, param, ok := strings.Cut(tag, "="); ok && name == "endswith" {
+			if strings.HasSuffix(*val, param) {
+				return nil
+			}
+			return ValidationErrors{&stringFieldError{tag: name, param: param, value: *val}}
+		}
+		rules := v.cachedVarRules(tag)
 		return v.varStringRules(ctx, *val, rules, true)
 	}
+	rules := v.cachedVarRules(tag)
 	rv := reflect.ValueOf(field)
 	errs := acquireErrors()
 	v.applyRules(ctx, reflect.Value{}, rv, rv, "", "", "", "", rules, errs)
@@ -431,6 +458,10 @@ func (v *Validate) applyDive(ctx context.Context, top reflect.Value, parent refl
 			idxBuf = strconv.AppendInt(idxBuf[:0], int64(i), 10)
 			childNS := ns + "[" + string(idxBuf) + "]"
 			childStructNS := structNs + "[" + string(idxBuf) + "]"
+			if len(valueRules) == 1 && valueRules[0].Name == constants.RuleRequired {
+				*errs = append(*errs, newFieldError(item, childNS, childStructNS, fieldName, structFieldName, valueRules[0]))
+				continue
+			}
 			v.applyRules(ctx, top, parent, item, childNS, childStructNS, fieldName, structFieldName, valueRules, errs)
 		}
 	case reflect.Map:
@@ -804,17 +835,6 @@ func newFieldError(field reflect.Value, ns string, structNs string, fieldName st
 		kind:        kind,
 		typ:         typ,
 	}
-}
-
-// shouldDiveIntoStruct 判断字段是否需要递归进入结构体校验
-func shouldDiveIntoStruct(field reflect.Value, rules []rule.RulePlan) bool {
-	for _, rule := range rules {
-		if constants.StopsStructDive(rule.Name) {
-			return false
-		}
-	}
-	field = validate.DerefReflect(field)
-	return field.IsValid() && field.Kind() == reflect.Struct && !validate.IsTimeType(field.Type())
 }
 
 func mayDiveStructType(typ reflect.Type, rules []rule.RulePlan) bool {

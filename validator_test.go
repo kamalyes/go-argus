@@ -1775,6 +1775,23 @@ func TestVarStringOrFastPath(t *testing.T) {
 	}
 }
 
+func TestVarStringSingleRuleDirectFastPath(t *testing.T) {
+	v := New()
+	if err := v.Var("hello", "required"); err != nil {
+		t.Fatalf("expected required fast path to pass: %v", err)
+	}
+	if err := v.Var("", "required"); err == nil {
+		t.Fatal("expected required fast path to fail")
+	}
+	value := "hello world"
+	if err := v.Var(&value, "endswith=world"); err != nil {
+		t.Fatalf("expected pointer endswith fast path to pass: %v", err)
+	}
+	if err := v.Var("hello world", "endswith=argus"); err == nil {
+		t.Fatal("expected endswith fast path to fail")
+	}
+}
+
 func TestNoneOfCIFastPath(t *testing.T) {
 	type req struct {
 		Status string `validate:"noneofci=blocked denied"`

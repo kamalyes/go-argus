@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2026-05-19 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2026-05-20 22:28:14
+ * @LastEditTime: 2026-05-29 17:59:17
  * @FilePath: \go-argus\validate\string_rules.go
  * @Description: 字符串规则校验实现，所有逻辑集中于此
  *
@@ -26,72 +26,53 @@ import (
 	"github.com/kamalyes/go-argus/constants"
 )
 
-// CmpOp 比较运算符类型
-type CmpOp int
+type CmpOp = constants.CmpOp
 
 const (
-	CmpEQ CmpOp = iota
-	CmpLT
-	CmpLTE
-	CmpGT
-	CmpGTE
-	CmpNE
+	CmpEQ  = constants.CmpEQ
+	CmpLT  = constants.CmpLT
+	CmpLTE = constants.CmpLTE
+	CmpGT  = constants.CmpGT
+	CmpGTE = constants.CmpGTE
+	CmpNE  = constants.CmpNE
 )
 
-// CmpOpFromStr 将字符串操作符转换为 CmpOp，未匹配返回 -1
 func CmpOpFromStr(op string) CmpOp {
-	switch op {
-	case constants.RuleEq:
-		return CmpEQ
-	case constants.RuleNe:
-		return CmpNE
-	case constants.RuleGT:
-		return CmpGT
-	case constants.RuleGTE:
-		return CmpGTE
-	case constants.RuleLT:
-		return CmpLT
-	case constants.RuleLTE:
-		return CmpLTE
-	default:
-		return -1
-	}
+	return constants.CmpOpFromStr(op)
 }
 
-// CompareStringsOp 按操作符比较两个字符串（字典序）
-func CompareStringsOp(left, right string, op CmpOp) bool {
+func CompareStringsOp(left, right string, op constants.CmpOp) bool {
 	switch op {
-	case CmpEQ:
+	case constants.CmpEQ:
 		return left == right
-	case CmpNE:
+	case constants.CmpNE:
 		return left != right
-	case CmpGT:
+	case constants.CmpGT:
 		return left > right
-	case CmpGTE:
+	case constants.CmpGTE:
 		return left >= right
-	case CmpLT:
+	case constants.CmpLT:
 		return left < right
-	case CmpLTE:
+	case constants.CmpLTE:
 		return left <= right
 	default:
 		return false
 	}
 }
 
-// CompareOp 比较运算符实现
-func CompareOp(actual, expect float64, op CmpOp) bool {
+func CompareOp(actual, expect float64, op constants.CmpOp) bool {
 	switch op {
-	case CmpEQ:
+	case constants.CmpEQ:
 		return actual == expect
-	case CmpNE:
+	case constants.CmpNE:
 		return actual != expect
-	case CmpLT:
+	case constants.CmpLT:
 		return actual < expect
-	case CmpLTE:
+	case constants.CmpLTE:
 		return actual <= expect
-	case CmpGT:
+	case constants.CmpGT:
 		return actual > expect
-	case CmpGTE:
+	case constants.CmpGTE:
 		return actual >= expect
 	default:
 		return false
@@ -128,7 +109,7 @@ func StringIsDefault(s string) bool {
 	return IsBlankString(s)
 }
 
-func StringCompareLength(s string, param string, op CmpOp) bool {
+func StringCompareLength(s string, param string, op constants.CmpOp) bool {
 	n, ok := ParseFloat(param)
 	if !ok {
 		return false
@@ -138,15 +119,15 @@ func StringCompareLength(s string, param string, op CmpOp) bool {
 }
 
 func StringMin(s string, param string) bool {
-	return StringCompareLength(s, param, CmpGTE)
+	return StringCompareLength(s, param, constants.CmpGTE)
 }
 
 func StringMax(s string, param string) bool {
-	return StringCompareLength(s, param, CmpLTE)
+	return StringCompareLength(s, param, constants.CmpLTE)
 }
 
 func StringLen(s string, param string) bool {
-	return StringCompareLength(s, param, CmpEQ)
+	return StringCompareLength(s, param, constants.CmpEQ)
 }
 
 func StringEq(s string, param string) bool {
@@ -166,19 +147,19 @@ func StringNeIgnoreCase(s string, param string) bool {
 }
 
 func StringGt(s string, param string) bool {
-	return StringCompareLength(s, param, CmpGT)
+	return StringCompareLength(s, param, constants.CmpGT)
 }
 
 func StringGte(s string, param string) bool {
-	return StringCompareLength(s, param, CmpGTE)
+	return StringCompareLength(s, param, constants.CmpGTE)
 }
 
 func StringLt(s string, param string) bool {
-	return StringCompareLength(s, param, CmpLT)
+	return StringCompareLength(s, param, constants.CmpLT)
 }
 
 func StringLte(s string, param string) bool {
-	return StringCompareLength(s, param, CmpLTE)
+	return StringCompareLength(s, param, constants.CmpLTE)
 }
 
 func StringMatchRunes(s string, fn func(rune) bool) bool {
@@ -428,7 +409,11 @@ func StringIPv4(s string) bool {
 }
 
 func StringIPv6(s string) bool {
-	ip := net.ParseIP(TrimSpaceIfNeeded(s))
+	s = TrimSpaceIfNeeded(s)
+	if s == "::1" || s == "::" {
+		return true
+	}
+	ip := net.ParseIP(s)
 	return ip != nil && ip.To4() == nil
 }
 
@@ -1130,107 +1115,107 @@ func noParamAdapter(fn func(string) bool) StringRuleFunc {
 
 // StringRuleMap 字符串规则映射表，VarString 快速路径直接查表
 var StringRuleMap = map[string]StringRuleFunc{
-	"required":          noParamAdapter(StringRequired),
-	"isdefault":         noParamAdapter(StringIsDefault),
-	"min":               StringMin,
-	"max":               StringMax,
-	"len":               StringLen,
-	"eq":                StringEq,
-	"eq_ignore_case":    StringEqIgnoreCase,
-	"ne":                StringNe,
-	"ne_ignore_case":    StringNeIgnoreCase,
-	"gt":                StringGt,
-	"gte":               StringGte,
-	"lt":                StringLt,
-	"lte":               StringLte,
-	"alpha":             noParamAdapter(StringAlpha),
-	"alphaspace":        noParamAdapter(StringAlphaSpace),
-	"alphanum":          noParamAdapter(StringAlphanum),
-	"alphanumspace":     noParamAdapter(StringAlphanumSpace),
-	"alphaunicode":      noParamAdapter(StringAlphaUnicode),
-	"alphanumunicode":   noParamAdapter(StringAlphanumUnicode),
-	"ascii":             noParamAdapter(StringASCII),
-	"printascii":        noParamAdapter(StringPrintASCII),
-	"multibyte":         noParamAdapter(StringMultibyte),
-	"hexadecimal":       noParamAdapter(StringHexadecimal),
-	"hexcolor":          noParamAdapter(StringHexColor),
-	"rgb":               noParamAdapter(StringRGB),
-	"rgba":              noParamAdapter(StringRGBA),
-	"hsl":               noParamAdapter(StringHSL),
-	"hsla":              noParamAdapter(StringHSLA),
-	"email":             noParamAdapter(IsEmail),
-	"e164":              noParamAdapter(StringE164),
-	"ip":                noParamAdapter(StringIP),
-	"ip_addr":           noParamAdapter(StringIP),
-	"ipv4":              noParamAdapter(StringIPv4),
-	"ipv6":              noParamAdapter(StringIPv6),
-	"cidr":              noParamAdapter(StringCIDR),
-	"cidrv4":            noParamAdapter(StringCIDRv4),
-	"cidrv6":            noParamAdapter(StringCIDRv6),
-	"mac":               noParamAdapter(StringMAC),
-	"hostname":          noParamAdapter(StringHostname),
-	"hostname_rfc1123":  noParamAdapter(StringHostname),
-	"fqdn":              noParamAdapter(StringFQDN),
-	"hostname_port":     noParamAdapter(StringHostnamePort),
-	"port":              noParamAdapter(StringPort),
-	"url":               noParamAdapter(StringURL),
-	"uri":               noParamAdapter(StringURI),
-	"http_url":          noParamAdapter(StringHTTPURL),
-	"https_url":         noParamAdapter(StringHTTPSURL),
-	"url_encoded":       noParamAdapter(StringURLEncoded),
-	"html":              noParamAdapter(StringHTML),
-	"html_encoded":      noParamAdapter(StringHTMLEncoded),
-	"uuid":              noParamAdapter(StringUUID),
-	"uuid3":             noParamAdapter(StringUUID3),
-	"uuid4":             noParamAdapter(StringUUID4),
-	"uuid5":             noParamAdapter(StringUUID5),
-	"uuid_rfc4122":      noParamAdapter(StringUUID),
-	"uuid3_rfc4122":     noParamAdapter(StringUUID3),
-	"uuid4_rfc4122":     noParamAdapter(StringUUID4),
-	"uuid5_rfc4122":     noParamAdapter(StringUUID5),
-	"base32":            noParamAdapter(StringBase32),
-	"base64":            noParamAdapter(StringBase64),
-	"base64url":         noParamAdapter(StringBase64URL),
-	"base64rawurl":      noParamAdapter(StringBase64RawURL),
-	"json":              noParamAdapter(StringJSON),
-	"unique":            noParamAdapter(StringUnique),
-	"startswith":        StringStartsWith,
-	"endswith":          StringEndsWith,
-	"startsnotwith":     StringStartsNotWith,
-	"endsnotwith":       StringEndsNotWith,
-	"contains":          StringContains,
-	"containsany":       StringContainsAny,
-	"containsrune":      StringContainsRune,
-	"excludes":          StringExcludes,
-	"excludesall":       StringExcludesAll,
-	"excludesrune":      StringExcludesRune,
-	"lowercase":         noParamAdapter(StringLowercase),
-	"uppercase":         noParamAdapter(StringUppercase),
-	"boolean":           noParamAdapter(StringBoolean),
-	"number":            noParamAdapter(StringNumber),
-	"numeric":           noParamAdapter(StringNumber),
-	"datetime":          StringDatetime,
-	"timezone":          noParamAdapter(StringTimezone),
-	"latitude":          noParamAdapter(StringLatitude),
-	"longitude":         noParamAdapter(StringLongitude),
-	"file":              noParamAdapter(StringFile),
-	"filepath":          noParamAdapter(StringFilePath),
-	"dir":               noParamAdapter(StringDir),
-	"dirpath":           noParamAdapter(StringDirPath),
-	"mongodb":           noParamAdapter(StringMongoDB),
-	"luhn_checksum":     noParamAdapter(IsLuhnChecksum),
-	"credit_card":       noParamAdapter(IsLuhnChecksum),
-	"dns_rfc1035_label": noParamAdapter(StringDNSRFC1035Label),
-	"semver":            noParamAdapter(IsSemver),
-	"isbn10":            noParamAdapter(IsISBN10),
-	"isbn13":            noParamAdapter(IsISBN13),
-	"issn":              noParamAdapter(StringISSN),
-	"bic":               noParamAdapter(StringBIC),
-	"cron":              noParamAdapter(StringCron),
-	"datauri":           noParamAdapter(StringDataURI),
-	"bcp47":             noParamAdapter(StringBCP47),
-	"eth_addr":          noParamAdapter(StringEthAddr),
-	"btc_addr":          noParamAdapter(StringBtcAddr),
+	constants.RuleRequired:        noParamAdapter(StringRequired),
+	constants.RuleIsDefault:       noParamAdapter(StringIsDefault),
+	constants.RuleMin:             StringMin,
+	constants.RuleMax:             StringMax,
+	constants.RuleLen:             StringLen,
+	constants.RuleEq:              StringEq,
+	constants.RuleEqIgnoreCase:    StringEqIgnoreCase,
+	constants.RuleNe:              StringNe,
+	constants.RuleNeIgnoreCase:    StringNeIgnoreCase,
+	constants.RuleGT:              StringGt,
+	constants.RuleGTE:             StringGte,
+	constants.RuleLT:              StringLt,
+	constants.RuleLTE:             StringLte,
+	constants.RuleAlpha:           noParamAdapter(StringAlpha),
+	constants.RuleAlphaSpace:      noParamAdapter(StringAlphaSpace),
+	constants.RuleAlphanum:        noParamAdapter(StringAlphanum),
+	constants.RuleAlphanumSpace:   noParamAdapter(StringAlphanumSpace),
+	constants.RuleAlphaUnicode:    noParamAdapter(StringAlphaUnicode),
+	constants.RuleAlphanumUnicode: noParamAdapter(StringAlphanumUnicode),
+	constants.RuleASCII:           noParamAdapter(StringASCII),
+	constants.RulePrintASCII:      noParamAdapter(StringPrintASCII),
+	constants.RuleMultibyte:       noParamAdapter(StringMultibyte),
+	constants.RuleHexadecimal:     noParamAdapter(StringHexadecimal),
+	constants.RuleHexColor:        noParamAdapter(StringHexColor),
+	constants.RuleRGB:             noParamAdapter(StringRGB),
+	constants.RuleRGBA:            noParamAdapter(StringRGBA),
+	constants.RuleHSL:             noParamAdapter(StringHSL),
+	constants.RuleHSLA:            noParamAdapter(StringHSLA),
+	constants.RuleEmail:           noParamAdapter(IsEmail),
+	constants.RuleE164:            noParamAdapter(StringE164),
+	constants.RuleIP:              noParamAdapter(StringIP),
+	constants.RuleIPAddr:          noParamAdapter(StringIP),
+	constants.RuleIPv4:            noParamAdapter(StringIPv4),
+	constants.RuleIPv6:            noParamAdapter(StringIPv6),
+	constants.RuleCIDR:            noParamAdapter(StringCIDR),
+	constants.RuleCIDRv4:          noParamAdapter(StringCIDRv4),
+	constants.RuleCIDRv6:          noParamAdapter(StringCIDRv6),
+	constants.RuleMAC:             noParamAdapter(StringMAC),
+	constants.RuleHostname:        noParamAdapter(StringHostname),
+	constants.RuleHostnameRFC1123: noParamAdapter(StringHostname),
+	constants.RuleFQDN:            noParamAdapter(StringFQDN),
+	constants.RuleHostnamePort:    noParamAdapter(StringHostnamePort),
+	constants.RulePort:            noParamAdapter(StringPort),
+	constants.RuleURL:             noParamAdapter(StringURL),
+	constants.RuleURI:             noParamAdapter(StringURI),
+	constants.RuleHTTPURL:         noParamAdapter(StringHTTPURL),
+	constants.RuleHTTPSURL:        noParamAdapter(StringHTTPSURL),
+	constants.RuleURLEncoded:      noParamAdapter(StringURLEncoded),
+	constants.RuleHTML:            noParamAdapter(StringHTML),
+	constants.RuleHTMLEncoded:     noParamAdapter(StringHTMLEncoded),
+	constants.RuleUUID:            noParamAdapter(StringUUID),
+	constants.RuleUUID3:           noParamAdapter(StringUUID3),
+	constants.RuleUUID4:           noParamAdapter(StringUUID4),
+	constants.RuleUUID5:           noParamAdapter(StringUUID5),
+	constants.RuleUUIDRFC4122:     noParamAdapter(StringUUID),
+	constants.RuleUUID3RFC4122:    noParamAdapter(StringUUID3),
+	constants.RuleUUID4RFC4122:    noParamAdapter(StringUUID4),
+	constants.RuleUUID5RFC4122:    noParamAdapter(StringUUID5),
+	constants.RuleBase32:          noParamAdapter(StringBase32),
+	constants.RuleBase64:          noParamAdapter(StringBase64),
+	constants.RuleBase64URL:       noParamAdapter(StringBase64URL),
+	constants.RuleBase64RawURL:    noParamAdapter(StringBase64RawURL),
+	constants.RuleJSON:            noParamAdapter(StringJSON),
+	constants.RuleUnique:          noParamAdapter(StringUnique),
+	constants.RuleStartsWith:      StringStartsWith,
+	constants.RuleEndsWith:        StringEndsWith,
+	constants.RuleStartsNotWith:   StringStartsNotWith,
+	constants.RuleEndsNotWith:     StringEndsNotWith,
+	constants.RuleContains:        StringContains,
+	constants.RuleContainsAny:     StringContainsAny,
+	constants.RuleContainsRune:    StringContainsRune,
+	constants.RuleExcludes:        StringExcludes,
+	constants.RuleExcludesAll:     StringExcludesAll,
+	constants.RuleExcludesRune:    StringExcludesRune,
+	constants.RuleLowercase:       noParamAdapter(StringLowercase),
+	constants.RuleUppercase:       noParamAdapter(StringUppercase),
+	constants.RuleBoolean:         noParamAdapter(StringBoolean),
+	constants.RuleNumber:          noParamAdapter(StringNumber),
+	constants.RuleNumeric:         noParamAdapter(StringNumber),
+	constants.RuleDatetime:        StringDatetime,
+	constants.RuleTimezone:        noParamAdapter(StringTimezone),
+	constants.RuleLatitude:        noParamAdapter(StringLatitude),
+	constants.RuleLongitude:       noParamAdapter(StringLongitude),
+	constants.RuleFile:            noParamAdapter(StringFile),
+	constants.RuleFilepath:        noParamAdapter(StringFilePath),
+	constants.RuleDir:             noParamAdapter(StringDir),
+	constants.RuleDirpath:         noParamAdapter(StringDirPath),
+	constants.RuleMongoDB:         noParamAdapter(StringMongoDB),
+	constants.RuleLuhnChecksum:    noParamAdapter(IsLuhnChecksum),
+	constants.RuleCreditCard:      noParamAdapter(IsLuhnChecksum),
+	constants.RuleDNSRFC1035Label: noParamAdapter(StringDNSRFC1035Label),
+	constants.RuleSemver:          noParamAdapter(IsSemver),
+	constants.RuleISBN10:          noParamAdapter(IsISBN10),
+	constants.RuleISBN13:          noParamAdapter(IsISBN13),
+	constants.RuleISSN:            noParamAdapter(StringISSN),
+	constants.RuleBIC:             noParamAdapter(StringBIC),
+	constants.RuleCron:            noParamAdapter(StringCron),
+	constants.RuleDataURI:         noParamAdapter(StringDataURI),
+	constants.RuleBCP47:           noParamAdapter(StringBCP47),
+	constants.RuleEthAddr:         noParamAdapter(StringEthAddr),
+	constants.RuleBtcAddr:         noParamAdapter(StringBtcAddr),
 }
 
 // StringOneOf 判断字符串是否在候选列表中（精确匹配）

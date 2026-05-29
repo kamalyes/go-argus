@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kamalyes/go-argus/constants"
 	"github.com/kamalyes/go-argus/utils"
 	"github.com/kamalyes/go-argus/validate"
 )
@@ -332,7 +333,7 @@ func TestCompareValueDefaultOp(t *testing.T) {
 }
 
 func TestCompareValueOpInvalid(t *testing.T) {
-	if CompareValueOp(reflect.ValueOf("a"), reflect.ValueOf("a"), validate.CmpOp(-1)) {
+	if CompareValueOp(reflect.ValueOf("a"), reflect.ValueOf("a"), constants.CmpOp(-1)) {
 		t.Fatal("expected invalid cmp op to fail")
 	}
 }
@@ -357,7 +358,7 @@ func TestSnakeCase(t *testing.T) {
 
 func TestCompareFloatOps(t *testing.T) {
 	cmp := func(left, right float64, op string) bool {
-		return validate.CompareOp(left, right, validate.CmpOpFromStr(op))
+		return validate.CompareOp(left, right, constants.CmpOpFromStr(op))
 	}
 	if !cmp(1, 1, "eq") {
 		t.Fatal("eq failed")

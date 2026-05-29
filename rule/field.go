@@ -17,6 +17,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/kamalyes/go-argus/constants"
 	"github.com/kamalyes/go-argus/utils"
 	"github.com/kamalyes/go-argus/validate"
 )
@@ -155,13 +156,13 @@ func FieldIndexByPath(root reflect.Type, path string) ([]int, bool) {
 
 // CompareValue 按操作符比较两个值，优先支持时间，其次支持数值和字符串
 func CompareValue(left reflect.Value, right reflect.Value, op string) bool {
-	cmpOp := validate.CmpOpFromStr(op)
+	cmpOp := constants.CmpOpFromStr(op)
 	return CompareValueOp(left, right, cmpOp)
 }
 
 // CompareValueOp 按预解析操作符比较两个值
-func CompareValueOp(left reflect.Value, right reflect.Value, cmpOp validate.CmpOp) bool {
-	if cmpOp < validate.CmpEQ || cmpOp > validate.CmpNE {
+func CompareValueOp(left reflect.Value, right reflect.Value, cmpOp constants.CmpOp) bool {
+	if cmpOp < constants.CmpEQ || cmpOp > constants.CmpNE {
 		return false
 	}
 	left = validate.DerefReflect(left)
@@ -171,7 +172,7 @@ func CompareValueOp(left reflect.Value, right reflect.Value, cmpOp validate.CmpO
 	}
 	if left.Kind() == reflect.String && right.Kind() == reflect.String {
 		switch cmpOp {
-		case validate.CmpEQ, validate.CmpNE:
+		case constants.CmpEQ, constants.CmpNE:
 			return validate.CompareStringsOp(left.String(), right.String(), cmpOp)
 		}
 	}
@@ -184,7 +185,6 @@ func CompareValueOp(left reflect.Value, right reflect.Value, cmpOp validate.CmpO
 	if lok && rok {
 		return validate.CompareOp(lf, rf, cmpOp)
 	}
-	// 快速路径：两边都是字符串时直接比较，避免 ScalarString 中的 fmt.Sprint 开销
 	if left.Kind() == reflect.String && right.Kind() == reflect.String {
 		return validate.CompareStringsOp(left.String(), right.String(), cmpOp)
 	}
@@ -278,7 +278,7 @@ func Range(parent reflect.Value, param string) bool {
 	if !ok {
 		return false
 	}
-	return CompareValue(start, end, "lt")
+	return CompareValue(start, end, constants.RuleLT)
 }
 
 // FieldContains 判断当前字段字符串是否包含目标字段的值

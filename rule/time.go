@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kamalyes/go-argus/constants"
 	"github.com/kamalyes/go-argus/validate"
 )
 
@@ -90,7 +91,7 @@ func CompareTimeExpr(field reflect.Value, expr string, op string, now time.Time)
 		return false
 	}
 	right, ok := ResolveTimeExpr(expr, now)
-	return ok && validate.CompareOp(float64(left.UnixNano()), float64(right.UnixNano()), validate.CmpOpFromStr(op))
+	return ok && validate.CompareOp(float64(left.UnixNano()), float64(right.UnixNano()), constants.CmpOpFromStr(op))
 }
 
 func parseTimeString(value string, layout string) (time.Time, bool) {

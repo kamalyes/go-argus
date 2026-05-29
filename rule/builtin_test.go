@@ -15,6 +15,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/kamalyes/go-argus/constants"
 	"github.com/kamalyes/go-argus/validate"
 )
 
@@ -224,19 +225,19 @@ func TestResolveFieldValueBool(t *testing.T) {
 }
 
 func TestCompareOp(t *testing.T) {
-	if !validate.CompareOp(5, 3, validate.CmpGT) {
+	if !validate.CompareOp(5, 3, constants.CmpGT) {
 		t.Fatal("expected 5 > 3")
 	}
-	if !validate.CompareOp(5, 5, validate.CmpGTE) {
+	if !validate.CompareOp(5, 5, constants.CmpGTE) {
 		t.Fatal("expected 5 >= 5")
 	}
-	if !validate.CompareOp(3, 5, validate.CmpLT) {
+	if !validate.CompareOp(3, 5, constants.CmpLT) {
 		t.Fatal("expected 3 < 5")
 	}
-	if !validate.CompareOp(3, 3, validate.CmpLTE) {
+	if !validate.CompareOp(3, 3, constants.CmpLTE) {
 		t.Fatal("expected 3 <= 3")
 	}
-	if !validate.CompareOp(5, 5, validate.CmpEQ) {
+	if !validate.CompareOp(5, 5, constants.CmpEQ) {
 		t.Fatal("expected 5 == 5")
 	}
 }
@@ -797,7 +798,7 @@ func TestResolveFieldValueFloat(t *testing.T) {
 }
 
 func TestCompareLengthOrNumberInvalid(t *testing.T) {
-	if CompareLengthOrNumber(reflect.Value{}, 5, validate.CmpGTE) {
+	if CompareLengthOrNumber(reflect.Value{}, 5, constants.CmpGTE) {
 		t.Fatal("expected invalid value to fail")
 	}
 }

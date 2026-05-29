@@ -15,7 +15,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/kamalyes/go-argus/validate"
+	"github.com/kamalyes/go-argus/constants"
 )
 
 func TestParseRulesEmpty(t *testing.T) {
@@ -108,41 +108,41 @@ func TestPrepareRulePlanNoSplit(t *testing.T) {
 
 func TestPrepareRulePlanCmpOp(t *testing.T) {
 	rp := PrepareRulePlan(RulePlan{Name: "afterfield", Param: "StartTime"})
-	if !rp.HasCmpOp || rp.CmpOp != validate.CmpGT {
+	if !rp.HasCmpOp || rp.CmpOp != constants.CmpGT {
 		t.Fatalf("expected afterfield to precompute gt, got has=%v op=%v", rp.HasCmpOp, rp.CmpOp)
 	}
 }
 
 func TestCmpOpForRule(t *testing.T) {
-	cases := map[string]validate.CmpOp{
-		"len":         validate.CmpEQ,
-		"min":         validate.CmpGTE,
-		"max":         validate.CmpLTE,
-		"gt":          validate.CmpGT,
-		"gte":         validate.CmpGTE,
-		"lt":          validate.CmpLT,
-		"lte":         validate.CmpLTE,
-		"eqfield":     validate.CmpEQ,
-		"nefield":     validate.CmpNE,
-		"gtfield":     validate.CmpGT,
-		"afterfield":  validate.CmpGT,
-		"gtefield":    validate.CmpGTE,
-		"ltfield":     validate.CmpLT,
-		"beforefield": validate.CmpLT,
-		"ltefield":    validate.CmpLTE,
-		"eqcsfield":   validate.CmpEQ,
-		"necsfield":   validate.CmpNE,
-		"gtcsfield":   validate.CmpGT,
-		"gtecsfield":  validate.CmpGTE,
-		"ltcsfield":   validate.CmpLT,
-		"ltecsfield":  validate.CmpLTE,
+	cases := map[string]constants.CmpOp{
+		"len":         constants.CmpEQ,
+		"min":         constants.CmpGTE,
+		"max":         constants.CmpLTE,
+		"gt":          constants.CmpGT,
+		"gte":         constants.CmpGTE,
+		"lt":          constants.CmpLT,
+		"lte":         constants.CmpLTE,
+		"eqfield":     constants.CmpEQ,
+		"nefield":     constants.CmpNE,
+		"gtfield":     constants.CmpGT,
+		"afterfield":  constants.CmpGT,
+		"gtefield":    constants.CmpGTE,
+		"ltfield":     constants.CmpLT,
+		"beforefield": constants.CmpLT,
+		"ltefield":    constants.CmpLTE,
+		"eqcsfield":   constants.CmpEQ,
+		"necsfield":   constants.CmpNE,
+		"gtcsfield":   constants.CmpGT,
+		"gtecsfield":  constants.CmpGTE,
+		"ltcsfield":   constants.CmpLT,
+		"ltecsfield":  constants.CmpLTE,
 	}
 	for name, want := range cases {
 		if got := CmpOpForRule(name); got != want {
 			t.Fatalf("expected %s to map to %v, got %v", name, want, got)
 		}
 	}
-	if got := CmpOpForRule("unknown"); got != validate.CmpOp(-1) {
+	if got := CmpOpForRule("unknown"); got != constants.CmpOp(-1) {
 		t.Fatalf("expected unknown rule to map to -1, got %v", got)
 	}
 }

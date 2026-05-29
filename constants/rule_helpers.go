@@ -3,91 +3,15 @@
  * @Date: 2026-05-29 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
  * @LastEditTime: 2026-05-29 00:00:00
- * @FilePath: \go-argus\constants\rules.go
- * @Description: Central validation rule names and rule groups
+ * @FilePath: \go-argus\constants\rule_helpers.go
+ * @Description: 规则分类辅助函数
  *
  * Copyright (c) 2026 by kamalyes, All Rights Reserved.
  */
 
 package constants
 
-const (
-	RuleEmpty = ""
-
-	RuleRequired = "required"
-
-	RuleOmitEmpty = "omitempty"
-	RuleOmitZero  = "omitzero"
-	RuleOmitNil   = "omitnil"
-
-	RuleDive          = "dive"
-	RuleKeys          = "keys"
-	RuleEndKeys       = "endkeys"
-	RuleStructOnly    = "structonly"
-	RuleNoStructLevel = "nostructlevel"
-
-	RuleLen = "len"
-	RuleMin = "min"
-	RuleMax = "max"
-	RuleEq  = "eq"
-	RuleNe  = "ne"
-	RuleGT  = "gt"
-	RuleGTE = "gte"
-	RuleLT  = "lt"
-	RuleLTE = "lte"
-
-	RuleSymbolEqual              = "="
-	RuleSymbolNotEqual           = "!="
-	RuleSymbolGreaterThan        = ">"
-	RuleSymbolGreaterThanOrEqual = ">="
-	RuleSymbolLessThan           = "<"
-	RuleSymbolLessThanOrEqual    = "<="
-
-	RuleOneOf    = "oneof"
-	RuleOneOfCI  = "oneofci"
-	RuleNoneOf   = "noneof"
-	RuleNoneOfCI = "noneofci"
-
-	RuleRequiredIf         = "required_if"
-	RuleRequiredUnless     = "required_unless"
-	RuleRequiredWith       = "required_with"
-	RuleRequiredWithAll    = "required_with_all"
-	RuleRequiredWithout    = "required_without"
-	RuleRequiredWithoutAll = "required_without_all"
-
-	RuleExcludedIf         = "excluded_if"
-	RuleExcludedUnless     = "excluded_unless"
-	RuleExcludedWith       = "excluded_with"
-	RuleExcludedWithAll    = "excluded_with_all"
-	RuleExcludedWithout    = "excluded_without"
-	RuleExcludedWithoutAll = "excluded_without_all"
-
-	RuleEqField     = "eqfield"
-	RuleNeField     = "nefield"
-	RuleGTField     = "gtfield"
-	RuleGTEField    = "gtefield"
-	RuleLTField     = "ltfield"
-	RuleLTEField    = "ltefield"
-	RuleAfterField  = "afterfield"
-	RuleBeforeField = "beforefield"
-
-	RuleEqCSField  = "eqcsfield"
-	RuleNeCSField  = "necsfield"
-	RuleGTCSField  = "gtcsfield"
-	RuleGTECSField = "gtecsfield"
-	RuleLTCSField  = "ltcsfield"
-	RuleLTECSField = "ltecsfield"
-
-	RuleAfter         = "after"
-	RuleBefore        = "before"
-	RuleRange         = "range"
-	RuleFieldContains = "fieldcontains"
-	RuleFieldExcludes = "fieldexcludes"
-	RuleRegex         = "regex"
-	RuleNotEmpty      = "not_empty"
-)
-
-// NeedsParamParts 是否需要参数部分
+// NeedsParamParts 是否需要将参数按空白拆分为多个部分
 func NeedsParamParts(name string) bool {
 	switch name {
 	case RuleOneOf, RuleOneOfCI, RuleNoneOf, RuleNoneOfCI,
@@ -100,7 +24,7 @@ func NeedsParamParts(name string) bool {
 	}
 }
 
-// IsScalarCompareRule 是否为标量比较规则
+// IsScalarCompareRule 是否为标量比较规则（min/max/len/gt/gte/lt/lte）
 func IsScalarCompareRule(name string) bool {
 	switch name {
 	case RuleMin, RuleMax, RuleLen, RuleGT, RuleGTE, RuleLT, RuleLTE:
@@ -110,7 +34,7 @@ func IsScalarCompareRule(name string) bool {
 	}
 }
 
-// IsFieldCompareRule 是否为跨字段比较规则
+// IsFieldCompareRule 是否为跨字段比较规则（含同结构体和跨结构体）
 func IsFieldCompareRule(name string) bool {
 	switch name {
 	case RuleEqField, RuleNeField, RuleGTField, RuleAfterField, RuleGTEField, RuleLTField, RuleBeforeField, RuleLTEField,
@@ -141,7 +65,7 @@ func IsCrossStructFieldCompareRule(name string) bool {
 	}
 }
 
-// IsOmitEmptyRule 是否为omitempty规则
+// IsOmitEmptyRule 是否为省略空值规则（omitempty/omitzero）
 func IsOmitEmptyRule(name string) bool {
 	return name == RuleOmitEmpty || name == RuleOmitZero
 }
@@ -176,7 +100,7 @@ func StopsStructDive(name string) bool {
 	}
 }
 
-// CompareOperatorForRule 返回规则对应的比较符
+// CompareOperatorForRule 返回规则对应的比较操作符字符串
 func CompareOperatorForRule(name string) string {
 	switch name {
 	case RuleLen, RuleEqField, RuleEqCSField:

@@ -11,7 +11,11 @@
 
 package validate
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/kamalyes/go-argus/constants"
+)
 
 func TestStringRequired(t *testing.T) {
 	if !StringRequired("hello") {
@@ -550,7 +554,7 @@ func TestIsBlankString(t *testing.T) {
 }
 
 func TestStringCompareLengthInvalidParam(t *testing.T) {
-	if StringCompareLength("abc", "notanumber", CmpEQ) {
+	if StringCompareLength("abc", "notanumber", constants.CmpEQ) {
 		t.Fatal("expected compare length to fail for invalid param")
 	}
 }
@@ -929,22 +933,22 @@ func TestStringDNSRFC1035LabelFail(t *testing.T) {
 }
 
 func TestCompareOp(t *testing.T) {
-	if !CompareOp(3, 3, CmpEQ) {
+	if !CompareOp(3, 3, constants.CmpEQ) {
 		t.Fatal("expected eq")
 	}
-	if !CompareOp(3, 2, CmpNE) {
+	if !CompareOp(3, 2, constants.CmpNE) {
 		t.Fatal("expected ne")
 	}
-	if !CompareOp(3, 2, CmpGT) {
+	if !CompareOp(3, 2, constants.CmpGT) {
 		t.Fatal("expected gt")
 	}
-	if !CompareOp(3, 3, CmpGTE) {
+	if !CompareOp(3, 3, constants.CmpGTE) {
 		t.Fatal("expected gte")
 	}
-	if !CompareOp(2, 3, CmpLT) {
+	if !CompareOp(2, 3, constants.CmpLT) {
 		t.Fatal("expected lt")
 	}
-	if !CompareOp(3, 3, CmpLTE) {
+	if !CompareOp(3, 3, constants.CmpLTE) {
 		t.Fatal("expected lte")
 	}
 }

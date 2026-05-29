@@ -16,6 +16,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/kamalyes/go-argus/constants"
 	"github.com/kamalyes/go-argus/validate"
 )
 
@@ -59,27 +60,27 @@ func RuleDefault(field reflect.Value, _ string, requiredStructEnabled bool) bool
 
 func RuleMin(field reflect.Value, param string, _ bool) bool {
 	n, ok := validate.ParseFloat(param)
-	return ok && CompareLengthOrNumber(field, n, validate.CmpGTE)
+	return ok && CompareLengthOrNumber(field, n, constants.CmpGTE)
 }
 
 func RuleMax(field reflect.Value, param string, _ bool) bool {
 	n, ok := validate.ParseFloat(param)
-	return ok && CompareLengthOrNumber(field, n, validate.CmpLTE)
+	return ok && CompareLengthOrNumber(field, n, constants.CmpLTE)
 }
 
 func RuleLen(field reflect.Value, param string, _ bool) bool {
 	n, ok := validate.ParseFloat(param)
-	return ok && CompareLengthOrNumber(field, n, validate.CmpEQ)
+	return ok && CompareLengthOrNumber(field, n, constants.CmpEQ)
 }
 
 func RuleGt(field reflect.Value, param string, _ bool) bool {
 	n, ok := validate.ParseFloat(param)
-	return ok && CompareLengthOrNumber(field, n, validate.CmpGT)
+	return ok && CompareLengthOrNumber(field, n, constants.CmpGT)
 }
 
 func RuleLt(field reflect.Value, param string, _ bool) bool {
 	n, ok := validate.ParseFloat(param)
-	return ok && CompareLengthOrNumber(field, n, validate.CmpLT)
+	return ok && CompareLengthOrNumber(field, n, constants.CmpLT)
 }
 
 func RuleEq(field reflect.Value, param string, _ bool) bool {
@@ -171,7 +172,7 @@ func RuleLongitude(field reflect.Value, _ string, _ bool) bool {
 // --- 数值/长度比较辅助函数 ---
 
 // CompareLengthOrNumber 对字段值进行长度或数值比较
-func CompareLengthOrNumber(field reflect.Value, expect float64, op validate.CmpOp) bool {
+func CompareLengthOrNumber(field reflect.Value, expect float64, op constants.CmpOp) bool {
 	actual, ok := ResolveFieldValue(field)
 	if !ok {
 		return false
@@ -229,108 +230,106 @@ func IsUniqueMap(field reflect.Value) bool {
 
 // BuiltinRules 内置规则映射表，evalTable 在 init 中合并此表和 dispatch 表
 var BuiltinRules = map[string]BuiltinRule{
-	// 需要特殊逻辑的规则
-	"required":        RuleRequired,
-	"isdefault":       RuleDefault,
-	"min":             RuleMin,
-	"max":             RuleMax,
-	"len":             RuleLen,
-	"eq":              RuleEq,
-	"eq_ignore_case":  RuleEqIgnoreCase,
-	"ne":              RuleNe,
-	"ne_ignore_case":  RuleNeIgnoreCase,
-	"gt":              RuleGt,
-	"gte":             RuleMin,
-	"lt":              RuleLt,
-	"lte":             RuleMax,
-	"alpha":           noParamBuiltinAdapter(validate.StringAlpha),
-	"alphaspace":      noParamBuiltinAdapter(validate.StringAlphaSpace),
-	"alphanum":        noParamBuiltinAdapter(validate.StringAlphanum),
-	"alphanumspace":   noParamBuiltinAdapter(validate.StringAlphanumSpace),
-	"alphaunicode":    noParamBuiltinAdapter(validate.StringAlphaUnicode),
-	"alphanumunicode": noParamBuiltinAdapter(validate.StringAlphanumUnicode),
-	"ascii":           noParamBuiltinAdapter(validate.StringASCII),
-	"printascii":      noParamBuiltinAdapter(validate.StringPrintASCII),
-	"multibyte":       noParamBuiltinAdapter(validate.StringMultibyte),
-	"hexadecimal":     noParamBuiltinAdapter(validate.StringHexadecimal),
-	"unique":          RuleUnique,
-	"boolean":         RuleBoolean,
-	"number":          RuleNumber,
-	"numeric":         RuleNumber,
-	"json":            RuleJSON,
-	"latitude":        RuleLatitude,
-	"longitude":       RuleLongitude,
+	constants.RuleRequired:        RuleRequired,
+	constants.RuleIsDefault:       RuleDefault,
+	constants.RuleMin:             RuleMin,
+	constants.RuleMax:             RuleMax,
+	constants.RuleLen:             RuleLen,
+	constants.RuleEq:              RuleEq,
+	constants.RuleEqIgnoreCase:    RuleEqIgnoreCase,
+	constants.RuleNe:              RuleNe,
+	constants.RuleNeIgnoreCase:    RuleNeIgnoreCase,
+	constants.RuleGT:              RuleGt,
+	constants.RuleGTE:             RuleMin,
+	constants.RuleLT:              RuleLt,
+	constants.RuleLTE:             RuleMax,
+	constants.RuleAlpha:           noParamBuiltinAdapter(validate.StringAlpha),
+	constants.RuleAlphaSpace:      noParamBuiltinAdapter(validate.StringAlphaSpace),
+	constants.RuleAlphanum:        noParamBuiltinAdapter(validate.StringAlphanum),
+	constants.RuleAlphanumSpace:   noParamBuiltinAdapter(validate.StringAlphanumSpace),
+	constants.RuleAlphaUnicode:    noParamBuiltinAdapter(validate.StringAlphaUnicode),
+	constants.RuleAlphanumUnicode: noParamBuiltinAdapter(validate.StringAlphanumUnicode),
+	constants.RuleASCII:           noParamBuiltinAdapter(validate.StringASCII),
+	constants.RulePrintASCII:      noParamBuiltinAdapter(validate.StringPrintASCII),
+	constants.RuleMultibyte:       noParamBuiltinAdapter(validate.StringMultibyte),
+	constants.RuleHexadecimal:     noParamBuiltinAdapter(validate.StringHexadecimal),
+	constants.RuleUnique:          RuleUnique,
+	constants.RuleBoolean:         RuleBoolean,
+	constants.RuleNumber:          RuleNumber,
+	constants.RuleNumeric:         RuleNumber,
+	constants.RuleJSON:            RuleJSON,
+	constants.RuleLatitude:        RuleLatitude,
+	constants.RuleLongitude:       RuleLongitude,
 
-	// 以下规则可通过适配器自动生成
-	"hexcolor":          noParamBuiltinAdapter(validate.StringHexColor),
-	"rgb":               noParamBuiltinAdapter(validate.StringRGB),
-	"rgba":              noParamBuiltinAdapter(validate.StringRGBA),
-	"hsl":               noParamBuiltinAdapter(validate.StringHSL),
-	"hsla":              noParamBuiltinAdapter(validate.StringHSLA),
-	"email":             noParamBuiltinAdapter(validate.IsEmail),
-	"e164":              noParamBuiltinAdapter(validate.StringE164),
-	"ip":                noParamBuiltinAdapter(validate.StringIP),
-	"ip_addr":           noParamBuiltinAdapter(validate.StringIP),
-	"ipv4":              noParamBuiltinAdapter(validate.StringIPv4),
-	"ipv6":              noParamBuiltinAdapter(validate.StringIPv6),
-	"cidr":              noParamBuiltinAdapter(validate.StringCIDR),
-	"cidrv4":            noParamBuiltinAdapter(validate.StringCIDRv4),
-	"cidrv6":            noParamBuiltinAdapter(validate.StringCIDRv6),
-	"mac":               noParamBuiltinAdapter(validate.StringMAC),
-	"hostname":          noParamBuiltinAdapter(validate.StringHostname),
-	"hostname_rfc1123":  noParamBuiltinAdapter(validate.StringHostname),
-	"fqdn":              noParamBuiltinAdapter(validate.StringFQDN),
-	"hostname_port":     noParamBuiltinAdapter(validate.StringHostnamePort),
-	"port":              noParamScalarBuiltinAdapter(validate.StringPort),
-	"url":               noParamBuiltinAdapter(validate.StringURL),
-	"uri":               noParamBuiltinAdapter(validate.StringURI),
-	"http_url":          noParamBuiltinAdapter(validate.StringHTTPURL),
-	"https_url":         noParamBuiltinAdapter(validate.StringHTTPSURL),
-	"url_encoded":       noParamBuiltinAdapter(validate.StringURLEncoded),
-	"html":              noParamBuiltinAdapter(validate.StringHTML),
-	"html_encoded":      noParamBuiltinAdapter(validate.StringHTMLEncoded),
-	"uuid":              noParamBuiltinAdapter(validate.StringUUID),
-	"uuid3":             noParamBuiltinAdapter(validate.StringUUID3),
-	"uuid4":             noParamBuiltinAdapter(validate.StringUUID4),
-	"uuid5":             noParamBuiltinAdapter(validate.StringUUID5),
-	"uuid_rfc4122":      noParamBuiltinAdapter(validate.StringUUID),
-	"uuid3_rfc4122":     noParamBuiltinAdapter(validate.StringUUID3),
-	"uuid4_rfc4122":     noParamBuiltinAdapter(validate.StringUUID4),
-	"uuid5_rfc4122":     noParamBuiltinAdapter(validate.StringUUID5),
-	"base32":            noParamBuiltinAdapter(validate.StringBase32),
-	"base64":            noParamBuiltinAdapter(validate.StringBase64),
-	"base64url":         noParamBuiltinAdapter(validate.StringBase64URL),
-	"base64rawurl":      noParamBuiltinAdapter(validate.StringBase64RawURL),
-	"startswith":        stringBuiltinAdapter(validate.StringStartsWith),
-	"endswith":          stringBuiltinAdapter(validate.StringEndsWith),
-	"startsnotwith":     stringBuiltinAdapter(validate.StringStartsNotWith),
-	"endsnotwith":       stringBuiltinAdapter(validate.StringEndsNotWith),
-	"contains":          stringBuiltinAdapter(validate.StringContains),
-	"containsany":       stringBuiltinAdapter(validate.StringContainsAny),
-	"containsrune":      stringBuiltinAdapter(validate.StringContainsRune),
-	"excludes":          stringBuiltinAdapter(validate.StringExcludes),
-	"excludesall":       stringBuiltinAdapter(validate.StringExcludesAll),
-	"excludesrune":      stringBuiltinAdapter(validate.StringExcludesRune),
-	"lowercase":         noParamBuiltinAdapter(validate.StringLowercase),
-	"uppercase":         noParamBuiltinAdapter(validate.StringUppercase),
-	"datetime":          stringBuiltinAdapter(validate.StringDatetime),
-	"timezone":          noParamBuiltinAdapter(validate.StringTimezone),
-	"file":              noParamBuiltinAdapter(validate.StringFile),
-	"filepath":          noParamBuiltinAdapter(validate.StringFilePath),
-	"dir":               noParamBuiltinAdapter(validate.StringDir),
-	"dirpath":           noParamBuiltinAdapter(validate.StringDirPath),
-	"mongodb":           noParamBuiltinAdapter(validate.StringMongoDB),
-	"luhn_checksum":     noParamBuiltinAdapter(validate.IsLuhnChecksum),
-	"credit_card":       noParamBuiltinAdapter(validate.IsLuhnChecksum),
-	"dns_rfc1035_label": noParamBuiltinAdapter(validate.StringDNSRFC1035Label),
-	"semver":            noParamBuiltinAdapter(validate.IsSemver),
-	"isbn10":            noParamBuiltinAdapter(validate.IsISBN10),
-	"isbn13":            noParamBuiltinAdapter(validate.IsISBN13),
-	"issn":              noParamBuiltinAdapter(validate.StringISSN),
-	"bic":               noParamBuiltinAdapter(validate.StringBIC),
-	"cron":              noParamBuiltinAdapter(validate.StringCron),
-	"datauri":           noParamBuiltinAdapter(validate.StringDataURI),
-	"bcp47":             noParamBuiltinAdapter(validate.StringBCP47),
-	"eth_addr":          noParamBuiltinAdapter(validate.StringEthAddr),
-	"btc_addr":          noParamBuiltinAdapter(validate.StringBtcAddr),
+	constants.RuleHexColor:        noParamBuiltinAdapter(validate.StringHexColor),
+	constants.RuleRGB:             noParamBuiltinAdapter(validate.StringRGB),
+	constants.RuleRGBA:            noParamBuiltinAdapter(validate.StringRGBA),
+	constants.RuleHSL:             noParamBuiltinAdapter(validate.StringHSL),
+	constants.RuleHSLA:            noParamBuiltinAdapter(validate.StringHSLA),
+	constants.RuleEmail:           noParamBuiltinAdapter(validate.IsEmail),
+	constants.RuleE164:            noParamBuiltinAdapter(validate.StringE164),
+	constants.RuleIP:              noParamBuiltinAdapter(validate.StringIP),
+	constants.RuleIPAddr:          noParamBuiltinAdapter(validate.StringIP),
+	constants.RuleIPv4:            noParamBuiltinAdapter(validate.StringIPv4),
+	constants.RuleIPv6:            noParamBuiltinAdapter(validate.StringIPv6),
+	constants.RuleCIDR:            noParamBuiltinAdapter(validate.StringCIDR),
+	constants.RuleCIDRv4:          noParamBuiltinAdapter(validate.StringCIDRv4),
+	constants.RuleCIDRv6:          noParamBuiltinAdapter(validate.StringCIDRv6),
+	constants.RuleMAC:             noParamBuiltinAdapter(validate.StringMAC),
+	constants.RuleHostname:        noParamBuiltinAdapter(validate.StringHostname),
+	constants.RuleHostnameRFC1123: noParamBuiltinAdapter(validate.StringHostname),
+	constants.RuleFQDN:            noParamBuiltinAdapter(validate.StringFQDN),
+	constants.RuleHostnamePort:    noParamBuiltinAdapter(validate.StringHostnamePort),
+	constants.RulePort:            noParamScalarBuiltinAdapter(validate.StringPort),
+	constants.RuleURL:             noParamBuiltinAdapter(validate.StringURL),
+	constants.RuleURI:             noParamBuiltinAdapter(validate.StringURI),
+	constants.RuleHTTPURL:         noParamBuiltinAdapter(validate.StringHTTPURL),
+	constants.RuleHTTPSURL:        noParamBuiltinAdapter(validate.StringHTTPSURL),
+	constants.RuleURLEncoded:      noParamBuiltinAdapter(validate.StringURLEncoded),
+	constants.RuleHTML:            noParamBuiltinAdapter(validate.StringHTML),
+	constants.RuleHTMLEncoded:     noParamBuiltinAdapter(validate.StringHTMLEncoded),
+	constants.RuleUUID:            noParamBuiltinAdapter(validate.StringUUID),
+	constants.RuleUUID3:           noParamBuiltinAdapter(validate.StringUUID3),
+	constants.RuleUUID4:           noParamBuiltinAdapter(validate.StringUUID4),
+	constants.RuleUUID5:           noParamBuiltinAdapter(validate.StringUUID5),
+	constants.RuleUUIDRFC4122:     noParamBuiltinAdapter(validate.StringUUID),
+	constants.RuleUUID3RFC4122:    noParamBuiltinAdapter(validate.StringUUID3),
+	constants.RuleUUID4RFC4122:    noParamBuiltinAdapter(validate.StringUUID4),
+	constants.RuleUUID5RFC4122:    noParamBuiltinAdapter(validate.StringUUID5),
+	constants.RuleBase32:          noParamBuiltinAdapter(validate.StringBase32),
+	constants.RuleBase64:          noParamBuiltinAdapter(validate.StringBase64),
+	constants.RuleBase64URL:       noParamBuiltinAdapter(validate.StringBase64URL),
+	constants.RuleBase64RawURL:    noParamBuiltinAdapter(validate.StringBase64RawURL),
+	constants.RuleStartsWith:      stringBuiltinAdapter(validate.StringStartsWith),
+	constants.RuleEndsWith:        stringBuiltinAdapter(validate.StringEndsWith),
+	constants.RuleStartsNotWith:   stringBuiltinAdapter(validate.StringStartsNotWith),
+	constants.RuleEndsNotWith:     stringBuiltinAdapter(validate.StringEndsNotWith),
+	constants.RuleContains:        stringBuiltinAdapter(validate.StringContains),
+	constants.RuleContainsAny:     stringBuiltinAdapter(validate.StringContainsAny),
+	constants.RuleContainsRune:    stringBuiltinAdapter(validate.StringContainsRune),
+	constants.RuleExcludes:        stringBuiltinAdapter(validate.StringExcludes),
+	constants.RuleExcludesAll:     stringBuiltinAdapter(validate.StringExcludesAll),
+	constants.RuleExcludesRune:    stringBuiltinAdapter(validate.StringExcludesRune),
+	constants.RuleLowercase:       noParamBuiltinAdapter(validate.StringLowercase),
+	constants.RuleUppercase:       noParamBuiltinAdapter(validate.StringUppercase),
+	constants.RuleDatetime:        stringBuiltinAdapter(validate.StringDatetime),
+	constants.RuleTimezone:        noParamBuiltinAdapter(validate.StringTimezone),
+	constants.RuleFile:            noParamBuiltinAdapter(validate.StringFile),
+	constants.RuleFilepath:        noParamBuiltinAdapter(validate.StringFilePath),
+	constants.RuleDir:             noParamBuiltinAdapter(validate.StringDir),
+	constants.RuleDirpath:         noParamBuiltinAdapter(validate.StringDirPath),
+	constants.RuleMongoDB:         noParamBuiltinAdapter(validate.StringMongoDB),
+	constants.RuleLuhnChecksum:    noParamBuiltinAdapter(validate.IsLuhnChecksum),
+	constants.RuleCreditCard:      noParamBuiltinAdapter(validate.IsLuhnChecksum),
+	constants.RuleDNSRFC1035Label: noParamBuiltinAdapter(validate.StringDNSRFC1035Label),
+	constants.RuleSemver:          noParamBuiltinAdapter(validate.IsSemver),
+	constants.RuleISBN10:          noParamBuiltinAdapter(validate.IsISBN10),
+	constants.RuleISBN13:          noParamBuiltinAdapter(validate.IsISBN13),
+	constants.RuleISSN:            noParamBuiltinAdapter(validate.StringISSN),
+	constants.RuleBIC:             noParamBuiltinAdapter(validate.StringBIC),
+	constants.RuleCron:            noParamBuiltinAdapter(validate.StringCron),
+	constants.RuleDataURI:         noParamBuiltinAdapter(validate.StringDataURI),
+	constants.RuleBCP47:           noParamBuiltinAdapter(validate.StringBCP47),
+	constants.RuleEthAddr:         noParamBuiltinAdapter(validate.StringEthAddr),
+	constants.RuleBtcAddr:         noParamBuiltinAdapter(validate.StringBtcAddr),
 }
