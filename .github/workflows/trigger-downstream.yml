@@ -7,6 +7,7 @@ on:
 
 permissions:
   actions: write
+  contents: read
 
 jobs:
   changes:
@@ -52,6 +53,7 @@ jobs:
         repo:
           - kamalyes/go-toolbox
           - kamalyes/go-pbmo
+          - kamalyes/go-rpc-gateway
           - kamalyes/go-sqlbuilder
           - kamalyes/go-wsc
           - kamalyes/go-cachex
