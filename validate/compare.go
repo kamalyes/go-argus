@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-06 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2023-12-06 00:00:00
+ * @LastEditTime: 2026-05-29 16:59:27
  * @FilePath: \go-argus\validate\compare.go
  * @Description: 通用比较校验能力，提供数值、字符串、HTTP 状态码和 Header 比较
  *
@@ -17,59 +17,8 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/kamalyes/go-argus/constants"
 	"github.com/kamalyes/go-argus/i18n"
-)
-
-func fmtOp(op CompareOperator) string { return string(op) }
-
-// CompareOperator 表示通用比较操作符
-type CompareOperator string
-
-// String 返回操作符字符串
-func (op CompareOperator) String() string {
-	return string(op)
-}
-
-const (
-	// OpEqual 表示相等
-	OpEqual CompareOperator = "eq"
-	// OpNotEqual 表示不等
-	OpNotEqual CompareOperator = "ne"
-	// OpGreaterThan 表示大于
-	OpGreaterThan CompareOperator = "gt"
-	// OpGreaterThanOrEqual 表示大于等于
-	OpGreaterThanOrEqual CompareOperator = "gte"
-	// OpLessThan 表示小于
-	OpLessThan CompareOperator = "lt"
-	// OpLessThanOrEqual 表示小于等于
-	OpLessThanOrEqual CompareOperator = "lte"
-	// OpContains 表示包含
-	OpContains CompareOperator = "contains"
-	// OpNotContains 表示不包含
-	OpNotContains CompareOperator = "not_contains"
-	// OpHasPrefix 表示前缀匹配
-	OpHasPrefix CompareOperator = "has_prefix"
-	// OpHasSuffix 表示后缀匹配
-	OpHasSuffix CompareOperator = "has_suffix"
-	// OpRegex 表示正则匹配
-	OpRegex CompareOperator = "regex"
-	// OpEmpty 表示空字符串
-	OpEmpty CompareOperator = "empty"
-	// OpNotEmpty 表示非空字符串
-	OpNotEmpty CompareOperator = "not_empty"
-
-	// OpSymbolEqual 是相等操作符别名
-	OpSymbolEqual CompareOperator = "="
-	// OpSymbolNotEqual 是不等操作符别名
-	OpSymbolNotEqual CompareOperator = "!="
-	// OpSymbolGreaterThan 是大于操作符别名
-	OpSymbolGreaterThan CompareOperator = ">"
-	// OpSymbolGreaterThanOrEqual 是大于等于操作符别名
-	OpSymbolGreaterThanOrEqual CompareOperator = ">="
-	// OpSymbolLessThan 是小于操作符别名
-	OpSymbolLessThan CompareOperator = "<"
-	// OpSymbolLessThanOrEqual 是小于等于操作符别名
-	OpSymbolLessThanOrEqual CompareOperator = "<="
 )
 
 // CompareResult 表示一次比较校验结果
@@ -88,53 +37,53 @@ type Number interface {
 }
 
 // CompareNumbers 比较两个数值
-func CompareNumbers[T Number](actual, expect T, op CompareOperator) CompareResult {
+func CompareNumbers[T Number](actual, expect T, op constants.CompareOperator) CompareResult {
 	result := CompareResult{Actual: fmt.Sprint(actual), Expect: fmt.Sprint(expect)}
 	switch op {
-	case OpEqual, OpSymbolEqual:
+	case constants.OpEqual, constants.OpSymbolEqual:
 		result.Success = actual == expect
-	case OpNotEqual, OpSymbolNotEqual:
+	case constants.OpNotEqual, constants.OpSymbolNotEqual:
 		result.Success = actual != expect
-	case OpGreaterThan, OpSymbolGreaterThan:
+	case constants.OpGreaterThan, constants.OpSymbolGreaterThan:
 		result.Success = actual > expect
-	case OpGreaterThanOrEqual, OpSymbolGreaterThanOrEqual:
+	case constants.OpGreaterThanOrEqual, constants.OpSymbolGreaterThanOrEqual:
 		result.Success = actual >= expect
-	case OpLessThan, OpSymbolLessThan:
+	case constants.OpLessThan, constants.OpSymbolLessThan:
 		result.Success = actual < expect
-	case OpLessThanOrEqual, OpSymbolLessThanOrEqual:
+	case constants.OpLessThanOrEqual, constants.OpSymbolLessThanOrEqual:
 		result.Success = actual <= expect
 	default:
 		result.Message = i18n.Msg(MsgCompareUnsupportedNumberOp)
 	}
 	if !result.Success && result.Message == "" {
-		result.Message = i18n.Msg(MsgCompareNumberFailed, map[string]string{"actual": fmt.Sprint(actual), "op": fmtOp(op), "expected": fmt.Sprint(expect)})
+		result.Message = i18n.Msg(MsgCompareNumberFailed, map[string]string{"actual": fmt.Sprint(actual), "op": op.String(), "expected": fmt.Sprint(expect)})
 	}
 	return result
 }
 
 // CompareStrings 比较两个字符串
-func CompareStrings(actual, expect string, op CompareOperator) CompareResult {
+func CompareStrings(actual, expect string, op constants.CompareOperator) CompareResult {
 	result := CompareResult{Actual: actual, Expect: expect}
 	switch op {
-	case OpEqual, OpSymbolEqual:
+	case constants.OpEqual, constants.OpSymbolEqual:
 		result.Success = actual == expect
-	case OpNotEqual, OpSymbolNotEqual:
+	case constants.OpNotEqual, constants.OpSymbolNotEqual:
 		result.Success = actual != expect
-	case OpContains:
+	case constants.OpContains:
 		result.Success = strings.Contains(actual, expect)
-	case OpNotContains:
+	case constants.OpNotContains:
 		result.Success = !strings.Contains(actual, expect)
-	case OpHasPrefix:
+	case constants.OpHasPrefix:
 		result.Success = strings.HasPrefix(actual, expect)
-	case OpHasSuffix:
+	case constants.OpHasSuffix:
 		result.Success = strings.HasSuffix(actual, expect)
-	case OpEmpty:
+	case constants.OpEmpty:
 		result.Success = strings.TrimSpace(actual) == ""
 		result.Expect = "empty string"
-	case OpNotEmpty:
+	case constants.OpNotEmpty:
 		result.Success = strings.TrimSpace(actual) != ""
 		result.Expect = "non-empty string"
-	case OpRegex:
+	case constants.OpRegex:
 		re, err := regexp.Compile(expect)
 		if err != nil {
 			result.Message = i18n.Msg(MsgCompareRegexCompileFailed, map[string]string{"error": err.Error()})
@@ -145,28 +94,28 @@ func CompareStrings(actual, expect string, op CompareOperator) CompareResult {
 		result.Message = i18n.Msg(MsgCompareUnsupportedStringOp)
 	}
 	if !result.Success && result.Message == "" {
-		result.Message = i18n.Msg(MsgCompareStringFailed, map[string]string{"actual": actual, "op": fmtOp(op), "expected": expect})
+		result.Message = i18n.Msg(MsgCompareStringFailed, map[string]string{"actual": actual, "op": op.String(), "expected": expect})
 	}
 	return result
 }
 
 // ValidateString 校验字符串关系，保留 go-toolbox 旧函数名
-func ValidateString(actual, expect string, op CompareOperator) CompareResult {
+func ValidateString(actual, expect string, op constants.CompareOperator) CompareResult {
 	return CompareStrings(actual, expect, op)
 }
 
 // ValidateContains 校验字节内容是否包含子串
 func ValidateContains(body []byte, substring string) CompareResult {
-	return CompareStrings(string(body), substring, OpContains)
+	return CompareStrings(string(body), substring, constants.OpContains)
 }
 
 // ValidateNotContains 校验字节内容是否不包含子串
 func ValidateNotContains(body []byte, substring string) CompareResult {
-	return CompareStrings(string(body), substring, OpNotContains)
+	return CompareStrings(string(body), substring, constants.OpNotContains)
 }
 
 // ValidateStatusCode 比较 HTTP 状态码
-func ValidateStatusCode(statusCode, expected int, op CompareOperator) CompareResult {
+func ValidateStatusCode(statusCode, expected int, op constants.CompareOperator) CompareResult {
 	return CompareNumbers(statusCode, expected, op)
 }
 
@@ -184,7 +133,7 @@ func ValidateStatusCodeRange(actual, min, max int) CompareResult {
 }
 
 // ValidateHeader 根据操作符比较 Header 值
-func ValidateHeader(headers map[string]string, key, expected string, op CompareOperator) CompareResult {
+func ValidateHeader(headers map[string]string, key, expected string, op constants.CompareOperator) CompareResult {
 	return CompareStrings(headers[key], expected, op)
 }
 
@@ -194,5 +143,5 @@ func ValidateContentType(headers map[string]string, expected string) CompareResu
 	if actual == "" {
 		actual = headers["content-type"]
 	}
-	return CompareStrings(actual, expected, OpContains)
+	return CompareStrings(actual, expected, constants.OpContains)
 }

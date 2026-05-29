@@ -12,6 +12,8 @@ package validate
 
 import (
 	"testing"
+
+	"github.com/kamalyes/go-argus/constants"
 )
 
 func TestValidateJSONValid(t *testing.T) {
@@ -195,21 +197,21 @@ func TestLookupJSONPathDollar(t *testing.T) {
 }
 
 func TestValidateJSONPath(t *testing.T) {
-	r := ValidateJSONPath([]byte(`{"name":"argus"}`), "name", "argus", OpEqual)
+	r := ValidateJSONPath([]byte(`{"name":"argus"}`), "name", "argus", constants.OpEqual)
 	if !r.Success {
 		t.Fatal("expected path match")
 	}
 }
 
 func TestValidateJSONPathInvalidJSON(t *testing.T) {
-	r := ValidateJSONPath([]byte(`{invalid}`), "name", "argus", OpEqual)
+	r := ValidateJSONPath([]byte(`{invalid}`), "name", "argus", constants.OpEqual)
 	if r.Success || r.Message == "" {
 		t.Fatal("expected invalid JSON to fail")
 	}
 }
 
 func TestValidateJSONPathNotFound(t *testing.T) {
-	r := ValidateJSONPath([]byte(`{"name":"argus"}`), "missing", "argus", OpEqual)
+	r := ValidateJSONPath([]byte(`{"name":"argus"}`), "missing", "argus", constants.OpEqual)
 	if r.Success {
 		t.Fatal("expected path not found to fail")
 	}

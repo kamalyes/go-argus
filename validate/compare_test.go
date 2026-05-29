@@ -12,101 +12,103 @@ package validate
 
 import (
 	"testing"
+
+	"github.com/kamalyes/go-argus/constants"
 )
 
 func TestCompareNumbersEqual(t *testing.T) {
-	r := CompareNumbers(10, 10, OpEqual)
+	r := CompareNumbers(10, 10, constants.OpEqual)
 	if !r.Success {
 		t.Fatal("expected equal")
 	}
 }
 
 func TestCompareNumbersSymbolEqual(t *testing.T) {
-	r := CompareNumbers(10, 10, OpSymbolEqual)
+	r := CompareNumbers(10, 10, constants.OpSymbolEqual)
 	if !r.Success {
 		t.Fatal("expected symbol equal")
 	}
 }
 
 func TestCompareNumbersNotEqual(t *testing.T) {
-	r := CompareNumbers(10, 20, OpNotEqual)
+	r := CompareNumbers(10, 20, constants.OpNotEqual)
 	if !r.Success {
 		t.Fatal("expected not equal")
 	}
 }
 
 func TestCompareNumbersSymbolNotEqual(t *testing.T) {
-	r := CompareNumbers(10, 20, OpSymbolNotEqual)
+	r := CompareNumbers(10, 20, constants.OpSymbolNotEqual)
 	if !r.Success {
 		t.Fatal("expected symbol not equal")
 	}
 }
 
 func TestCompareNumbersGreaterThan(t *testing.T) {
-	r := CompareNumbers(20, 10, OpGreaterThan)
+	r := CompareNumbers(20, 10, constants.OpGreaterThan)
 	if !r.Success {
 		t.Fatal("expected greater than")
 	}
 }
 
 func TestCompareNumbersSymbolGreaterThan(t *testing.T) {
-	r := CompareNumbers(20, 10, OpSymbolGreaterThan)
+	r := CompareNumbers(20, 10, constants.OpSymbolGreaterThan)
 	if !r.Success {
 		t.Fatal("expected symbol greater than")
 	}
 }
 
 func TestCompareNumbersGreaterThanOrEqual(t *testing.T) {
-	r := CompareNumbers(10, 10, OpGreaterThanOrEqual)
+	r := CompareNumbers(10, 10, constants.OpGreaterThanOrEqual)
 	if !r.Success {
 		t.Fatal("expected greater than or equal")
 	}
 }
 
 func TestCompareNumbersSymbolGreaterThanOrEqual(t *testing.T) {
-	r := CompareNumbers(10, 10, OpSymbolGreaterThanOrEqual)
+	r := CompareNumbers(10, 10, constants.OpSymbolGreaterThanOrEqual)
 	if !r.Success {
 		t.Fatal("expected symbol greater than or equal")
 	}
 }
 
 func TestCompareNumbersLessThan(t *testing.T) {
-	r := CompareNumbers(5, 10, OpLessThan)
+	r := CompareNumbers(5, 10, constants.OpLessThan)
 	if !r.Success {
 		t.Fatal("expected less than")
 	}
 }
 
 func TestCompareNumbersSymbolLessThan(t *testing.T) {
-	r := CompareNumbers(5, 10, OpSymbolLessThan)
+	r := CompareNumbers(5, 10, constants.OpSymbolLessThan)
 	if !r.Success {
 		t.Fatal("expected symbol less than")
 	}
 }
 
 func TestCompareNumbersLessThanOrEqual(t *testing.T) {
-	r := CompareNumbers(10, 10, OpLessThanOrEqual)
+	r := CompareNumbers(10, 10, constants.OpLessThanOrEqual)
 	if !r.Success {
 		t.Fatal("expected less than or equal")
 	}
 }
 
 func TestCompareNumbersSymbolLessThanOrEqual(t *testing.T) {
-	r := CompareNumbers(10, 10, OpSymbolLessThanOrEqual)
+	r := CompareNumbers(10, 10, constants.OpSymbolLessThanOrEqual)
 	if !r.Success {
 		t.Fatal("expected symbol less than or equal")
 	}
 }
 
 func TestCompareNumbersUnsupportedOp(t *testing.T) {
-	r := CompareNumbers(10, 10, OpContains)
+	r := CompareNumbers(10, 10, constants.OpContains)
 	if r.Success || r.Message == "" {
 		t.Fatal("expected unsupported op to fail with message")
 	}
 }
 
 func TestCompareNumbersFailed(t *testing.T) {
-	r := CompareNumbers(5, 10, OpGreaterThan)
+	r := CompareNumbers(5, 10, constants.OpGreaterThan)
 	if r.Success {
 		t.Fatal("expected gt to fail")
 	}
@@ -116,98 +118,98 @@ func TestCompareNumbersFailed(t *testing.T) {
 }
 
 func TestCompareStringsEqual(t *testing.T) {
-	r := CompareStrings("hello", "hello", OpEqual)
+	r := CompareStrings("hello", "hello", constants.OpEqual)
 	if !r.Success {
 		t.Fatal("expected equal")
 	}
 }
 
 func TestCompareStringsSymbolEqual(t *testing.T) {
-	r := CompareStrings("hello", "hello", OpSymbolEqual)
+	r := CompareStrings("hello", "hello", constants.OpSymbolEqual)
 	if !r.Success {
 		t.Fatal("expected symbol equal")
 	}
 }
 
 func TestCompareStringsNotEqual(t *testing.T) {
-	r := CompareStrings("hello", "world", OpNotEqual)
+	r := CompareStrings("hello", "world", constants.OpNotEqual)
 	if !r.Success {
 		t.Fatal("expected not equal")
 	}
 }
 
 func TestCompareStringsSymbolNotEqual(t *testing.T) {
-	r := CompareStrings("hello", "world", OpSymbolNotEqual)
+	r := CompareStrings("hello", "world", constants.OpSymbolNotEqual)
 	if !r.Success {
 		t.Fatal("expected symbol not equal")
 	}
 }
 
 func TestCompareStringsContains(t *testing.T) {
-	r := CompareStrings("hello world", "world", OpContains)
+	r := CompareStrings("hello world", "world", constants.OpContains)
 	if !r.Success {
 		t.Fatal("expected contains")
 	}
 }
 
 func TestCompareStringsNotContains(t *testing.T) {
-	r := CompareStrings("hello world", "xyz", OpNotContains)
+	r := CompareStrings("hello world", "xyz", constants.OpNotContains)
 	if !r.Success {
 		t.Fatal("expected not contains")
 	}
 }
 
 func TestCompareStringsHasPrefix(t *testing.T) {
-	r := CompareStrings("hello world", "hello", OpHasPrefix)
+	r := CompareStrings("hello world", "hello", constants.OpHasPrefix)
 	if !r.Success {
 		t.Fatal("expected has prefix")
 	}
 }
 
 func TestCompareStringsHasSuffix(t *testing.T) {
-	r := CompareStrings("hello world", "world", OpHasSuffix)
+	r := CompareStrings("hello world", "world", constants.OpHasSuffix)
 	if !r.Success {
 		t.Fatal("expected has suffix")
 	}
 }
 
 func TestCompareStringsEmpty(t *testing.T) {
-	r := CompareStrings("   ", "", OpEmpty)
+	r := CompareStrings("   ", "", constants.OpEmpty)
 	if !r.Success {
 		t.Fatal("expected empty")
 	}
 }
 
 func TestCompareStringsNotEmpty(t *testing.T) {
-	r := CompareStrings("hello", "", OpNotEmpty)
+	r := CompareStrings("hello", "", constants.OpNotEmpty)
 	if !r.Success {
 		t.Fatal("expected not empty")
 	}
 }
 
 func TestCompareStringsRegex(t *testing.T) {
-	r := CompareStrings("hello123", `\d+`, OpRegex)
+	r := CompareStrings("hello123", `\d+`, constants.OpRegex)
 	if !r.Success {
 		t.Fatal("expected regex match")
 	}
 }
 
 func TestCompareStringsRegexCompileError(t *testing.T) {
-	r := CompareStrings("hello", `[`, OpRegex)
+	r := CompareStrings("hello", `[`, constants.OpRegex)
 	if r.Success || r.Message == "" {
 		t.Fatal("expected regex compile error")
 	}
 }
 
 func TestCompareStringsUnsupportedOp(t *testing.T) {
-	r := CompareStrings("hello", "world", OpGreaterThan)
+	r := CompareStrings("hello", "world", constants.OpGreaterThan)
 	if r.Success || r.Message == "" {
 		t.Fatal("expected unsupported op to fail with message")
 	}
 }
 
 func TestCompareStringsFailed(t *testing.T) {
-	r := CompareStrings("abc", "xyz", OpContains)
+	r := CompareStrings("abc", "xyz", constants.OpContains)
 	if r.Success {
 		t.Fatal("expected contains to fail")
 	}
@@ -217,7 +219,7 @@ func TestCompareStringsFailed(t *testing.T) {
 }
 
 func TestValidateString(t *testing.T) {
-	r := ValidateString("hello", "hello", OpEqual)
+	r := ValidateString("hello", "hello", constants.OpEqual)
 	if !r.Success {
 		t.Fatal("expected equal")
 	}
@@ -238,7 +240,7 @@ func TestValidateNotContains(t *testing.T) {
 }
 
 func TestValidateStatusCode(t *testing.T) {
-	r := ValidateStatusCode(200, 200, OpEqual)
+	r := ValidateStatusCode(200, 200, constants.OpEqual)
 	if !r.Success {
 		t.Fatal("expected status code equal")
 	}
@@ -263,7 +265,7 @@ func TestValidateStatusCodeRangeFail(t *testing.T) {
 
 func TestValidateHeader(t *testing.T) {
 	headers := map[string]string{"Content-Type": "application/json"}
-	r := ValidateHeader(headers, "Content-Type", "application/json", OpEqual)
+	r := ValidateHeader(headers, "Content-Type", "application/json", constants.OpEqual)
 	if !r.Success {
 		t.Fatal("expected header equal")
 	}
@@ -286,13 +288,7 @@ func TestValidateContentTypeLowerKey(t *testing.T) {
 }
 
 func TestCompareOperatorString(t *testing.T) {
-	if OpEqual.String() != "eq" {
-		t.Fatalf("expected eq, got %s", OpEqual.String())
-	}
-}
-
-func TestFmtOp(t *testing.T) {
-	if fmtOp(OpEqual) != "eq" {
-		t.Fatalf("expected eq, got %s", fmtOp(OpEqual))
+	if constants.OpEqual.String() != "eq" {
+		t.Fatalf("expected eq, got %s", constants.OpEqual.String())
 	}
 }

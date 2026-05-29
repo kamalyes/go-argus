@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/kamalyes/go-argus/constants"
 	"github.com/kamalyes/go-argus/i18n"
 )
 
@@ -123,7 +124,7 @@ func LookupJSONPath(data any, path string) (any, bool) {
 }
 
 // ValidateJSONPath 校验 JSON 路径的值
-func ValidateJSONPath(body []byte, jsonPath string, expected any, op CompareOperator) CompareResult {
+func ValidateJSONPath(body []byte, jsonPath string, expected any, op constants.CompareOperator) CompareResult {
 	result := CompareResult{Expect: fmt.Sprint(expected)}
 	data, err := ValidateJSONWithData(body)
 	if err != nil {

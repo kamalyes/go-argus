@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-06 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2026-05-19 08:57:16
+ * @LastEditTime: 2026-05-29 16:59:54
  * @FilePath: \go-argus\reexport.go
  * @Description: 根包兼容入口，统一转发 validate 子包的所有导出能力
  *
@@ -17,6 +17,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/kamalyes/go-argus/constants"
 	"github.com/kamalyes/go-argus/schema"
 	"github.com/kamalyes/go-argus/validate"
 )
@@ -26,28 +27,28 @@ import (
 // ────────────────────────────────────────
 
 // CompareOperator 表示通用比较操作符
-type CompareOperator = validate.CompareOperator
+type CompareOperator = constants.CompareOperator
 
 const (
-	OpEqual                    = validate.OpEqual
-	OpNotEqual                 = validate.OpNotEqual
-	OpGreaterThan              = validate.OpGreaterThan
-	OpGreaterThanOrEqual       = validate.OpGreaterThanOrEqual
-	OpLessThan                 = validate.OpLessThan
-	OpLessThanOrEqual          = validate.OpLessThanOrEqual
-	OpContains                 = validate.OpContains
-	OpNotContains              = validate.OpNotContains
-	OpHasPrefix                = validate.OpHasPrefix
-	OpHasSuffix                = validate.OpHasSuffix
-	OpRegex                    = validate.OpRegex
-	OpEmpty                    = validate.OpEmpty
-	OpNotEmpty                 = validate.OpNotEmpty
-	OpSymbolEqual              = validate.OpSymbolEqual
-	OpSymbolNotEqual           = validate.OpSymbolNotEqual
-	OpSymbolGreaterThan        = validate.OpSymbolGreaterThan
-	OpSymbolGreaterThanOrEqual = validate.OpSymbolGreaterThanOrEqual
-	OpSymbolLessThan           = validate.OpSymbolLessThan
-	OpSymbolLessThanOrEqual    = validate.OpSymbolLessThanOrEqual
+	OpEqual                    = constants.OpEqual
+	OpNotEqual                 = constants.OpNotEqual
+	OpGreaterThan              = constants.OpGreaterThan
+	OpGreaterThanOrEqual       = constants.OpGreaterThanOrEqual
+	OpLessThan                 = constants.OpLessThan
+	OpLessThanOrEqual          = constants.OpLessThanOrEqual
+	OpContains                 = constants.OpContains
+	OpNotContains              = constants.OpNotContains
+	OpHasPrefix                = constants.OpHasPrefix
+	OpHasSuffix                = constants.OpHasSuffix
+	OpRegex                    = constants.OpRegex
+	OpEmpty                    = constants.OpEmpty
+	OpNotEmpty                 = constants.OpNotEmpty
+	OpSymbolEqual              = constants.OpSymbolEqual
+	OpSymbolNotEqual           = constants.OpSymbolNotEqual
+	OpSymbolGreaterThan        = constants.OpSymbolGreaterThan
+	OpSymbolGreaterThanOrEqual = constants.OpSymbolGreaterThanOrEqual
+	OpSymbolLessThan           = constants.OpSymbolLessThan
+	OpSymbolLessThanOrEqual    = constants.OpSymbolLessThanOrEqual
 )
 
 // CompareResult 表示一次比较校验结果

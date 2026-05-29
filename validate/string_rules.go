@@ -22,6 +22,8 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/kamalyes/go-argus/constants"
 )
 
 // CmpOp 比较运算符类型
@@ -39,17 +41,17 @@ const (
 // CmpOpFromStr 将字符串操作符转换为 CmpOp，未匹配返回 -1
 func CmpOpFromStr(op string) CmpOp {
 	switch op {
-	case "eq":
+	case constants.RuleEq:
 		return CmpEQ
-	case "ne":
+	case constants.RuleNe:
 		return CmpNE
-	case "gt":
+	case constants.RuleGT:
 		return CmpGT
-	case "gte":
+	case constants.RuleGTE:
 		return CmpGTE
-	case "lt":
+	case constants.RuleLT:
 		return CmpLT
-	case "lte":
+	case constants.RuleLTE:
 		return CmpLTE
 	default:
 		return -1

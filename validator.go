@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-06 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2026-05-19 13:16:11
+ * @LastEditTime: 2026-05-29 16:54:16
  * @FilePath: \go-argus\validator.go
  * @Description: Argus 根校验器，提供 struct tag 校验、变量校验、自定义规则和兼容入口
  *
@@ -20,6 +20,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/kamalyes/go-argus/constants"
 	"github.com/kamalyes/go-argus/rule"
 	"github.com/kamalyes/go-argus/utils"
 	"github.com/kamalyes/go-argus/validate"
@@ -219,14 +220,14 @@ func (v *Validate) varStringRules(ctx context.Context, field string, rules []rul
 	for i := 0; i < len(rules); i++ {
 		r := rules[i]
 		switch r.Name {
-		case "omitempty", "omitzero":
+		case constants.RuleOmitEmpty, constants.RuleOmitZero:
 			if validate.IsBlankString(field) {
 				return nil
 			}
 			continue
-		case "omitnil":
+		case constants.RuleOmitNil:
 			continue
-		case "structonly", "nostructlevel", "":
+		case constants.RuleStructOnly, constants.RuleNoStructLevel, constants.RuleEmpty:
 			continue
 		}
 		if len(r.OrRules) > 0 {
@@ -267,21 +268,20 @@ func (v *Validate) evalStringOr(ctx context.Context, field string, rules []rule.
 
 // evalStringRule 评估单条字符串规则，返回 (是否通过, 是否已处理)
 func evalStringRule(field string, r rule.RulePlan) (bool, bool) {
-	switch r.Name {
-	case "min", "max", "len", "gt", "gte", "lt", "lte":
+	if constants.IsScalarCompareRule(r.Name) {
 		return r.HasNumber && validate.CompareOp(float64(utf8.RuneCountInString(field)), r.Number, r.CmpOp), true
 	}
 	if fn, ok := rule.StringRuleMap[r.Name]; ok {
 		return fn == nil || fn(field, r.Param), true
 	}
 	switch r.Name {
-	case "oneof":
+	case constants.RuleOneOf:
 		return validate.StringOneOf(field, r.ParamParts), true
-	case "oneofci":
+	case constants.RuleOneOfCI:
 		return validate.StringOneOfCI(field, r.ParamParts), true
-	case "noneof":
+	case constants.RuleNoneOf:
 		return !validate.StringOneOf(field, r.ParamParts), true
-	case "noneofci":
+	case constants.RuleNoneOfCI:
 		return !validate.StringOneOfCI(field, r.ParamParts), true
 	default:
 		return false, false
@@ -365,22 +365,20 @@ func (v *Validate) applyRules(ctx context.Context, top reflect.Value, parent ref
 	for i := 0; i < len(rules); i++ {
 		rule := rules[i]
 		switch rule.Name {
-		case "omitempty", "omitzero":
+		case constants.RuleOmitEmpty, constants.RuleOmitZero:
 			if validate.IsEmptyValueWithStruct(derefed, v.requiredStructEnabled) {
 				return
 			}
 			continue
-		case "omitnil":
+		case constants.RuleOmitNil:
 			if validate.IsNilValue(field) {
 				return
 			}
 			continue
-		case "dive":
+		case constants.RuleDive:
 			v.applyDive(ctx, top, parent, derefed, ns, structNs, fieldName, structFieldName, rules[i+1:], errs)
 			return
-		case "structonly", "nostructlevel":
-			continue
-		case "":
+		case constants.RuleStructOnly, constants.RuleNoStructLevel, constants.RuleEmpty:
 			continue
 		}
 
@@ -454,11 +452,11 @@ func (v *Validate) applyDive(ctx context.Context, top reflect.Value, parent refl
 }
 
 func splitDiveRules(rules []rule.RulePlan) ([]rule.RulePlan, []rule.RulePlan) {
-	if len(rules) == 0 || rules[0].Name != "keys" {
+	if len(rules) == 0 || rules[0].Name != constants.RuleKeys {
 		return nil, rules
 	}
 	for i := 1; i < len(rules); i++ {
-		if rules[i].Name == "endkeys" {
+		if rules[i].Name == constants.RuleEndKeys {
 			return rules[1:i], rules[i+1:]
 		}
 	}
@@ -474,17 +472,17 @@ func (v *Validate) applyRulesFast(ctx context.Context, top reflect.Value, parent
 	for i := 0; i < len(rules); i++ {
 		rule := rules[i]
 		switch rule.Name {
-		case "omitempty", "omitzero":
+		case constants.RuleOmitEmpty, constants.RuleOmitZero:
 			if validate.IsEmptyValueWithStruct(derefed, v.requiredStructEnabled) {
 				return true
 			}
 			continue
-		case "omitnil":
+		case constants.RuleOmitNil:
 			if validate.IsNilValue(field) {
 				return true
 			}
 			continue
-		case "dive":
+		case constants.RuleDive:
 			keyRules, valueRules := splitDiveRules(rules[i+1:])
 			switch derefed.Kind() {
 			case reflect.Slice, reflect.Array:
@@ -502,7 +500,7 @@ func (v *Validate) applyRulesFast(ctx context.Context, top reflect.Value, parent
 				}
 			}
 			return true
-		case "keys", "endkeys", "structonly", "nostructlevel", "":
+		case constants.RuleKeys, constants.RuleEndKeys, constants.RuleStructOnly, constants.RuleNoStructLevel, constants.RuleEmpty:
 			continue
 		}
 
@@ -537,8 +535,7 @@ func (v *Validate) applyRulesFast(ctx context.Context, top reflect.Value, parent
 
 // evalRule 评估单条规则，优先查 dispatch 表，其次查 builtin 表，最后查自定义注册
 func (v *Validate) evalRule(ctx context.Context, top reflect.Value, parent reflect.Value, field reflect.Value, fieldName string, structFieldName string, plan rule.RulePlan) bool {
-	switch plan.Name {
-	case "min", "max", "len", "gt", "gte", "lt", "lte":
+	if constants.IsScalarCompareRule(plan.Name) {
 		return plan.HasNumber && rule.CompareLengthOrNumber(field, plan.Number, plan.CmpOp)
 	}
 	if action, ok := evalTable[plan.Name]; ok {
@@ -684,7 +681,7 @@ func (v *Validate) evalExcludedWithoutAll(top, parent, field reflect.Value, plan
 
 func (v *Validate) evalCmpField(top, parent, field reflect.Value, plan rule.RulePlan) bool {
 	target := parent
-	if strings.HasSuffix(plan.Name, "csfield") {
+	if constants.IsCrossStructFieldCompareRule(plan.Name) {
 		target = top
 	}
 	derefed := validate.DerefReflect(field)
@@ -717,11 +714,11 @@ func (v *Validate) evalFieldExcludes(top, parent, field reflect.Value, plan rule
 }
 
 func (v *Validate) evalAfter(top, parent, field reflect.Value, plan rule.RulePlan) bool {
-	return rule.CompareTimeExpr(field, plan.Param, "gt", time.Now())
+	return rule.CompareTimeExpr(field, plan.Param, constants.RuleGT, time.Now())
 }
 
 func (v *Validate) evalBefore(top, parent, field reflect.Value, plan rule.RulePlan) bool {
-	return rule.CompareTimeExpr(field, plan.Param, "lt", time.Now())
+	return rule.CompareTimeExpr(field, plan.Param, constants.RuleLT, time.Now())
 }
 
 func (v *Validate) evalRange(top, parent, field reflect.Value, plan rule.RulePlan) bool {
@@ -746,41 +743,41 @@ func (v *Validate) evalNoneOfCI(top, parent, field reflect.Value, plan rule.Rule
 
 // evalDispatchTable 需要跨字段访问的规则分派表
 var evalDispatchTable = map[string]evalDispatchFn{
-	"required_if":          (*Validate).evalRequiredIf,
-	"required_unless":      (*Validate).evalRequiredUnless,
-	"required_with":        (*Validate).evalRequiredWith,
-	"required_with_all":    (*Validate).evalRequiredWithAll,
-	"required_without":     (*Validate).evalRequiredWithout,
-	"required_without_all": (*Validate).evalRequiredWithoutAll,
-	"excluded_if":          (*Validate).evalExcludedIf,
-	"excluded_unless":      (*Validate).evalExcludedUnless,
-	"excluded_with":        (*Validate).evalExcludedWith,
-	"excluded_with_all":    (*Validate).evalExcludedWithAll,
-	"excluded_without":     (*Validate).evalExcludedWithout,
-	"excluded_without_all": (*Validate).evalExcludedWithoutAll,
-	"eqfield":              (*Validate).evalCmpField,
-	"nefield":              (*Validate).evalCmpField,
-	"gtfield":              (*Validate).evalCmpField,
-	"afterfield":           (*Validate).evalCmpField,
-	"gtefield":             (*Validate).evalCmpField,
-	"ltfield":              (*Validate).evalCmpField,
-	"beforefield":          (*Validate).evalCmpField,
-	"ltefield":             (*Validate).evalCmpField,
-	"eqcsfield":            (*Validate).evalCmpField,
-	"necsfield":            (*Validate).evalCmpField,
-	"gtcsfield":            (*Validate).evalCmpField,
-	"gtecsfield":           (*Validate).evalCmpField,
-	"ltcsfield":            (*Validate).evalCmpField,
-	"ltecsfield":           (*Validate).evalCmpField,
-	"fieldcontains":        (*Validate).evalFieldContains,
-	"fieldexcludes":        (*Validate).evalFieldExcludes,
-	"after":                (*Validate).evalAfter,
-	"before":               (*Validate).evalBefore,
-	"range":                (*Validate).evalRange,
-	"oneof":                (*Validate).evalOneOf,
-	"oneofci":              (*Validate).evalOneOfCI,
-	"noneof":               (*Validate).evalNoneOf,
-	"noneofci":             (*Validate).evalNoneOfCI,
+	constants.RuleRequiredIf:         (*Validate).evalRequiredIf,
+	constants.RuleRequiredUnless:     (*Validate).evalRequiredUnless,
+	constants.RuleRequiredWith:       (*Validate).evalRequiredWith,
+	constants.RuleRequiredWithAll:    (*Validate).evalRequiredWithAll,
+	constants.RuleRequiredWithout:    (*Validate).evalRequiredWithout,
+	constants.RuleRequiredWithoutAll: (*Validate).evalRequiredWithoutAll,
+	constants.RuleExcludedIf:         (*Validate).evalExcludedIf,
+	constants.RuleExcludedUnless:     (*Validate).evalExcludedUnless,
+	constants.RuleExcludedWith:       (*Validate).evalExcludedWith,
+	constants.RuleExcludedWithAll:    (*Validate).evalExcludedWithAll,
+	constants.RuleExcludedWithout:    (*Validate).evalExcludedWithout,
+	constants.RuleExcludedWithoutAll: (*Validate).evalExcludedWithoutAll,
+	constants.RuleEqField:            (*Validate).evalCmpField,
+	constants.RuleNeField:            (*Validate).evalCmpField,
+	constants.RuleGTField:            (*Validate).evalCmpField,
+	constants.RuleAfterField:         (*Validate).evalCmpField,
+	constants.RuleGTEField:           (*Validate).evalCmpField,
+	constants.RuleLTField:            (*Validate).evalCmpField,
+	constants.RuleBeforeField:        (*Validate).evalCmpField,
+	constants.RuleLTEField:           (*Validate).evalCmpField,
+	constants.RuleEqCSField:          (*Validate).evalCmpField,
+	constants.RuleNeCSField:          (*Validate).evalCmpField,
+	constants.RuleGTCSField:          (*Validate).evalCmpField,
+	constants.RuleGTECSField:         (*Validate).evalCmpField,
+	constants.RuleLTCSField:          (*Validate).evalCmpField,
+	constants.RuleLTECSField:         (*Validate).evalCmpField,
+	constants.RuleFieldContains:      (*Validate).evalFieldContains,
+	constants.RuleFieldExcludes:      (*Validate).evalFieldExcludes,
+	constants.RuleAfter:              (*Validate).evalAfter,
+	constants.RuleBefore:             (*Validate).evalBefore,
+	constants.RuleRange:              (*Validate).evalRange,
+	constants.RuleOneOf:              (*Validate).evalOneOf,
+	constants.RuleOneOfCI:            (*Validate).evalOneOfCI,
+	constants.RuleNoneOf:             (*Validate).evalNoneOf,
+	constants.RuleNoneOfCI:           (*Validate).evalNoneOfCI,
 }
 
 func newFieldError(field reflect.Value, ns string, structNs string, fieldName string, structFieldName string, rule rule.RulePlan) FieldError {
@@ -812,8 +809,7 @@ func newFieldError(field reflect.Value, ns string, structNs string, fieldName st
 // shouldDiveIntoStruct 判断字段是否需要递归进入结构体校验
 func shouldDiveIntoStruct(field reflect.Value, rules []rule.RulePlan) bool {
 	for _, rule := range rules {
-		switch rule.Name {
-		case "dive", "nostructlevel", "structonly":
+		if constants.StopsStructDive(rule.Name) {
 			return false
 		}
 	}
@@ -823,8 +819,7 @@ func shouldDiveIntoStruct(field reflect.Value, rules []rule.RulePlan) bool {
 
 func mayDiveStructType(typ reflect.Type, rules []rule.RulePlan) bool {
 	for _, rule := range rules {
-		switch rule.Name {
-		case "dive", "nostructlevel", "structonly":
+		if constants.StopsStructDive(rule.Name) {
 			return false
 		}
 	}
@@ -855,13 +850,13 @@ func (v *Validate) compileStruct(t reflect.Type) *rule.StructPlan {
 		altName := v.resolveFieldName(sf)
 		rules := rule.ParseRules(tag)
 		for i := range rules {
-			if strings.HasSuffix(rules[i].Name, "field") && !strings.HasSuffix(rules[i].Name, "csfield") {
+			if constants.IsLocalFieldCompareRule(rules[i].Name) {
 				if index, ok := rule.FieldIndexByPath(t, rules[i].Param); ok {
 					rules[i].FieldIndex = index
 				}
 			}
 			for j := range rules[i].OrRules {
-				if strings.HasSuffix(rules[i].OrRules[j].Name, "field") && !strings.HasSuffix(rules[i].OrRules[j].Name, "csfield") {
+				if constants.IsLocalFieldCompareRule(rules[i].OrRules[j].Name) {
 					if index, ok := rule.FieldIndexByPath(t, rules[i].OrRules[j].Param); ok {
 						rules[i].OrRules[j].FieldIndex = index
 					}

@@ -15,6 +15,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/kamalyes/go-argus/constants"
 	"github.com/kamalyes/go-argus/validate"
 )
 
@@ -91,75 +92,41 @@ func ParseSingleRulePlan(raw string) RulePlan {
 
 // PrepareRulePlan 对规则计划做后处理，预拆分需要空白分词的规则参数
 func PrepareRulePlan(rp RulePlan) RulePlan {
-	switch rp.Name {
-	case "oneof", "oneofci", "noneof", "noneofci",
-		"required_with", "required_with_all", "required_without", "required_without_all",
-		"excluded_with", "excluded_with_all", "excluded_without", "excluded_without_all",
-		"required_if", "required_unless", "excluded_if", "excluded_unless":
+	if constants.NeedsParamParts(rp.Name) {
 		if rp.Param != "" {
 			rp.ParamParts = strings.Fields(rp.Param)
 		}
-	case "min", "max", "len", "gt", "gte", "lt", "lte":
+	}
+	if constants.IsScalarCompareRule(rp.Name) {
 		rp.CmpOp = ScalarCmpOpForRule(rp.Name)
 		rp.HasCmpOp = true
 		if rp.Param != "" {
 			rp.Number, rp.HasNumber = validate.ParseFloat(rp.Param)
 		}
-	case "eqfield", "nefield", "gtfield", "afterfield", "gtefield", "ltfield", "beforefield", "ltefield",
-		"eqcsfield", "necsfield", "gtcsfield", "gtecsfield", "ltcsfield", "ltecsfield":
+	}
+	if constants.IsFieldCompareRule(rp.Name) {
 		rp.CmpOp = CmpOpForRule(rp.Name)
 		rp.HasCmpOp = true
 	}
 	return rp
 }
 
-// CmpOpForRule 将跨字段规则映射为比较操作符
 // ScalarCmpOpForRule maps scalar length/number rules to comparison operators.
 func ScalarCmpOpForRule(name string) validate.CmpOp {
-	switch name {
-	case "len":
-		return validate.CmpEQ
-	case "min", "gte":
-		return validate.CmpGTE
-	case "max", "lte":
-		return validate.CmpLTE
-	case "gt":
-		return validate.CmpGT
-	case "lt":
-		return validate.CmpLT
-	default:
+	op := constants.CompareOperatorForRule(name)
+	if op == constants.RuleEmpty {
 		return -1
 	}
+	return validate.CmpOpFromStr(op)
 }
 
 // CmpOpForRule maps cross-field rules to comparison operators.
 func CmpOpForRule(name string) validate.CmpOp {
-	switch name {
-	case "len":
-		return validate.CmpEQ
-	case "min", "gte":
-		return validate.CmpGTE
-	case "max", "lte":
-		return validate.CmpLTE
-	case "gt":
-		return validate.CmpGT
-	case "lt":
-		return validate.CmpLT
-	case "eqfield", "eqcsfield":
-		return validate.CmpEQ
-	case "nefield", "necsfield":
-		return validate.CmpNE
-	case "gtfield", "gtcsfield", "afterfield":
-		return validate.CmpGT
-	case "gtefield", "gtecsfield":
-		return validate.CmpGTE
-	case "ltfield", "ltcsfield", "beforefield":
-		return validate.CmpLT
-	case "ltefield", "ltecsfield":
-		return validate.CmpLTE
-	default:
+	op := constants.CompareOperatorForRule(name)
+	if op == constants.RuleEmpty {
 		return -1
 	}
+	return validate.CmpOpFromStr(op)
 }
 
 // SplitRuleOr 按 | 分隔或规则，支持转义符
