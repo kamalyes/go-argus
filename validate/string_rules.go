@@ -19,12 +19,15 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 	"unicode/utf8"
 
 	"github.com/kamalyes/go-argus/constants"
 )
+
+var timezoneCache sync.Map
 
 type CmpOp = constants.CmpOp
 
@@ -1040,8 +1043,13 @@ func StringDatetime(s string, param string) bool {
 }
 
 func StringTimezone(s string) bool {
+	if cached, ok := timezoneCache.Load(s); ok {
+		return cached.(bool)
+	}
 	_, err := time.LoadLocation(s)
-	return err == nil
+	valid := err == nil
+	timezoneCache.Store(s, valid)
+	return valid
 }
 
 func StringLatitude(s string) bool {
