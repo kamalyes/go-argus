@@ -236,6 +236,9 @@ func TestStringUUID(t *testing.T) {
 	if !StringUUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8") {
 		t.Fatal("expected uuid to pass")
 	}
+	if !StringUUID(" 6ba7b810-9dad-11d1-80b4-00c04fd430c8 ") {
+		t.Fatal("expected uuid to use canonical trimming")
+	}
 }
 
 func TestStringPort(t *testing.T) {
@@ -1060,6 +1063,185 @@ func TestStringUUID5Fail(t *testing.T) {
 func TestStringBase64Fail(t *testing.T) {
 	if StringBase64("not-base64!!!") {
 		t.Fatal("expected base64 to fail for invalid")
+	}
+}
+
+func TestStringFastParsersTable(t *testing.T) {
+	valid := map[string]func(string) bool{
+		"uuid":      StringUUID,
+		"uuid4":     StringUUID4,
+		"hexcolor":  StringHexColor,
+		"rgb":       StringRGB,
+		"rgba":      StringRGBA,
+		"hsl":       StringHSL,
+		"hsla":      StringHSLA,
+		"e164":      StringE164,
+		"ipv4":      StringIPv4,
+		"cidr":      StringCIDR,
+		"mac":       StringMAC,
+		"base64":    StringBase64,
+		"base64url": StringBase64URL,
+	}
+	values := map[string]string{
+		"uuid":      "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+		"uuid4":     "6ba7b810-9dad-41d1-80b4-00c04fd430c8",
+		"hexcolor":  "#aabbcc",
+		"rgb":       "rgb(255, 0, 128)",
+		"rgba":      "rgba(255,0,128,0.5)",
+		"hsl":       "hsl(120,100%,50%)",
+		"hsla":      "hsla(120,100%,50%,.5)",
+		"e164":      "+14155552671",
+		"ipv4":      "192.168.1.1",
+		"cidr":      "192.168.1.0/24",
+		"mac":       "00:11:22:33:44:55",
+		"base64":    "SGVsbG8=",
+		"base64url": "SGVsbG8=",
+	}
+	for name, fn := range valid {
+		if !fn(values[name]) {
+			t.Fatalf("expected %s to pass for %q", name, values[name])
+		}
+	}
+}
+
+func TestStringFastParsersInvalidTable(t *testing.T) {
+	invalid := map[string]struct {
+		value string
+		fn    func(string) bool
+	}{
+		"uuid":      {"6ba7b810-9dad-11d1-80b4-00c04fd430cx", StringUUID},
+		"uuid4":     {"6ba7b810-9dad-51d1-80b4-00c04fd430c8", StringUUID4},
+		"hexcolor":  {"#abcdex", StringHexColor},
+		"rgb":       {"rgb(256,0,0)", StringRGB},
+		"rgba":      {"rgba(0,0,0,1.5)", StringRGBA},
+		"hsl":       {"hsl(361,100%,50%)", StringHSL},
+		"hsla":      {"hsla(120,101%,50%,.5)", StringHSLA},
+		"e164":      {"+0123", StringE164},
+		"ipv4":      {"192.168.1.999", StringIPv4},
+		"cidr":      {"192.168.1.0/33", StringCIDR},
+		"mac":       {"00:11:22:33:44:zz", StringMAC},
+		"base64":    {"SGVsbG8===", StringBase64},
+		"base64url": {"SGVsbG8+/=", StringBase64URL},
+	}
+	for name, item := range invalid {
+		if item.fn(item.value) {
+			t.Fatalf("expected %s to fail for %q", name, item.value)
+		}
+	}
+}
+
+func TestStringFastParserEdges(t *testing.T) {
+	valid := map[string]struct {
+		value string
+		fn    func(string) bool
+	}{
+		"hexcolor_short":    {"abc", StringHexColor},
+		"hexcolor_alpha":    {"#abcd", StringHexColor},
+		"rgba_alpha_one":    {"rgba(0,0,0,1)", StringRGBA},
+		"hsla_alpha_zero":   {"hsla(360,0%,100%,0)", StringHSLA},
+		"e164_max":          {"+123456789012345", StringE164},
+		"ipv4_zero":         {"0.0.0.0", StringIPv4},
+		"cidr_zero":         {"0.0.0.0/0", StringCIDR},
+		"mac_plain":         {"001122334455", StringMAC},
+		"mac_dash":          {"00-11-22-33-44-55", StringMAC},
+		"base64_raw":        {"SGVsbG8", StringBase64},
+		"base64url_special": {"SGVsbG8_", StringBase64URL},
+	}
+	for name, item := range valid {
+		if !item.fn(item.value) {
+			t.Fatalf("expected %s to pass for %q", name, item.value)
+		}
+	}
+
+	invalid := map[string]struct {
+		value string
+		fn    func(string) bool
+	}{
+		"hexcolor_len":      {"#ab", StringHexColor},
+		"rgb_missing_comma": {"rgb(1 2 3)", StringRGB},
+		"hsl_missing_pct":   {"hsl(120,100,50%)", StringHSL},
+		"e164_too_long":     {"+1234567890123456", StringE164},
+		"ipv4_leading_zero": {"01.2.3.4", StringIPv4},
+		"cidr_empty_bits":   {"10.0.0.0/", StringCIDR},
+		"mac_mixed_sep":     {"00:11-22:33:44:55", StringMAC},
+		"base64url_std":     {"SGVsbG8+", StringBase64URL},
+	}
+	for name, item := range invalid {
+		if item.fn(item.value) {
+			t.Fatalf("expected %s to fail for %q", name, item.value)
+		}
+	}
+}
+
+func TestStringNoParamAdaptersDirect(t *testing.T) {
+	valid := map[string]struct {
+		value string
+		fn    func(string) bool
+	}{
+		"issn":     {"0317-847X", StringISSN},
+		"bic":      {"CHASUS33", StringBIC},
+		"cron":     {"0 0 * * *", StringCron},
+		"datauri":  {"data:text/plain;base64,SGVsbG8=", StringDataURI},
+		"bcp47":    {"en-US", StringBCP47},
+		"eth_addr": {"0x742d35Cc6634C0532925a3b844Bc9e7595f2bD38", StringEthAddr},
+		"btc_addr": {"1BoatSLRHtKNngkdXEeobR76b53LETtpyT", StringBtcAddr},
+	}
+	for name, item := range valid {
+		if !item.fn(item.value) {
+			t.Fatalf("expected %s to pass for %q", name, item.value)
+		}
+	}
+
+	invalid := map[string]struct {
+		value string
+		fn    func(string) bool
+	}{
+		"issn":     {"0317-8472", StringISSN},
+		"bic":      {"CHASUS3!", StringBIC},
+		"cron":     {"0 0 * * * * *", StringCron},
+		"datauri":  {"data:text/plain;chars\x00et=utf-8,hello", StringDataURI},
+		"bcp47":    {"1n", StringBCP47},
+		"eth_addr": {"742d35Cc6634C0532925a3b844Bc9e7595f2bD38", StringEthAddr},
+		"btc_addr": {"bc1q!508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4", StringBtcAddr},
+	}
+	for name, item := range invalid {
+		if item.fn(item.value) {
+			t.Fatalf("expected %s to fail for %q", name, item.value)
+		}
+	}
+}
+
+func TestFormatHelpersDirect(t *testing.T) {
+	ClearRegexCache()
+	re, err := GetCompiledRegex(`^a+$`)
+	if err != nil || !re.MatchString("aaa") {
+		t.Fatalf("expected compiled regex to match, err=%v", err)
+	}
+	if _, err := GetCompiledRegex(`[`); err == nil {
+		t.Fatal("expected invalid regex to fail")
+	}
+	ClearRegexCache()
+
+	pos := 0
+	if !ParseSemverNum("12", &pos) || pos != 2 {
+		t.Fatalf("expected semver number to parse, pos=%d", pos)
+	}
+	pos = 0
+	if !ParseSemverPreRelease("-rc.1", &pos) || pos != len("-rc.1") {
+		t.Fatalf("expected pre-release to parse, pos=%d", pos)
+	}
+	pos = 0
+	if !ParseSemverBuildMeta("+build.7", &pos) || pos != len("+build.7") {
+		t.Fatalf("expected build metadata to parse, pos=%d", pos)
+	}
+	if !IsValidCronField("*/5") || IsValidCronField("!") {
+		t.Fatal("expected cron field helper to validate step syntax")
+	}
+	if LuhnDouble(8) != 7 || !IsLuhnChecksum("79927398713") {
+		t.Fatal("expected luhn helpers to pass")
+	}
+	if !IsISBN10CheckDigit('X', 1) || IsISBN10CheckDigit('!', 1) {
+		t.Fatal("expected isbn10 check digit helper to validate X and reject punctuation")
 	}
 }
 

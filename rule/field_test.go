@@ -120,6 +120,33 @@ func TestFieldByPathPointer(t *testing.T) {
 	}
 }
 
+func TestFieldIndexByPath(t *testing.T) {
+	typ := reflect.TypeOf(nestedStruct{})
+	index, ok := FieldIndexByPath(typ, "inner.name")
+	if !ok {
+		t.Fatal("expected nested json path to resolve")
+	}
+	value := reflect.ValueOf(nestedStruct{Inner: testStruct{Name: "indexed"}}).FieldByIndex(index)
+	if value.String() != "indexed" {
+		t.Fatalf("expected indexed value, got %s", value.String())
+	}
+}
+
+func TestFieldIndexByPathInvalid(t *testing.T) {
+	if _, ok := FieldIndexByPath(nil, "Name"); ok {
+		t.Fatal("expected nil root to fail")
+	}
+	if _, ok := FieldIndexByPath(reflect.TypeOf(""), "Name"); ok {
+		t.Fatal("expected non-struct root to fail")
+	}
+	if _, ok := FieldIndexByPath(reflect.TypeOf(testStruct{}), "Missing"); ok {
+		t.Fatal("expected missing field to fail")
+	}
+	if _, ok := FieldIndexByPath(reflect.TypeOf(testStruct{}), ""); ok {
+		t.Fatal("expected empty path to fail")
+	}
+}
+
 func TestFieldByPathEmptyPart(t *testing.T) {
 	s := testStruct{Name: "argus"}
 	val, ok := FieldByPath(reflect.ValueOf(s), ".Name")
@@ -301,6 +328,12 @@ func TestCompareValueTimeVsNonTime(t *testing.T) {
 func TestCompareValueDefaultOp(t *testing.T) {
 	if CompareValue(reflect.ValueOf("a"), reflect.ValueOf("b"), "invalid_op") {
 		t.Fatal("expected invalid op to return false")
+	}
+}
+
+func TestCompareValueOpInvalid(t *testing.T) {
+	if CompareValueOp(reflect.ValueOf("a"), reflect.ValueOf("a"), validate.CmpOp(-1)) {
+		t.Fatal("expected invalid cmp op to fail")
 	}
 }
 

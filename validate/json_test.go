@@ -270,3 +270,32 @@ func TestSplitJSONPathEmpty(t *testing.T) {
 		t.Fatalf("expected 2 parts, got %d", len(parts))
 	}
 }
+
+func TestJSONScannerHelpers(t *testing.T) {
+	data := []byte(" \t{\"name\":\"argus\",\"items\":[1,true,null]}\n")
+	start := SkipJSONSpaces(data, 0)
+	if start != 2 {
+		t.Fatalf("expected first non-space at 2, got %d", start)
+	}
+	end, err := ScanJSONValueEnd(data, start)
+	if err != nil {
+		t.Fatalf("expected object scan to pass: %v", err)
+	}
+	if end <= start {
+		t.Fatalf("expected scan to advance, got %d", end)
+	}
+	strEnd, err := ScanJSONString([]byte(`"a\"b"`), 0)
+	if err != nil || strEnd != len(`"a\"b"`) {
+		t.Fatalf("expected string scan to consume escaped string, end=%d err=%v", strEnd, err)
+	}
+	scalarEnd, err := ScanJSONValueEnd([]byte("true,rest"), 0)
+	if err != nil || scalarEnd != len("true") {
+		t.Fatalf("expected scalar scan to stop at comma, end=%d err=%v", scalarEnd, err)
+	}
+	if _, err := ScanJSONValueEnd([]byte(`{"bad":[1}`), 0); err == nil {
+		t.Fatal("expected mismatched composite to fail")
+	}
+	if _, err := ScanJSONString([]byte(`bad`), 0); err == nil {
+		t.Fatal("expected non-string scan to fail")
+	}
+}

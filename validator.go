@@ -18,6 +18,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/kamalyes/go-argus/rule"
 	"github.com/kamalyes/go-argus/utils"
@@ -266,6 +267,10 @@ func (v *Validate) evalStringOr(ctx context.Context, field string, rules []rule.
 
 // evalStringRule 评估单条字符串规则，返回 (是否通过, 是否已处理)
 func evalStringRule(field string, r rule.RulePlan) (bool, bool) {
+	switch r.Name {
+	case "min", "max", "len", "gt", "gte", "lt", "lte":
+		return r.HasNumber && validate.CompareOp(float64(utf8.RuneCountInString(field)), r.Number, r.CmpOp), true
+	}
 	if fn, ok := rule.StringRuleMap[r.Name]; ok {
 		return fn == nil || fn(field, r.Param), true
 	}
@@ -342,7 +347,7 @@ func (v *Validate) validateStruct(ctx context.Context, top reflect.Value, curren
 			continue
 		}
 
-		if shouldDiveIntoStruct(field, fp.Rules) {
+		if fp.MayDiveStruct {
 			nested := validate.DerefReflect(field)
 			if nested.IsValid() && nested.Kind() == reflect.Struct {
 				v.validateStruct(ctx, top, nested, fieldNS, fieldStructNS, errs)
@@ -415,28 +420,127 @@ func (v *Validate) applyDive(ctx context.Context, top reflect.Value, parent refl
 	if !field.IsValid() {
 		return
 	}
+	keyRules, valueRules := splitDiveRules(rules)
 	switch field.Kind() {
 	case reflect.Slice, reflect.Array:
 		// 复用 []byte 缓冲区避免 strconv.Itoa 分配
 		var idxBuf []byte
 		for i := 0; i < field.Len(); i++ {
+			item := field.Index(i)
+			if v.applyRulesFast(ctx, top, parent, item, fieldName, structFieldName, valueRules) {
+				continue
+			}
 			idxBuf = strconv.AppendInt(idxBuf[:0], int64(i), 10)
 			childNS := ns + "[" + string(idxBuf) + "]"
 			childStructNS := structNs + "[" + string(idxBuf) + "]"
-			v.applyRules(ctx, top, parent, field.Index(i), childNS, childStructNS, fieldName, structFieldName, rules, errs)
+			v.applyRules(ctx, top, parent, item, childNS, childStructNS, fieldName, structFieldName, valueRules, errs)
 		}
 	case reflect.Map:
 		for _, key := range field.MapKeys() {
+			value := field.MapIndex(key)
+			if v.applyRulesFast(ctx, top, parent, key, fieldName, structFieldName, keyRules) &&
+				v.applyRulesFast(ctx, top, parent, value, fieldName, structFieldName, valueRules) {
+				continue
+			}
 			keyText := validate.StringValue(key)
 			childNS := ns + "[" + keyText + "]"
 			childStructNS := structNs + "[" + keyText + "]"
-			v.applyRules(ctx, top, parent, field.MapIndex(key), childNS, childStructNS, fieldName, structFieldName, rules, errs)
+			if len(keyRules) > 0 {
+				v.applyRules(ctx, top, parent, key, childNS, childStructNS, fieldName, structFieldName, keyRules, errs)
+			}
+			v.applyRules(ctx, top, parent, value, childNS, childStructNS, fieldName, structFieldName, valueRules, errs)
 		}
 	}
 }
 
+func splitDiveRules(rules []rule.RulePlan) ([]rule.RulePlan, []rule.RulePlan) {
+	if len(rules) == 0 || rules[0].Name != "keys" {
+		return nil, rules
+	}
+	for i := 1; i < len(rules); i++ {
+		if rules[i].Name == "endkeys" {
+			return rules[1:i], rules[i+1:]
+		}
+	}
+	return rules[1:], nil
+}
+
+// applyRulesFast 校验成功路径，不构造错误命名空间
+func (v *Validate) applyRulesFast(ctx context.Context, top reflect.Value, parent reflect.Value, field reflect.Value, fieldName string, structFieldName string, rules []rule.RulePlan) bool {
+	if len(rules) == 0 {
+		return true
+	}
+	derefed := validate.DerefReflect(field)
+	for i := 0; i < len(rules); i++ {
+		rule := rules[i]
+		switch rule.Name {
+		case "omitempty", "omitzero":
+			if validate.IsEmptyValueWithStruct(derefed, v.requiredStructEnabled) {
+				return true
+			}
+			continue
+		case "omitnil":
+			if validate.IsNilValue(field) {
+				return true
+			}
+			continue
+		case "dive":
+			keyRules, valueRules := splitDiveRules(rules[i+1:])
+			switch derefed.Kind() {
+			case reflect.Slice, reflect.Array:
+				for j := 0; j < derefed.Len(); j++ {
+					if !v.applyRulesFast(ctx, top, parent, derefed.Index(j), fieldName, structFieldName, valueRules) {
+						return false
+					}
+				}
+			case reflect.Map:
+				for _, key := range derefed.MapKeys() {
+					if !v.applyRulesFast(ctx, top, parent, key, fieldName, structFieldName, keyRules) ||
+						!v.applyRulesFast(ctx, top, parent, derefed.MapIndex(key), fieldName, structFieldName, valueRules) {
+						return false
+					}
+				}
+			}
+			return true
+		case "keys", "endkeys", "structonly", "nostructlevel", "":
+			continue
+		}
+
+		ok := false
+		if len(rule.OrRules) > 0 {
+			for j := 0; j < len(rule.OrRules); j++ {
+				orRule := rule.OrRules[j]
+				if action, found := evalTable[orRule.Name]; found {
+					if action.dispatch != nil {
+						if action.dispatch(v, top, parent, derefed, orRule) {
+							ok = true
+							break
+						}
+					} else if action.builtin(derefed, orRule.Param, v.requiredStructEnabled) {
+						ok = true
+						break
+					}
+				} else if v.evalRule(ctx, top, parent, derefed, fieldName, structFieldName, orRule) {
+					ok = true
+					break
+				}
+			}
+		} else {
+			ok = v.evalRule(ctx, top, parent, derefed, fieldName, structFieldName, rule)
+		}
+		if !ok {
+			return false
+		}
+	}
+	return true
+}
+
 // evalRule 评估单条规则，优先查 dispatch 表，其次查 builtin 表，最后查自定义注册
 func (v *Validate) evalRule(ctx context.Context, top reflect.Value, parent reflect.Value, field reflect.Value, fieldName string, structFieldName string, plan rule.RulePlan) bool {
+	switch plan.Name {
+	case "min", "max", "len", "gt", "gte", "lt", "lte":
+		return plan.HasNumber && rule.CompareLengthOrNumber(field, plan.Number, plan.CmpOp)
+	}
 	if action, ok := evalTable[plan.Name]; ok {
 		if action.dispatch != nil {
 			return action.dispatch(v, top, parent, field, plan)
@@ -463,7 +567,6 @@ func (v *Validate) evalRule(ctx context.Context, top reflect.Value, parent refle
 	return result
 }
 
-// getCustomValidation 读取自定义规则，使用 RLock 保护
 func (v *Validate) getCustomValidation(name string) FuncCtx {
 	v.mu.RLock()
 	fn := v.validations[name]
@@ -580,14 +683,29 @@ func (v *Validate) evalExcludedWithoutAll(top, parent, field reflect.Value, plan
 }
 
 func (v *Validate) evalCmpField(top, parent, field reflect.Value, plan rule.RulePlan) bool {
-	op := cmpFieldOps[plan.Name]
 	target := parent
 	if strings.HasSuffix(plan.Name, "csfield") {
 		target = top
 	}
-	// 预解引用，避免 CompareValue 内部重复 DerefReflect
 	derefed := validate.DerefReflect(field)
-	return rule.CompareFieldDerefed(derefed, target, plan.Param, op)
+	var other reflect.Value
+	if len(plan.FieldIndex) > 0 {
+		target = validate.DerefReflect(target)
+		if !target.IsValid() || target.Kind() != reflect.Struct {
+			return false
+		}
+		other = target.FieldByIndex(plan.FieldIndex)
+	} else {
+		var ok bool
+		other, ok = rule.FieldByPath(target, plan.Param)
+		if !ok {
+			return false
+		}
+	}
+	if !plan.HasCmpOp {
+		plan.CmpOp = rule.CmpOpForRule(plan.Name)
+	}
+	return rule.CompareValueOp(derefed, other, plan.CmpOp)
 }
 
 func (v *Validate) evalFieldContains(top, parent, field reflect.Value, plan rule.RulePlan) bool {
@@ -624,24 +742,6 @@ func (v *Validate) evalNoneOf(top, parent, field reflect.Value, plan rule.RulePl
 
 func (v *Validate) evalNoneOfCI(top, parent, field reflect.Value, plan rule.RulePlan) bool {
 	return !rule.OneOfCIFast(field, plan.ParamParts)
-}
-
-// cmpFieldOps 跨字段比较规则到操作符的映射
-var cmpFieldOps = map[string]string{
-	"eqfield":     "eq",
-	"nefield":     "ne",
-	"gtfield":     "gt",
-	"afterfield":  "gt",
-	"gtefield":    "gte",
-	"ltfield":     "lt",
-	"beforefield": "lt",
-	"ltefield":    "lte",
-	"eqcsfield":   "eq",
-	"necsfield":   "ne",
-	"gtcsfield":   "gt",
-	"gtecsfield":  "gte",
-	"ltcsfield":   "lt",
-	"ltecsfield":  "lte",
 }
 
 // evalDispatchTable 需要跨字段访问的规则分派表
@@ -721,6 +821,19 @@ func shouldDiveIntoStruct(field reflect.Value, rules []rule.RulePlan) bool {
 	return field.IsValid() && field.Kind() == reflect.Struct && !validate.IsTimeType(field.Type())
 }
 
+func mayDiveStructType(typ reflect.Type, rules []rule.RulePlan) bool {
+	for _, rule := range rules {
+		switch rule.Name {
+		case "dive", "nostructlevel", "structonly":
+			return false
+		}
+	}
+	for typ.Kind() == reflect.Ptr {
+		typ = typ.Elem()
+	}
+	return typ.Kind() == reflect.Struct && !validate.IsTimeType(typ)
+}
+
 func (v *Validate) compileStruct(t reflect.Type) *rule.StructPlan {
 	if cached, ok := v.structCache.Load(t); ok {
 		return cached.(*rule.StructPlan)
@@ -740,13 +853,29 @@ func (v *Validate) compileStruct(t reflect.Type) *rule.StructPlan {
 		}
 
 		altName := v.resolveFieldName(sf)
+		rules := rule.ParseRules(tag)
+		for i := range rules {
+			if strings.HasSuffix(rules[i].Name, "field") && !strings.HasSuffix(rules[i].Name, "csfield") {
+				if index, ok := rule.FieldIndexByPath(t, rules[i].Param); ok {
+					rules[i].FieldIndex = index
+				}
+			}
+			for j := range rules[i].OrRules {
+				if strings.HasSuffix(rules[i].OrRules[j].Name, "field") && !strings.HasSuffix(rules[i].OrRules[j].Name, "csfield") {
+					if index, ok := rule.FieldIndexByPath(t, rules[i].OrRules[j].Param); ok {
+						rules[i].OrRules[j].FieldIndex = index
+					}
+				}
+			}
+		}
 		fp := rule.FieldPlan{
 			Index:          sf.Index,
 			Name:           sf.Name,
 			AltName:        altName,
 			Typ:            sf.Type,
-			Rules:          rule.ParseRules(tag),
+			Rules:          rules,
 			HasValidate:    tag != "",
+			MayDiveStruct:  mayDiveStructType(sf.Type, rules),
 			NsPrefix:       utils.JoinNS(typeName, altName),
 			StructNsPrefix: utils.JoinNS(typeName, sf.Name),
 		}

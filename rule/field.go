@@ -121,9 +121,60 @@ func CompareFieldDerefed(current reflect.Value, parent reflect.Value, targetPath
 	return CompareValue(current, target, op)
 }
 
+// FieldIndexByPath 预解析字段路径，供结构体计划复用
+func FieldIndexByPath(root reflect.Type, path string) ([]int, bool) {
+	if root == nil || path == "" {
+		return nil, false
+	}
+	for root.Kind() == reflect.Ptr {
+		root = root.Elem()
+	}
+	if root.Kind() != reflect.Struct {
+		return nil, false
+	}
+	var index []int
+	current := root
+	for _, part := range strings.Split(path, ".") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		idx, ok := fieldLookup(current)[part]
+		if !ok {
+			return nil, false
+		}
+		sf := current.Field(idx)
+		index = append(index, sf.Index...)
+		current = sf.Type
+		for current.Kind() == reflect.Ptr {
+			current = current.Elem()
+		}
+	}
+	return index, len(index) > 0
+}
+
 // CompareValue 按操作符比较两个值，优先支持时间，其次支持数值和字符串
 func CompareValue(left reflect.Value, right reflect.Value, op string) bool {
 	cmpOp := validate.CmpOpFromStr(op)
+	return CompareValueOp(left, right, cmpOp)
+}
+
+// CompareValueOp 按预解析操作符比较两个值
+func CompareValueOp(left reflect.Value, right reflect.Value, cmpOp validate.CmpOp) bool {
+	if cmpOp < validate.CmpEQ || cmpOp > validate.CmpNE {
+		return false
+	}
+	left = validate.DerefReflect(left)
+	right = validate.DerefReflect(right)
+	if !left.IsValid() || !right.IsValid() {
+		return false
+	}
+	if left.Kind() == reflect.String && right.Kind() == reflect.String {
+		switch cmpOp {
+		case validate.CmpEQ, validate.CmpNE:
+			return validate.CompareStringsOp(left.String(), right.String(), cmpOp)
+		}
+	}
 	if lt, lok := TimeValue(left, ""); lok {
 		rt, rok := TimeValue(right, "")
 		return rok && validate.CompareOp(float64(lt.UnixNano()), float64(rt.UnixNano()), cmpOp)

@@ -13,7 +13,6 @@ package validate
 
 import (
 	"encoding/base32"
-	"encoding/base64"
 	"net"
 	"os"
 	"path/filepath"
@@ -239,35 +238,190 @@ func StringHexadecimal(s string) bool {
 }
 
 func StringHexColor(s string) bool {
-	return ColorHexRegex.MatchString(s)
+	if len(s) > 0 && s[0] == '#' {
+		s = s[1:]
+	}
+	switch len(s) {
+	case 3, 4, 6, 8:
+	default:
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if !IsHexChar(s[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 func StringRGB(s string) bool {
-	return RGBRegex.MatchString(s)
+	return parseRGBLike(s, "rgb(", false)
 }
 
 func StringRGBA(s string) bool {
-	return RGBARegex.MatchString(s)
+	return parseRGBLike(s, "rgba(", true)
 }
 
 func StringHSL(s string) bool {
-	return HSLRegex.MatchString(s)
+	return parseHSLLike(s, "hsl(", false)
 }
 
 func StringHSLA(s string) bool {
-	return HSLARegex.MatchString(s)
+	return parseHSLLike(s, "hsla(", true)
 }
 
 func StringE164(s string) bool {
-	return E164Regex.MatchString(s)
+	if len(s) < 3 || len(s) > 16 || s[0] != '+' || s[1] < '1' || s[1] > '9' {
+		return false
+	}
+	for i := 2; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func parseRGBLike(s string, prefix string, alpha bool) bool {
+	if !strings.HasPrefix(s, prefix) || len(s) <= len(prefix) || s[len(s)-1] != ')' {
+		return false
+	}
+	i := len(prefix)
+	for n := 0; n < 3; n++ {
+		value, ok := parseColorInt(s, &i)
+		if !ok || value > 255 {
+			return false
+		}
+		if !consumeColorSep(s, &i, n == 2 && alpha) {
+			return false
+		}
+	}
+	if alpha {
+		if !parseAlpha(s, &i) {
+			return false
+		}
+		skipASCIIWS(s, &i)
+		return i == len(s)-1
+	}
+	skipASCIIWS(s, &i)
+	return i == len(s)-1
+}
+
+func parseHSLLike(s string, prefix string, alpha bool) bool {
+	if !strings.HasPrefix(s, prefix) || len(s) <= len(prefix) || s[len(s)-1] != ')' {
+		return false
+	}
+	i := len(prefix)
+	hue, ok := parseColorInt(s, &i)
+	if !ok || hue > 360 || !consumeColorSep(s, &i, false) {
+		return false
+	}
+	for n := 0; n < 2; n++ {
+		pct, ok := parseColorInt(s, &i)
+		if !ok || pct > 100 {
+			return false
+		}
+		skipASCIIWS(s, &i)
+		if i >= len(s) || s[i] != '%' {
+			return false
+		}
+		i++
+		if !consumeColorSep(s, &i, n == 1 && alpha) {
+			return false
+		}
+	}
+	if alpha {
+		if !parseAlpha(s, &i) {
+			return false
+		}
+		skipASCIIWS(s, &i)
+		return i == len(s)-1
+	}
+	skipASCIIWS(s, &i)
+	return i == len(s)-1
+}
+
+func parseColorInt(s string, i *int) (int, bool) {
+	skipASCIIWS(s, i)
+	start := *i
+	value := 0
+	for *i < len(s) && s[*i] >= '0' && s[*i] <= '9' {
+		value = value*10 + int(s[*i]-'0')
+		*i++
+	}
+	return value, *i > start
+}
+
+func consumeColorSep(s string, i *int, needComma bool) bool {
+	skipASCIIWS(s, i)
+	if needComma {
+		if *i >= len(s) || s[*i] != ',' {
+			return false
+		}
+		*i++
+		return true
+	}
+	if *i < len(s) && s[*i] == ',' {
+		*i++
+		return true
+	}
+	return *i < len(s) && s[*i] == ')'
+}
+
+func parseAlpha(s string, i *int) bool {
+	skipASCIIWS(s, i)
+	if *i >= len(s) {
+		return false
+	}
+	if s[*i] == '0' {
+		*i++
+		if *i < len(s) && s[*i] == '.' {
+			*i++
+			start := *i
+			for *i < len(s) && s[*i] >= '0' && s[*i] <= '9' {
+				*i++
+			}
+			return *i > start
+		}
+		return true
+	}
+	if s[*i] == '1' {
+		*i++
+		return true
+	}
+	if s[*i] == '.' {
+		*i++
+		start := *i
+		for *i < len(s) && s[*i] >= '0' && s[*i] <= '9' {
+			*i++
+		}
+		return *i > start
+	}
+	return false
+}
+
+func skipASCIIWS(s string, i *int) {
+	for *i < len(s) {
+		switch s[*i] {
+		case ' ', '\t', '\n', '\r':
+			*i++
+		default:
+			return
+		}
+	}
 }
 
 func StringIP(s string) bool {
-	return net.ParseIP(TrimSpaceIfNeeded(s)) != nil
+	s = TrimSpaceIfNeeded(s)
+	return parseIPv4Fast(s) || net.ParseIP(s) != nil
 }
 
 func StringIPv4(s string) bool {
-	ip := net.ParseIP(TrimSpaceIfNeeded(s))
+	s = TrimSpaceIfNeeded(s)
+	if parseIPv4Fast(s) {
+		return true
+	}
+	ip := net.ParseIP(s)
 	return ip != nil && ip.To4() != nil
 }
 
@@ -277,23 +431,115 @@ func StringIPv6(s string) bool {
 }
 
 func StringCIDR(s string) bool {
-	_, _, err := net.ParseCIDR(strings.TrimSpace(s))
+	s = TrimSpaceIfNeeded(s)
+	if parseIPv4CIDRFast(s) {
+		return true
+	}
+	_, _, err := net.ParseCIDR(s)
 	return err == nil
 }
 
 func StringCIDRv4(s string) bool {
-	ip, _, err := net.ParseCIDR(strings.TrimSpace(s))
+	s = TrimSpaceIfNeeded(s)
+	if parseIPv4CIDRFast(s) {
+		return true
+	}
+	ip, _, err := net.ParseCIDR(s)
 	return err == nil && ip.To4() != nil
 }
 
 func StringCIDRv6(s string) bool {
-	ip, _, err := net.ParseCIDR(strings.TrimSpace(s))
+	s = TrimSpaceIfNeeded(s)
+	ip, _, err := net.ParseCIDR(s)
 	return err == nil && ip.To4() == nil
 }
 
 func StringMAC(s string) bool {
-	_, err := net.ParseMAC(strings.TrimSpace(s))
+	s = TrimSpaceIfNeeded(s)
+	if parseMACFast(s) {
+		return true
+	}
+	_, err := net.ParseMAC(s)
 	return err == nil
+}
+
+func parseIPv4Fast(s string) bool {
+	part := 0
+	value := 0
+	digits := 0
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c >= '0' && c <= '9' {
+			if digits == 0 && c == '0' && i+1 < len(s) && s[i+1] >= '0' && s[i+1] <= '9' {
+				return false
+			}
+			value = value*10 + int(c-'0')
+			digits++
+			if digits > 3 || value > 255 {
+				return false
+			}
+			continue
+		}
+		if c != '.' || digits == 0 || part == 3 {
+			return false
+		}
+		part++
+		value = 0
+		digits = 0
+	}
+	return part == 3 && digits > 0
+}
+
+func parseIPv4CIDRFast(s string) bool {
+	slash := strings.IndexByte(s, '/')
+	if slash <= 0 || slash == len(s)-1 {
+		return false
+	}
+	if !parseIPv4Fast(s[:slash]) {
+		return false
+	}
+	bits := 0
+	for i := slash + 1; i < len(s); i++ {
+		c := s[i]
+		if c < '0' || c > '9' {
+			return false
+		}
+		bits = bits*10 + int(c-'0')
+		if bits > 32 {
+			return false
+		}
+	}
+	return true
+}
+
+func parseMACFast(s string) bool {
+	if len(s) == 12 {
+		for i := 0; i < len(s); i++ {
+			if !IsHexChar(s[i]) {
+				return false
+			}
+		}
+		return true
+	}
+	if len(s) != 17 {
+		return false
+	}
+	sep := s[2]
+	if sep != ':' && sep != '-' {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if (i+1)%3 == 0 {
+			if s[i] != sep {
+				return false
+			}
+			continue
+		}
+		if !IsHexChar(s[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 func StringHostname(s string) bool {
@@ -442,15 +688,22 @@ func StringUUID(s string) bool {
 }
 
 func StringUUID3(s string) bool {
-	return len(s) == 36 && s[14] == '3' && IsUUID(s)
+	return isUUIDVersion(s, '3')
 }
 
 func StringUUID4(s string) bool {
-	return len(s) == 36 && s[14] == '4' && IsUUID(s)
+	return isUUIDVersion(s, '4')
 }
 
 func StringUUID5(s string) bool {
-	return len(s) == 36 && s[14] == '5' && IsUUID(s)
+	return isUUIDVersion(s, '5')
+}
+
+func isUUIDVersion(s string, version byte) bool {
+	if len(s) != 36 || s[14] != version {
+		return false
+	}
+	return IsUUID(s)
 }
 
 func StringBase32(s string) bool {
@@ -463,7 +716,8 @@ func StringBase32(s string) bool {
 }
 
 func StringBase64(s string) bool {
-	return IsBase64(s)
+	s = TrimSpaceIfNeeded(s)
+	return isBase64Syntax(s, false, true) || isBase64Syntax(s, false, false)
 }
 
 func StringBase64URL(s string) bool {
@@ -471,8 +725,7 @@ func StringBase64URL(s string) bool {
 	if ts == "" {
 		return false
 	}
-	_, err := base64.URLEncoding.DecodeString(ts)
-	return err == nil
+	return isBase64Syntax(ts, true, true)
 }
 
 func StringBase64RawURL(s string) bool {
@@ -480,8 +733,37 @@ func StringBase64RawURL(s string) bool {
 	if ts == "" {
 		return false
 	}
-	_, err := base64.RawURLEncoding.DecodeString(ts)
-	return err == nil
+	return isBase64Syntax(ts, true, false)
+}
+
+func isBase64Syntax(s string, urlSafe bool, padded bool) bool {
+	if s == "" {
+		return false
+	}
+	padding := 0
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c == '=' {
+			padding++
+			if !padded || padding > 2 || i < len(s)-2 {
+				return false
+			}
+			continue
+		}
+		ok := (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')
+		if urlSafe {
+			ok = ok || c == '-' || c == '_'
+		} else {
+			ok = ok || c == '+' || c == '/'
+		}
+		if padding > 0 || !ok {
+			return false
+		}
+	}
+	if padded {
+		return len(s)%4 == 0
+	}
+	return len(s)%4 != 1
 }
 
 func StringJSON(s string) bool {

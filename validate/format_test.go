@@ -98,6 +98,13 @@ func TestValidateIPAddressInvalid(t *testing.T) {
 	}
 }
 
+func TestValidateIPAlias(t *testing.T) {
+	r := ValidateIP("127.0.0.1")
+	if !r.Success {
+		t.Fatal("expected ValidateIP alias to pass")
+	}
+}
+
 func TestValidateProtocolValid(t *testing.T) {
 	r := ValidateProtocol("https://example.com")
 	if !r.Success {

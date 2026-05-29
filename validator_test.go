@@ -192,6 +192,38 @@ func TestDiveMap(t *testing.T) {
 	}
 }
 
+func TestDiveMapKeysEndKeys(t *testing.T) {
+	v := New()
+	m := map[string]string{"key1": "value1", "key2": "value2"}
+	if err := v.Var(m, "dive,keys,required,startswith=key,endkeys,required,startswith=value"); err != nil {
+		t.Fatalf("expected keys/endkeys map to pass: %v", err)
+	}
+}
+
+func TestDiveMapKeysEndKeysKeyFailure(t *testing.T) {
+	v := New()
+	err := v.Var(map[string]string{"bad": "value1"}, "dive,keys,required,startswith=key,endkeys,required")
+	if err == nil {
+		t.Fatal("expected keys validation to fail")
+	}
+	ve := err.(ValidationErrors)
+	if got := ve[0].Namespace(); got != "[bad]" {
+		t.Fatalf("expected key namespace [bad], got %q", got)
+	}
+}
+
+func TestDiveMapKeysEndKeysValueFailure(t *testing.T) {
+	v := New()
+	err := v.Var(map[string]string{"key1": ""}, "dive,keys,required,startswith=key,endkeys,required")
+	if err == nil {
+		t.Fatal("expected value validation to fail")
+	}
+	ve := err.(ValidationErrors)
+	if got := ve[0].Namespace(); got != "[key1]" {
+		t.Fatalf("expected value namespace [key1], got %q", got)
+	}
+}
+
 func TestDiveInvalidField(t *testing.T) {
 	v := New()
 	if err := v.Var(nil, "dive,required"); err != nil {
@@ -1730,5 +1762,28 @@ func TestApplyDiveWithIdxBuf(t *testing.T) {
 	}
 	if err := v.Struct(req{Items: []string{"a", "", "c"}}); err == nil {
 		t.Fatal("expected dive to fail for empty item")
+	}
+}
+
+func TestVarStringOrFastPath(t *testing.T) {
+	v := New()
+	if err := v.VarString("rgba(1,2,3,.5)", "rgb|rgba"); err != nil {
+		t.Fatalf("expected string or fast path to pass: %v", err)
+	}
+	if err := v.VarString("not-a-color", "rgb|rgba"); err == nil {
+		t.Fatal("expected string or fast path to fail")
+	}
+}
+
+func TestNoneOfCIFastPath(t *testing.T) {
+	type req struct {
+		Status string `validate:"noneofci=blocked denied"`
+	}
+	v := New()
+	if err := v.Struct(req{Status: "allowed"}); err != nil {
+		t.Fatalf("expected noneofci to pass: %v", err)
+	}
+	if err := v.Struct(req{Status: "BLOCKED"}); err == nil {
+		t.Fatal("expected noneofci to fail case-insensitively")
 	}
 }

@@ -14,6 +14,8 @@ package rule
 import (
 	"reflect"
 	"testing"
+
+	"github.com/kamalyes/go-argus/validate"
 )
 
 func TestParseRulesEmpty(t *testing.T) {
@@ -101,6 +103,47 @@ func TestPrepareRulePlanNoSplit(t *testing.T) {
 	rp := PrepareRulePlan(RulePlan{Name: "min", Param: "3"})
 	if len(rp.ParamParts) != 0 {
 		t.Fatalf("expected no param parts for min, got %v", rp.ParamParts)
+	}
+}
+
+func TestPrepareRulePlanCmpOp(t *testing.T) {
+	rp := PrepareRulePlan(RulePlan{Name: "afterfield", Param: "StartTime"})
+	if !rp.HasCmpOp || rp.CmpOp != validate.CmpGT {
+		t.Fatalf("expected afterfield to precompute gt, got has=%v op=%v", rp.HasCmpOp, rp.CmpOp)
+	}
+}
+
+func TestCmpOpForRule(t *testing.T) {
+	cases := map[string]validate.CmpOp{
+		"len":         validate.CmpEQ,
+		"min":         validate.CmpGTE,
+		"max":         validate.CmpLTE,
+		"gt":          validate.CmpGT,
+		"gte":         validate.CmpGTE,
+		"lt":          validate.CmpLT,
+		"lte":         validate.CmpLTE,
+		"eqfield":     validate.CmpEQ,
+		"nefield":     validate.CmpNE,
+		"gtfield":     validate.CmpGT,
+		"afterfield":  validate.CmpGT,
+		"gtefield":    validate.CmpGTE,
+		"ltfield":     validate.CmpLT,
+		"beforefield": validate.CmpLT,
+		"ltefield":    validate.CmpLTE,
+		"eqcsfield":   validate.CmpEQ,
+		"necsfield":   validate.CmpNE,
+		"gtcsfield":   validate.CmpGT,
+		"gtecsfield":  validate.CmpGTE,
+		"ltcsfield":   validate.CmpLT,
+		"ltecsfield":  validate.CmpLTE,
+	}
+	for name, want := range cases {
+		if got := CmpOpForRule(name); got != want {
+			t.Fatalf("expected %s to map to %v, got %v", name, want, got)
+		}
+	}
+	if got := CmpOpForRule("unknown"); got != validate.CmpOp(-1) {
+		t.Fatalf("expected unknown rule to map to -1, got %v", got)
 	}
 }
 

@@ -14,6 +14,8 @@ package rule
 import (
 	"reflect"
 	"strings"
+
+	"github.com/kamalyes/go-argus/validate"
 )
 
 // RulePlan 表示一条规则的运行计划
@@ -22,6 +24,11 @@ type RulePlan struct {
 	Param      string     // 规则参数原始值
 	ParamParts []string   // 规则参数按空白拆分
 	OrRules    []RulePlan // 或规则列表（对应 | 分隔符）
+	CmpOp      validate.CmpOp
+	HasCmpOp   bool
+	FieldIndex []int
+	Number     float64
+	HasNumber  bool
 }
 
 // FieldPlan 表示结构体字段的校验计划
@@ -32,6 +39,7 @@ type FieldPlan struct {
 	Typ            reflect.Type
 	Rules          []RulePlan // 字段上的规则列表
 	HasValidate    bool       // 是否包含校验标签
+	MayDiveStruct  bool       // 是否可能递归进入结构体字段
 	NsPrefix       string     // 命名空间前缀
 	StructNsPrefix string     // 结构体命名空间前缀
 }
@@ -91,8 +99,67 @@ func PrepareRulePlan(rp RulePlan) RulePlan {
 		if rp.Param != "" {
 			rp.ParamParts = strings.Fields(rp.Param)
 		}
+	case "min", "max", "len", "gt", "gte", "lt", "lte":
+		rp.CmpOp = ScalarCmpOpForRule(rp.Name)
+		rp.HasCmpOp = true
+		if rp.Param != "" {
+			rp.Number, rp.HasNumber = validate.ParseFloat(rp.Param)
+		}
+	case "eqfield", "nefield", "gtfield", "afterfield", "gtefield", "ltfield", "beforefield", "ltefield",
+		"eqcsfield", "necsfield", "gtcsfield", "gtecsfield", "ltcsfield", "ltecsfield":
+		rp.CmpOp = CmpOpForRule(rp.Name)
+		rp.HasCmpOp = true
 	}
 	return rp
+}
+
+// CmpOpForRule 将跨字段规则映射为比较操作符
+// ScalarCmpOpForRule maps scalar length/number rules to comparison operators.
+func ScalarCmpOpForRule(name string) validate.CmpOp {
+	switch name {
+	case "len":
+		return validate.CmpEQ
+	case "min", "gte":
+		return validate.CmpGTE
+	case "max", "lte":
+		return validate.CmpLTE
+	case "gt":
+		return validate.CmpGT
+	case "lt":
+		return validate.CmpLT
+	default:
+		return -1
+	}
+}
+
+// CmpOpForRule maps cross-field rules to comparison operators.
+func CmpOpForRule(name string) validate.CmpOp {
+	switch name {
+	case "len":
+		return validate.CmpEQ
+	case "min", "gte":
+		return validate.CmpGTE
+	case "max", "lte":
+		return validate.CmpLTE
+	case "gt":
+		return validate.CmpGT
+	case "lt":
+		return validate.CmpLT
+	case "eqfield", "eqcsfield":
+		return validate.CmpEQ
+	case "nefield", "necsfield":
+		return validate.CmpNE
+	case "gtfield", "gtcsfield", "afterfield":
+		return validate.CmpGT
+	case "gtefield", "gtecsfield":
+		return validate.CmpGTE
+	case "ltfield", "ltcsfield", "beforefield":
+		return validate.CmpLT
+	case "ltefield", "ltecsfield":
+		return validate.CmpLTE
+	default:
+		return -1
+	}
 }
 
 // SplitRuleOr 按 | 分隔或规则，支持转义符

@@ -24,7 +24,6 @@ import (
 )
 
 var (
-	uuidRegex    = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 	regexCache   = make(map[string]*regexp.Regexp)
 	regexCacheMu sync.RWMutex
 )
@@ -134,7 +133,7 @@ func ValidateWebSocket(urlStr string) CompareResult {
 // ValidateUUID 校验 UUID 格式
 func ValidateUUID(uuidStr string) CompareResult {
 	result := CompareResult{Actual: uuidStr, Expect: "valid UUID format"}
-	if !uuidRegex.MatchString(strings.TrimSpace(uuidStr)) {
+	if !IsUUID(uuidStr) {
 		result.Message = i18n.Msg(MsgFormatUUIDInvalid)
 		return result
 	}
@@ -670,7 +669,23 @@ func IsIP(ip string) bool {
 
 // IsUUID 判断字符串是否为有效 UUID
 func IsUUID(uuid string) bool {
-	return uuidRegex.MatchString(strings.TrimSpace(uuid))
+	uuid = strings.TrimSpace(uuid)
+	if len(uuid) != 36 {
+		return false
+	}
+	for i := 0; i < len(uuid); i++ {
+		switch i {
+		case 8, 13, 18, 23:
+			if uuid[i] != '-' {
+				return false
+			}
+		default:
+			if !IsHexChar(uuid[i]) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // IsBase64 判断字符串是否为有效 Base64
