@@ -194,6 +194,11 @@ func MatchPathInList(path string, patterns []string) bool {
 	return validate.MatchPathInList(path, patterns)
 }
 
+// MatchPathGlob Glob 模式匹配路径（支持 * 和 ? 通配符）
+func MatchPathGlob(path, pattern string) bool {
+	return validate.MatchPathGlob(path, pattern)
+}
+
 // IsIPAllowed 判断 IP 是否在允许列表中
 func IsIPAllowed(ip string, cidrList []string) bool {
 	return validate.IsIPAllowed(ip, cidrList)

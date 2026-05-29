@@ -15,6 +15,7 @@ import (
 	"bytes"
 	"fmt"
 	"net"
+	"path/filepath"
 	"strings"
 
 	"github.com/kamalyes/go-argus/i18n"
@@ -31,17 +32,27 @@ func (b *IPBase) ValidateIP(ip string) error {
 	return nil
 }
 
-// MatchPathInList 判断路径是否命中任意路径前缀
+// MatchPathInList 判断路径是否命中任意路径规则
 func MatchPathInList(path string, patterns []string) bool {
 	for _, pattern := range patterns {
+		pattern = strings.TrimSpace(pattern)
 		if pattern == "" {
 			continue
 		}
 		if path == pattern || strings.HasPrefix(path, pattern) {
 			return true
 		}
+		if strings.ContainsAny(pattern, "*?") && MatchPathGlob(path, pattern) {
+			return true
+		}
 	}
 	return false
+}
+
+// MatchPathGlob Glob 模式匹配路径（支持 * 和 ? 通配符）
+func MatchPathGlob(path, pattern string) bool {
+	matched, _ := filepath.Match(pattern, path)
+	return matched || pattern == path
 }
 
 // IPSet 表示预编译 IP 规则集合，适合高频请求路径复用

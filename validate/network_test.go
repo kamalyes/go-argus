@@ -36,6 +36,18 @@ func TestMatchPathInList(t *testing.T) {
 	if !MatchPathInList("/api/users", []string{"/api/users"}) {
 		t.Fatal("expected exact match")
 	}
+	if !MatchPathInList("/v1/webhooks/WEBHOOK_TYPE_VERSION_BUILD", []string{"/v1/webhooks/*"}) {
+		t.Fatal("expected wildcard match")
+	}
+	if !MatchPathInList("/api/v1/builds/callback", []string{"/api/*/builds/*"}) {
+		t.Fatal("expected middle wildcard match")
+	}
+	if !MatchPathInList("/api/v1/users", []string{"/api/?1/users"}) {
+		t.Fatal("expected question wildcard match")
+	}
+	if MatchPathInList("/v1/builds/callback", []string{"/v1/webhooks/*"}) {
+		t.Fatal("expected wildcard to not match different prefix")
+	}
 	if MatchPathInList("/api/users", []string{""}) {
 		t.Fatal("expected empty pattern to not match")
 	}

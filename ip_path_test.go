@@ -51,6 +51,12 @@ func TestMatchPathInList(t *testing.T) {
 	if !MatchPathInList("/api/v1", []string{"/api/v1"}) {
 		t.Fatal("expected exact path match")
 	}
+	if !MatchPathInList("/v1/webhooks/WEBHOOK_TYPE_VERSION_BUILD", []string{"/v1/webhooks/*"}) {
+		t.Fatal("expected wildcard path match")
+	}
+	if !MatchPathGlob("/v1/webhooks/WEBHOOK_TYPE_VERSION_BUILD", "/v1/webhooks/*") {
+		t.Fatal("expected glob path match")
+	}
 }
 
 func TestIsIPAllowed(t *testing.T) {
