@@ -424,7 +424,8 @@ func skipDataURIParamsFmt(s string, i int) int {
 }
 
 func skipBase64IfPresentFmt(s string, i int) int {
-	if i+6 <= len(s) && s[i] == 'b' && s[i+1] == 'a' && s[i+2] == 's' && s[i+3] == 'e' && s[i+4] == '6' && s[i+5] == '4' {
+	if i+6 <= len(s) && s[i] == 'b' && s[i+1] == 'a' && s[i+2] == 's' && s[i+3] == 'e' && s[i+4] == '6' &&
+		s[i+5] == '4' {
 		return i + 6
 	}
 	return i

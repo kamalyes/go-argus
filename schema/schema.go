@@ -14,6 +14,7 @@ package schema
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -27,7 +28,7 @@ type JSONSchema struct {
 	Required             []string              `json:"required,omitempty"`
 	Properties           map[string]JSONSchema `json:"properties,omitempty"`
 	Items                *JSONSchema           `json:"items,omitempty"`
-	Enum                 []interface{}         `json:"enum,omitempty"`
+	Enum                 []any                 `json:"enum,omitempty"`
 	MinLength            *int                  `json:"minLength,omitempty"`
 	MaxLength            *int                  `json:"maxLength,omitempty"`
 	Minimum              *float64              `json:"minimum,omitempty"`
@@ -36,7 +37,7 @@ type JSONSchema struct {
 }
 
 // ValidateJSONSchema 校验数据是否符合 schema
-func ValidateJSONSchema(data interface{}, schema interface{}) validate.CompareResult {
+func ValidateJSONSchema(data, schema any) validate.CompareResult {
 	result := validate.CompareResult{Actual: fmt.Sprint(data), Expect: "valid JSON schema"}
 	compiled, err := normalizeSchema(schema)
 	if err != nil {
@@ -52,12 +53,12 @@ func ValidateJSONSchema(data interface{}, schema interface{}) validate.CompareRe
 }
 
 // ValidateStructWithSchema 校验结构体或 map 是否符合 schema
-func ValidateStructWithSchema(structData interface{}, schema interface{}) validate.CompareResult {
+func ValidateStructWithSchema(structData, schema any) validate.CompareResult {
 	raw, err := json.Marshal(structData)
 	if err != nil {
 		return validate.CompareResult{Message: err.Error()}
 	}
-	var data interface{}
+	var data any
 	json.Unmarshal(raw, &data)
 	return ValidateJSONSchema(data, schema)
 }
@@ -116,7 +117,7 @@ func (b *SchemaBuilder) ArrayProperty(name string, items JSONSchema) *SchemaBuil
 }
 
 // Enum 设置枚举值
-func (b *SchemaBuilder) Enum(values ...interface{}) *SchemaBuilder {
+func (b *SchemaBuilder) Enum(values ...any) *SchemaBuilder {
 	b.schema.Enum = append(b.schema.Enum, values...)
 	return b
 }
@@ -149,13 +150,13 @@ func FormatSchemaError(result validate.CompareResult) string {
 	return result.Message
 }
 
-func normalizeSchema(schema interface{}) (JSONSchema, error) {
+func normalizeSchema(schema any) (JSONSchema, error) {
 	switch v := schema.(type) {
 	case JSONSchema:
 		return v, nil
 	case *JSONSchema:
 		if v == nil {
-			return JSONSchema{}, fmt.Errorf(i18n.Msg(validate.MsgSchemaEmpty))
+			return JSONSchema{}, errors.New(i18n.Msg(validate.MsgSchemaEmpty))
 		}
 		return *v, nil
 	case []byte:
@@ -174,12 +175,14 @@ func normalizeSchema(schema interface{}) (JSONSchema, error) {
 	}
 }
 
-func validateValue(value interface{}, schema JSONSchema, path string) error {
+func validateValue(value any, schema JSONSchema, path string) error {
 	if schema.Type != "" && !matchesType(value, schema.Type) {
-		return fmt.Errorf(i18n.Msg(validate.MsgSchemaTypeMismatch, map[string]string{"path": path, "type": schema.Type}))
+		return errors.New(
+			i18n.Msg(validate.MsgSchemaTypeMismatch, map[string]string{"path": path, "type": schema.Type}),
+		)
 	}
 	if len(schema.Enum) > 0 && !containsEnum(value, schema.Enum) {
-		return fmt.Errorf(i18n.Msg(validate.MsgSchemaEnumMismatch, map[string]string{"path": path}))
+		return errors.New(i18n.Msg(validate.MsgSchemaEnumMismatch, map[string]string{"path": path}))
 	}
 	switch schema.Type {
 	case "string":
@@ -198,30 +201,50 @@ func validateValue(value interface{}, schema JSONSchema, path string) error {
 	}
 }
 
-func validateString(value interface{}, schema JSONSchema, path string) error {
+func validateString(value any, schema JSONSchema, path string) error {
 	s := value.(string)
 	if schema.MinLength != nil && len([]rune(s)) < *schema.MinLength {
-		return fmt.Errorf(i18n.Msg(validate.MsgSchemaStringMinLength, map[string]string{"path": path, "min": fmt.Sprint(*schema.MinLength)}))
+		return errors.New(
+			i18n.Msg(
+				validate.MsgSchemaStringMinLength,
+				map[string]string{"path": path, "min": fmt.Sprint(*schema.MinLength)},
+			),
+		)
 	}
 	if schema.MaxLength != nil && len([]rune(s)) > *schema.MaxLength {
-		return fmt.Errorf(i18n.Msg(validate.MsgSchemaStringMaxLength, map[string]string{"path": path, "max": fmt.Sprint(*schema.MaxLength)}))
+		return errors.New(
+			i18n.Msg(
+				validate.MsgSchemaStringMaxLength,
+				map[string]string{"path": path, "max": fmt.Sprint(*schema.MaxLength)},
+			),
+		)
 	}
 	return nil
 }
 
-func validateNumber(value interface{}, schema JSONSchema, path string) error {
+func validateNumber(value any, schema JSONSchema, path string) error {
 	n := value.(float64)
 	if schema.Minimum != nil && n < *schema.Minimum {
-		return fmt.Errorf(i18n.Msg(validate.MsgSchemaNumberBelowMinimum, map[string]string{"path": path, "min": fmt.Sprint(*schema.Minimum)}))
+		return errors.New(
+			i18n.Msg(
+				validate.MsgSchemaNumberBelowMinimum,
+				map[string]string{"path": path, "min": fmt.Sprint(*schema.Minimum)},
+			),
+		)
 	}
 	if schema.Maximum != nil && n > *schema.Maximum {
-		return fmt.Errorf(i18n.Msg(validate.MsgSchemaNumberAboveMaximum, map[string]string{"path": path, "max": fmt.Sprint(*schema.Maximum)}))
+		return errors.New(
+			i18n.Msg(
+				validate.MsgSchemaNumberAboveMaximum,
+				map[string]string{"path": path, "max": fmt.Sprint(*schema.Maximum)},
+			),
+		)
 	}
 	return nil
 }
 
-func validateArray(value interface{}, schema JSONSchema, path string) error {
-	arr, ok := value.([]interface{})
+func validateArray(value any, schema JSONSchema, path string) error {
+	arr, ok := value.([]any)
 	if !ok || schema.Items == nil {
 		return nil
 	}
@@ -233,11 +256,13 @@ func validateArray(value interface{}, schema JSONSchema, path string) error {
 	return nil
 }
 
-func validateObject(value interface{}, schema JSONSchema, path string) error {
-	obj := value.(map[string]interface{})
+func validateObject(value any, schema JSONSchema, path string) error {
+	obj := value.(map[string]any)
 	for _, field := range schema.Required {
 		if _, ok := obj[field]; !ok {
-			return fmt.Errorf(i18n.Msg(validate.MsgSchemaFieldRequired, map[string]string{"path": path, "field": field}))
+			return errors.New(
+				i18n.Msg(validate.MsgSchemaFieldRequired, map[string]string{"path": path, "field": field}),
+			)
 		}
 	}
 	for name, prop := range schema.Properties {
@@ -250,13 +275,13 @@ func validateObject(value interface{}, schema JSONSchema, path string) error {
 	return nil
 }
 
-func matchesType(value interface{}, typ string) bool {
+func matchesType(value any, typ string) bool {
 	switch typ {
 	case "object":
-		_, ok := value.(map[string]interface{})
+		_, ok := value.(map[string]any)
 		return ok
 	case "array":
-		_, ok := value.([]interface{})
+		_, ok := value.([]any)
 		return ok
 	case "string":
 		_, ok := value.(string)
@@ -277,7 +302,7 @@ func matchesType(value interface{}, typ string) bool {
 	}
 }
 
-func containsEnum(value interface{}, values []interface{}) bool {
+func containsEnum(value any, values []any) bool {
 	actual := fmt.Sprint(value)
 	for _, item := range values {
 		if actual == fmt.Sprint(item) {

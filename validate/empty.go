@@ -14,6 +14,7 @@ package validate
 import (
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -29,7 +30,7 @@ func IsEmptyValueWithStruct(v reflect.Value, requiredStructEnabled bool) bool {
 	if !v.IsValid() {
 		return true
 	}
-	for v.Kind() == reflect.Interface || v.Kind() == reflect.Ptr {
+	for v.Kind() == reflect.Interface || v.Kind() == reflect.Pointer {
 		if v.IsNil() {
 			return true
 		}
@@ -76,7 +77,7 @@ func IsNilValue(v reflect.Value) bool {
 		return true
 	}
 	switch v.Kind() {
-	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.Slice:
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
 		return v.IsNil()
 	default:
 		return false
@@ -85,7 +86,7 @@ func IsNilValue(v reflect.Value) bool {
 
 // DerefReflect 解开指针和 interface，遇到 nil 返回无效 Value
 func DerefReflect(v reflect.Value) reflect.Value {
-	for v.IsValid() && (v.Kind() == reflect.Interface || v.Kind() == reflect.Ptr) {
+	for v.IsValid() && (v.Kind() == reflect.Interface || v.Kind() == reflect.Pointer) {
 		if v.IsNil() {
 			return reflect.Value{}
 		}
@@ -124,7 +125,7 @@ func IsTimeEmpty(t *time.Time) bool {
 }
 
 // IsTimeValid 判断时间值是否有效，非时间类型视为有效以兼容过滤场景
-func IsTimeValid(timeVal interface{}) bool {
+func IsTimeValid(timeVal any) bool {
 	if timeVal == nil {
 		return false
 	}
@@ -139,7 +140,7 @@ func IsTimeValid(timeVal interface{}) bool {
 }
 
 // HasEmpty 判断切片中是否存在空值
-func HasEmpty(elems []interface{}) (bool, int) {
+func HasEmpty(elems []any) (bool, int) {
 	if len(elems) == 0 {
 		return true, 0
 	}
@@ -153,7 +154,7 @@ func HasEmpty(elems []interface{}) (bool, int) {
 }
 
 // IsAllEmpty 判断切片中所有元素是否都为空
-func IsAllEmpty(elems []interface{}) bool {
+func IsAllEmpty(elems []any) bool {
 	for _, elem := range elems {
 		if !IsEmptyValue(reflect.ValueOf(elem)) {
 			return false
@@ -188,7 +189,7 @@ func ContainsChinese(s string) bool {
 }
 
 // EmptyToDefault 在字符串为空时返回默认值
-func EmptyToDefault(str string, defaultStr string) string {
+func EmptyToDefault(str, defaultStr string) string {
 	if strings.TrimSpace(str) == "" {
 		return defaultStr
 	}
@@ -196,7 +197,7 @@ func EmptyToDefault(str string, defaultStr string) string {
 }
 
 // IsNil 判断 interface 是否为 nil 或内部持有 nil
-func IsNil(x interface{}) bool {
+func IsNil(x any) bool {
 	if x == nil {
 		return true
 	}
@@ -217,7 +218,7 @@ func IsCEmpty[T comparable](v T) bool {
 }
 
 // DerefValue 解开 interface 中的指针值
-func DerefValue(value interface{}) (interface{}, bool) {
+func DerefValue(value any) (any, bool) {
 	if value == nil {
 		return nil, false
 	}
@@ -245,18 +246,13 @@ func IsSafeFieldName(field string) bool {
 // IsAllowedField 判断字段是否在白名单中，未传白名单时退化为安全字段名检查
 func IsAllowedField(field string, allowedFields ...[]string) bool {
 	if len(allowedFields) > 0 && len(allowedFields[0]) > 0 {
-		for _, allowed := range allowedFields[0] {
-			if field == allowed {
-				return true
-			}
-		}
-		return false
+		return slices.Contains(allowedFields[0], field)
 	}
 	return IsSafeFieldName(field)
 }
 
 // UnwrapProtobufWrapper 通过反射解开 protobuf wrapper，避免引入 protobuf 依赖
-func UnwrapProtobufWrapper(value interface{}) (interface{}, bool) {
+func UnwrapProtobufWrapper(value any) (any, bool) {
 	if value == nil {
 		return nil, false
 	}
@@ -273,7 +269,7 @@ func UnwrapProtobufWrapper(value interface{}) (interface{}, bool) {
 }
 
 // IsEmptyAfterDeref 解引用后判断值是否为空，适合 SQL/query 过滤条件
-func IsEmptyAfterDeref(value interface{}) (interface{}, bool) {
+func IsEmptyAfterDeref(value any) (any, bool) {
 	if unwrapped, ok := UnwrapProtobufWrapper(value); ok {
 		if IsEmptyValue(reflect.ValueOf(unwrapped)) {
 			return nil, true
@@ -294,7 +290,7 @@ func IsEmptyAfterDeref(value interface{}) (interface{}, bool) {
 }
 
 // NormalizeFilterValue 归一化过滤值，支持 protobuf wrapper 和任意切片
-func NormalizeFilterValue(value interface{}) interface{} {
+func NormalizeFilterValue(value any) any {
 	if normalized, ok := UnwrapProtobufWrapper(value); ok {
 		return normalized
 	}
@@ -303,7 +299,7 @@ func NormalizeFilterValue(value interface{}) interface{} {
 		return value
 	}
 	if v.Kind() == reflect.Slice || v.Kind() == reflect.Array {
-		out := make([]interface{}, v.Len())
+		out := make([]any, v.Len())
 		for i := 0; i < v.Len(); i++ {
 			out[i] = NormalizeFilterValue(v.Index(i).Interface())
 		}
@@ -313,7 +309,7 @@ func NormalizeFilterValue(value interface{}) interface{} {
 }
 
 // NormalizeFilterValueSlice 归一化过滤值切片
-func NormalizeFilterValueSlice(values []interface{}) []interface{} {
+func NormalizeFilterValueSlice(values []any) []any {
 	if values == nil {
 		return nil
 	}
@@ -322,7 +318,7 @@ func NormalizeFilterValueSlice(values []interface{}) []interface{} {
 		return nil
 	}
 
-	out := make([]interface{}, len(values))
+	out := make([]any, len(values))
 	for i, value := range values {
 		out[i] = NormalizeFilterValue(value)
 	}
@@ -330,7 +326,7 @@ func NormalizeFilterValueSlice(values []interface{}) []interface{} {
 }
 
 // NormalizeFilterValueIfNotEmpty 过滤空值后返回归一化值
-func NormalizeFilterValueIfNotEmpty(value interface{}) (interface{}, bool) {
+func NormalizeFilterValueIfNotEmpty(value any) (any, bool) {
 	deref, isEmpty := IsEmptyAfterDeref(value)
 	if isEmpty {
 		return nil, true

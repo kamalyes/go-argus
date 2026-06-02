@@ -12,6 +12,7 @@
 package validate
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/kamalyes/go-argus/i18n"
@@ -44,7 +45,7 @@ func (v *EnumValidator[T]) MustBeValid(value T) error {
 	if v.IsValid(value) {
 		return nil
 	}
-	return fmt.Errorf(i18n.Msg(MsgEnumInvalidValue, map[string]string{"value": fmt.Sprint(value)}))
+	return errors.New(i18n.Msg(MsgEnumInvalidValue, map[string]string{"value": fmt.Sprint(value)}))
 }
 
 // GetValidValues 返回枚举值列表

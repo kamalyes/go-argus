@@ -13,7 +13,7 @@ package validate
 
 import (
 	"bytes"
-	"fmt"
+	"errors"
 	"net"
 	"path/filepath"
 	"strings"
@@ -27,7 +27,7 @@ type IPBase struct{}
 // ValidateIP 校验 IP 字符串是否有效
 func (b *IPBase) ValidateIP(ip string) error {
 	if net.ParseIP(strings.TrimSpace(ip)) == nil {
-		return fmt.Errorf(i18n.Msg(MsgNetworkIPInvalid, map[string]string{"value": ip}))
+		return errors.New(i18n.Msg(MsgNetworkIPInvalid, map[string]string{"value": ip}))
 	}
 	return nil
 }
@@ -82,7 +82,7 @@ func CompileIPSet(patterns []string) (*IPSet, error) {
 				start := net.ParseIP(strings.TrimSpace(parts[0]))
 				end := net.ParseIP(strings.TrimSpace(parts[1]))
 				if start == nil || end == nil {
-					return nil, fmt.Errorf(i18n.Msg(MsgNetworkIPRangeInvalid, map[string]string{"value": pattern}))
+					return nil, errors.New(i18n.Msg(MsgNetworkIPRangeInvalid, map[string]string{"value": pattern}))
 				}
 				set.ranges = append(set.ranges, [2]net.IP{start, end})
 				continue
@@ -93,7 +93,7 @@ func CompileIPSet(patterns []string) (*IPSet, error) {
 			}
 			ip := net.ParseIP(pattern)
 			if ip == nil {
-				return nil, fmt.Errorf(i18n.Msg(MsgNetworkIPRuleInvalid, map[string]string{"value": pattern}))
+				return nil, errors.New(i18n.Msg(MsgNetworkIPRuleInvalid, map[string]string{"value": pattern}))
 			}
 			set.exact[pattern] = struct{}{}
 		}

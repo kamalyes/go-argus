@@ -41,7 +41,7 @@ func GetLocale() string {
 }
 
 // RegisterI18n 注册或覆盖某个语言下的单个 i18n 消息模板
-func RegisterI18n(locale string, key string, template string) {
+func RegisterI18n(locale, key, template string) {
 	i18n.Register(locale, key, template)
 }
 

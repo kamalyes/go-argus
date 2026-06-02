@@ -13,6 +13,7 @@ package rule
 
 import (
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -114,7 +115,7 @@ func IsRequiredWith(parent reflect.Value, param string) bool {
 
 // CompareFieldDerefed 将已解引用的当前字段和目标字段按操作符比较
 // 调用方已对 current 做 DerefReflect，避免重复解引用
-func CompareFieldDerefed(current reflect.Value, parent reflect.Value, targetPath string, op string) bool {
+func CompareFieldDerefed(current, parent reflect.Value, targetPath, op string) bool {
 	target, ok := FieldByPath(parent, targetPath)
 	if !ok {
 		return false
@@ -127,7 +128,7 @@ func FieldIndexByPath(root reflect.Type, path string) ([]int, bool) {
 	if root == nil || path == "" {
 		return nil, false
 	}
-	for root.Kind() == reflect.Ptr {
+	for root.Kind() == reflect.Pointer {
 		root = root.Elem()
 	}
 	if root.Kind() != reflect.Struct {
@@ -147,7 +148,7 @@ func FieldIndexByPath(root reflect.Type, path string) ([]int, bool) {
 		sf := current.Field(idx)
 		index = append(index, sf.Index...)
 		current = sf.Type
-		for current.Kind() == reflect.Ptr {
+		for current.Kind() == reflect.Pointer {
 			current = current.Elem()
 		}
 	}
@@ -155,13 +156,13 @@ func FieldIndexByPath(root reflect.Type, path string) ([]int, bool) {
 }
 
 // CompareValue 按操作符比较两个值，优先支持时间，其次支持数值和字符串
-func CompareValue(left reflect.Value, right reflect.Value, op string) bool {
+func CompareValue(left, right reflect.Value, op string) bool {
 	cmpOp := constants.CmpOpFromStr(op)
 	return CompareValueOp(left, right, cmpOp)
 }
 
 // CompareValueOp 按预解析操作符比较两个值
-func CompareValueOp(left reflect.Value, right reflect.Value, cmpOp constants.CmpOp) bool {
+func CompareValueOp(left, right reflect.Value, cmpOp constants.CmpOp) bool {
 	if cmpOp < constants.CmpEQ || cmpOp > constants.CmpNE {
 		return false
 	}
@@ -199,12 +200,7 @@ func OneOfFast(field reflect.Value, parts []string) bool {
 	if !ok {
 		return false
 	}
-	for _, item := range parts {
-		if actual == item {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(parts, actual)
 }
 
 // OneOfCIFast 判断字段值是否在候选列表中（忽略大小写）
@@ -282,7 +278,7 @@ func Range(parent reflect.Value, param string) bool {
 }
 
 // FieldContains 判断当前字段字符串是否包含目标字段的值
-func FieldContains(field reflect.Value, parent reflect.Value, param string) bool {
+func FieldContains(field, parent reflect.Value, param string) bool {
 	other, ok := FieldByPath(parent, param)
 	if !ok {
 		return false

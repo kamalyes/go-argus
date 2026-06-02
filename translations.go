@@ -22,19 +22,19 @@ import (
 
 // ValidationMessage 表示一个可直接序列化给 HTTP/gRPC 网关的字段错误
 type ValidationMessage struct {
-	Field           string      `json:"field"`
-	Namespace       string      `json:"namespace"`
-	StructField     string      `json:"struct_field,omitempty"`
-	StructNamespace string      `json:"struct_namespace,omitempty"`
-	Tag             string      `json:"tag"`
-	ActualTag       string      `json:"actual_tag"`
-	Param           string      `json:"param,omitempty"`
-	Value           interface{} `json:"value,omitempty"`
-	Message         string      `json:"message"`
+	Field           string `json:"field"`
+	Namespace       string `json:"namespace"`
+	StructField     string `json:"struct_field,omitempty"`
+	StructNamespace string `json:"struct_namespace,omitempty"`
+	Tag             string `json:"tag"`
+	ActualTag       string `json:"actual_tag"`
+	Param           string `json:"param,omitempty"`
+	Value           any    `json:"value,omitempty"`
+	Message         string `json:"message"`
 }
 
 // RegisterTranslation 注册或覆盖某个语言下的单个规则翻译模板
-func RegisterTranslation(locale string, tag string, template string) {
+func RegisterTranslation(locale, tag, template string) {
 	i18n.Register(locale, tag, template)
 }
 
@@ -131,26 +131,32 @@ func renderTranslation(locale string, fe FieldError) string {
 	return template
 }
 
-func lookupTranslation(locale string, tag string) string {
+func lookupTranslation(locale, tag string) string {
 	return i18n.Lookup(locale, tag)
 }
 
 func isRequiredTag(tag string) bool {
 	switch tag {
-	case "required", "required_if", "required_unless", "required_with", "required_with_all", "required_without", "required_without_all":
+	case "required",
+		"required_if",
+		"required_unless",
+		"required_with",
+		"required_with_all",
+		"required_without",
+		"required_without_all":
 		return true
 	default:
 		return false
 	}
 }
 
-func safeMessageValue(value interface{}) interface{} {
+func safeMessageValue(value any) any {
 	if value == nil {
 		return nil
 	}
 	rv := reflect.ValueOf(value)
 	switch rv.Kind() {
-	case reflect.Chan, reflect.Func, reflect.Map, reflect.Ptr, reflect.Interface, reflect.Slice:
+	case reflect.Chan, reflect.Func, reflect.Map, reflect.Pointer, reflect.Interface, reflect.Slice:
 		if rv.IsNil() {
 			return nil
 		}
