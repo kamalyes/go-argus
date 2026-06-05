@@ -264,7 +264,7 @@ func UnwrapProtobufWrapper(value interface{}) (interface{}, bool) {
 	if IsNilValue(v) {
 		return nil, true
 	}
-	method := v.MethodByName("GetValue")
+	method := findZeroArgGetValueMethod(v)
 	if !method.IsValid() || method.Type().NumIn() != 0 || method.Type().NumOut() != 1 {
 		return nil, false
 	}
@@ -275,19 +275,33 @@ func UnwrapProtobufWrapper(value interface{}) (interface{}, bool) {
 // IsEmptyAfterDeref 解引用后判断值是否为空，适合 SQL/query 过滤条件
 func IsEmptyAfterDeref(value interface{}) (interface{}, bool) {
 	if unwrapped, ok := UnwrapProtobufWrapper(value); ok {
-		if IsEmptyValue(reflect.ValueOf(unwrapped)) {
+		deref, ok := DerefValue(unwrapped)
+		if !ok {
 			return nil, true
 		}
-		return unwrapped, false
+		uv := reflect.ValueOf(deref)
+		if IsFilterScalarKind(uv.Kind()) {
+			return deref, false
+		}
+		if IsEmptyValue(uv) {
+			return nil, true
+		}
+		return deref, false
 	}
+
 	deref, ok := DerefValue(value)
 	if !ok {
 		return nil, true
 	}
+
+	dv := reflect.ValueOf(deref)
 	if b, isBool := deref.(bool); isBool {
 		return b, false
 	}
-	if IsEmptyValue(reflect.ValueOf(deref)) {
+	if dv.Kind() == reflect.Bool {
+		return deref, false
+	}
+	if IsEmptyValue(dv) {
 		return nil, true
 	}
 	return deref, false
@@ -319,7 +333,7 @@ func NormalizeFilterValueSlice(values []interface{}) []interface{} {
 	}
 
 	if len(values) == 0 {
-		return nil
+		return make([]interface{}, 0)
 	}
 
 	out := make([]interface{}, len(values))
@@ -336,4 +350,30 @@ func NormalizeFilterValueIfNotEmpty(value interface{}) (interface{}, bool) {
 		return nil, true
 	}
 	return NormalizeFilterValue(deref), false
+}
+
+func findZeroArgGetValueMethod(v reflect.Value) reflect.Value {
+	method := v.MethodByName("GetValue")
+	if method.IsValid() {
+		return method
+	}
+	if v.Kind() == reflect.Ptr {
+		return reflect.Value{}
+	}
+	pv := reflect.New(v.Type())
+	pv.Elem().Set(v)
+	return pv.MethodByName("GetValue")
+}
+
+// IsFilterScalarKind 判断 Kind 是否属于过滤场景下的标量类型（bool/number）
+func IsFilterScalarKind(kind reflect.Kind) bool {
+	switch kind {
+	case reflect.Bool,
+		reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
+		reflect.Float32, reflect.Float64:
+		return true
+	default:
+		return false
+	}
 }

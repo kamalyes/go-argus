@@ -402,6 +402,11 @@ func NormalizeFilterValueIfNotEmpty(value interface{}) (interface{}, bool) {
 	return validate.NormalizeFilterValueIfNotEmpty(value)
 }
 
+// IsFilterScalarKind 判断 Kind 是否属于过滤场景下的标量类型（bool/number）
+func IsFilterScalarKind(kind reflect.Kind) bool {
+	return validate.IsFilterScalarKind(kind)
+}
+
 // ────────────────────────────────────────
 // JSON 扫描（validate/json）
 // ────────────────────────────────────────

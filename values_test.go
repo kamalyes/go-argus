@@ -275,3 +275,12 @@ func TestNormalizeFilterValueIfNotEmpty(t *testing.T) {
 		t.Fatal("expected nil to be empty (ok=true)")
 	}
 }
+
+func TestIsFilterScalarKind(t *testing.T) {
+	if !IsFilterScalarKind(reflect.Float64) {
+		t.Fatal("expected float64 to be scalar kind")
+	}
+	if IsFilterScalarKind(reflect.Struct) {
+		t.Fatal("expected struct to be non-scalar kind")
+	}
+}

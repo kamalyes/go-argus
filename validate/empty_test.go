@@ -17,6 +17,8 @@ import (
 	"unsafe"
 )
 
+type customBool bool
+
 func TestIsEmptyValueInvalid(t *testing.T) {
 	if !IsEmptyValue(reflect.Value{}) {
 		t.Fatal("expected invalid value to be empty")
@@ -170,6 +172,12 @@ func TestStringValue(t *testing.T) {
 	}
 	if StringValue(reflect.Value{}) != "" {
 		t.Fatal("expected invalid value to be empty string")
+	}
+}
+
+func TestStringValueStringKind(t *testing.T) {
+	if StringValue(reflect.ValueOf("abc")) != "abc" {
+		t.Fatal("expected direct string branch")
 	}
 }
 
@@ -451,6 +459,23 @@ func TestIsEmptyAfterDerefProtobufNonEmpty(t *testing.T) {
 	}
 }
 
+func TestIsEmptyAfterDerefProtobufNilPtrValue(t *testing.T) {
+	_, empty := IsEmptyAfterDeref(mockProtoNilPtrValue{})
+	if !empty {
+		t.Fatal("expected protobuf wrapper nil pointer value to be empty")
+	}
+}
+
+func TestIsEmptyAfterDerefProtobufScalarZero(t *testing.T) {
+	v, empty := IsEmptyAfterDeref(mockProtoIntValue{})
+	if empty {
+		t.Fatal("expected protobuf scalar zero to be treated as non-empty")
+	}
+	if v.(int) != 0 {
+		t.Fatal("expected protobuf scalar zero value")
+	}
+}
+
 func TestNormalizeFilterValueInvalidReflect(t *testing.T) {
 	result := NormalizeFilterValue(42)
 	if result.(int) != 42 {
@@ -473,6 +498,14 @@ type mockProtoWrapper struct {
 
 func (m mockProtoWrapper) GetValue() string { return m.value }
 
+type mockProtoNilPtrValue struct{}
+
+func (m mockProtoNilPtrValue) GetValue() *int { return nil }
+
+type mockProtoIntValue struct{}
+
+func (m mockProtoIntValue) GetValue() int { return 0 }
+
 func TestUnwrapProtobufWrapper(t *testing.T) {
 	w := mockProtoWrapper{value: "test"}
 	v, ok := UnwrapProtobufWrapper(w)
@@ -490,6 +523,14 @@ func TestUnwrapProtobufWrapperNoMethod(t *testing.T) {
 	}
 }
 
+func TestUnwrapProtobufWrapperNoMethodPtr(t *testing.T) {
+	ptr := &mockProtoNoMethod{}
+	_, ok := UnwrapProtobufWrapper(ptr)
+	if ok {
+		t.Fatal("expected pointer without method to fail unwrap")
+	}
+}
+
 type mockProtoAddr struct{ value string }
 
 func (m *mockProtoAddr) GetValue() string { return m.value }
@@ -502,6 +543,14 @@ func TestUnwrapProtobufWrapperAddr(t *testing.T) {
 	}
 }
 
+func TestUnwrapProtobufWrapperValueWithPtrReceiver(t *testing.T) {
+	w := mockProtoAddr{value: "value-receiver-via-pointer-method"}
+	v, ok := UnwrapProtobufWrapper(w)
+	if !ok || v.(string) != "value-receiver-via-pointer-method" {
+		t.Fatal("expected value type to unwrap via pointer receiver method")
+	}
+}
+
 func TestIsEmptyAfterDerefBool(t *testing.T) {
 	v, empty := IsEmptyAfterDeref(false)
 	if empty {
@@ -509,6 +558,16 @@ func TestIsEmptyAfterDerefBool(t *testing.T) {
 	}
 	if v.(bool) {
 		t.Fatal("expected false bool")
+	}
+}
+
+func TestIsEmptyAfterDerefCustomBool(t *testing.T) {
+	v, empty := IsEmptyAfterDeref(customBool(false))
+	if empty {
+		t.Fatal("expected custom bool to not be empty")
+	}
+	if v.(customBool) != customBool(false) {
+		t.Fatal("expected custom bool false")
 	}
 }
 
@@ -613,6 +672,37 @@ func TestNormalizeFilterValueIfNotEmpty(t *testing.T) {
 	_, empty = NormalizeFilterValueIfNotEmpty("")
 	if !empty {
 		t.Fatal("expected empty value")
+	}
+}
+
+func TestNormalizeFilterValueIfNotEmptyNumericZero(t *testing.T) {
+	v, empty := NormalizeFilterValueIfNotEmpty(0)
+	if !empty {
+		t.Fatal("expected numeric zero to be treated as empty")
+	}
+	if v != nil {
+		t.Fatal("expected normalized value to be nil when empty")
+	}
+}
+
+func TestIsTimeType(t *testing.T) {
+	if !IsTimeType(reflect.TypeOf(time.Time{})) {
+		t.Fatal("expected time.Time type to match")
+	}
+	if IsTimeType(reflect.TypeOf("")) {
+		t.Fatal("expected string type to not match time type")
+	}
+}
+
+func TestIsFilterScalarKind(t *testing.T) {
+	if !IsFilterScalarKind(reflect.Int) {
+		t.Fatal("expected int kind to be scalar")
+	}
+	if !IsFilterScalarKind(reflect.Bool) {
+		t.Fatal("expected bool kind to be scalar")
+	}
+	if IsFilterScalarKind(reflect.String) {
+		t.Fatal("expected string kind to be non-scalar")
 	}
 }
 
