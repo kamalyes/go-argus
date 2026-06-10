@@ -1,0 +1,180 @@
+name: PR Auto Review & Merge
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+  pull-requests: write
+  checks: read
+  statuses: read
+
+jobs:
+  review:
+    name: 🔍 Auto Review
+    runs-on: ubuntu-latest
+    outputs:
+      summary: ${{ steps.review.outputs.summary }}
+      should-merge: ${{ steps.verdict.outputs.should-merge }}
+    steps:
+      - name: 📥 Fetch Repository
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: 📄 Get PR diff
+        id: diff
+        run: |
+          gh pr diff "$PR_URL" > pr_diff.txt
+          echo "lines=$(wc -l < pr_diff.txt)" >> "$GITHUB_OUTPUT"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GITHUB_TOKEN: ${{ secrets.GH_GPA_TOKEN }}
+
+      - name: 🔎 Analyze changes
+        id: review
+        shell: bash
+        run: |
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_BODY="${{ github.event.pull_request.body }}"
+          PR_AUTHOR="${{ github.event.pull_request.user.login }}"
+          CHANGED_FILES=$(gh pr diff "$PR_URL" --name-only 2>/dev/null || echo "")
+          FILE_COUNT=$(echo "$CHANGED_FILES" | grep -c '.' || echo "0")
+          DIFF_LINES=$(wc -l < pr_diff.txt)
+
+          # Classify change type
+          CHANGE_TYPE="unknown"
+          if echo "$PR_TITLE" | grep -qiE '^(feat|feature)'; then
+            CHANGE_TYPE="feature"
+          elif echo "$PR_TITLE" | grep -qiE '^fix'; then
+            CHANGE_TYPE="bugfix"
+          elif echo "$PR_TITLE" | grep -qiE '^(refactor|chore|ci)'; then
+            CHANGE_TYPE="maintenance"
+          elif echo "$PR_TITLE" | grep -qiE '^(doc|docs)'; then
+            CHANGE_TYPE="documentation"
+          elif echo "$PR_TITLE" | grep -qiE '^(test|tests)'; then
+            CHANGE_TYPE="testing"
+          fi
+
+          # Check for potential issues
+          WARNINGS=""
+          SUGGESTIONS=""
+
+          # Check for sensitive files
+          if echo "$CHANGED_FILES" | grep -qiE '(go\.mod|go\.sum)'; then
+            WARNINGS="${WARNINGS}- ⚠️ Dependency files changed (go.mod/go.sum) — please verify no unintended dependency updates.\n"
+          fi
+
+          # Check for large PRs
+          if [ "$DIFF_LINES" -gt 500 ]; then
+            WARNINGS="${WARNINGS}- ⚠️ Large PR (${DIFF_LINES} diff lines) — consider splitting into smaller PRs for easier review.\n"
+          fi
+
+          # Check for missing description
+          if [ -z "$PR_BODY" ] || [ "$PR_BODY" = "null" ]; then
+            SUGGESTIONS="${SUGGESTIONS}- 💡 PR description is empty — adding a summary helps reviewers understand the intent.\n"
+          fi
+
+          # Suggestions by change type
+          case "$CHANGE_TYPE" in
+            feature)
+              SUGGESTIONS="${SUGGESTIONS}- 💡 New feature detected — ensure new validation rules have corresponding test cases.\n"
+              ;;
+            bugfix)
+              SUGGESTIONS="${SUGGESTIONS}- 💡 Bug fix detected — consider adding a regression test to prevent recurrence.\n"
+              ;;
+            maintenance)
+              SUGGESTIONS="${SUGGESTIONS}- 💡 Maintenance change — verify no behavioral regressions in existing tests.\n"
+              ;;
+          esac
+
+          # Build summary
+          SUMMARY="## 🤖 Automated PR Review\n\n"
+          SUMMARY="${SUMMARY}| Item | Detail |\n"
+          SUMMARY="${SUMMARY}|------|--------|\n"
+          SUMMARY="${SUMMARY}| Author | @${PR_AUTHOR} |\n"
+          SUMMARY="${SUMMARY}| Change Type | ${CHANGE_TYPE} |\n"
+          SUMMARY="${SUMMARY}| Files Changed | ${FILE_COUNT} |\n"
+          SUMMARY="${SUMMARY}| Diff Lines | ${DIFF_LINES} |\n\n"
+
+          if [ -n "$WARNINGS" ]; then
+            SUMMARY="${SUMMARY}### Warnings\n${WARNINGS}\n"
+          fi
+
+          if [ -n "$SUGGESTIONS" ]; then
+            SUMMARY="${SUMMARY}### Suggestions\n${SUGGESTIONS}\n"
+          fi
+
+          echo "summary<<EOF" >> "$GITHUB_OUTPUT"
+          echo -e "$SUMMARY" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GITHUB_TOKEN: ${{ secrets.GH_GPA_TOKEN }}
+
+      - name: 💬 Post review comment
+        run: |
+          gh pr comment "$PR_URL" --body "${{ steps.review.outputs.summary }}"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GITHUB_TOKEN: ${{ secrets.GH_GPA_TOKEN }}
+
+      - name: 🛡️ Check if safe to auto-merge
+        id: verdict
+        run: |
+          # Skip auto-merge for dependabot (handled by dependabot-automerge.yml)
+          if [ "${{ github.actor }}" = "dependabot[bot]" ]; then
+            echo "should-merge=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Skip if PR has draft or WIP in title
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          if echo "$PR_TITLE" | grep -qiE '(wip|draft|do not merge)'; then
+            echo "should-merge=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "should-merge=true" >> "$GITHUB_OUTPUT"
+
+  wait-for-tests:
+    needs: review
+    if: needs.review.outputs.should-merge == 'true'
+    name: ⏳ Wait for Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: ⏱️ Wait for check suites
+        uses: lewagon/wait-on-check-action@v1.3.4
+        id: wait_for_checks
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          running-workflow-name: Wait for Tests
+          check-regexp: Test
+          repo-token: ${{ secrets.GH_GPA_TOKEN }}
+          wait-interval: 30
+
+  auto-merge:
+    needs: [review, wait-for-tests]
+    if: needs.review.outputs.should-merge == 'true'
+    name: 🚀 Auto Merge
+    runs-on: ubuntu-latest
+    steps:
+      - name: ✅ Approve and enable auto-merge
+        run: |
+          PR_URL="${{ github.event.pull_request.html_url }}"
+
+          # Approve the PR
+          gh pr review --approve "$PR_URL" --body "✅ **Auto-approved**: All tests passed. Ready to merge."
+
+          # Enable auto-merge (GitHub will merge once all required checks pass and branch protections are satisfied)
+          gh pr merge --auto --merge "$PR_URL"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_GPA_TOKEN }}
+
+      - name: 📣 Post merge confirmation comment
+        run: |
+          PR_URL="${{ github.event.pull_request.html_url }}"
+          gh pr comment "$PR_URL" --body "✅ **Auto-merge enabled**: All tests passed. This PR will be automatically merged once branch protection rules are satisfied."
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_GPA_TOKEN }}
