@@ -85,7 +85,7 @@ func ResolveTimeExpr(expr string, now time.Time) (time.Time, bool) {
 }
 
 // CompareTimeExpr 将字段时间与表达式时间比较
-func CompareTimeExpr(field reflect.Value, expr string, op string, now time.Time) bool {
+func CompareTimeExpr(field reflect.Value, expr, op string, now time.Time) bool {
 	left, ok := TimeValue(field, "")
 	if !ok {
 		return false
@@ -94,7 +94,7 @@ func CompareTimeExpr(field reflect.Value, expr string, op string, now time.Time)
 	return ok && validate.CompareOp(float64(left.UnixNano()), float64(right.UnixNano()), constants.CmpOpFromStr(op))
 }
 
-func parseTimeString(value string, layout string) (time.Time, bool) {
+func parseTimeString(value, layout string) (time.Time, bool) {
 	value = strings.TrimSpace(value)
 	if value == "" {
 		return time.Time{}, false
@@ -174,8 +174,8 @@ func parseDuration(value string) (time.Duration, bool) {
 	if value == "" {
 		return 0, false
 	}
-	if strings.HasSuffix(value, "d") {
-		n, err := strconv.ParseInt(strings.TrimSuffix(value, "d"), 10, 64)
+	if before, ok := strings.CutSuffix(value, "d"); ok {
+		n, err := strconv.ParseInt(before, 10, 64)
 		if err != nil {
 			return 0, false
 		}

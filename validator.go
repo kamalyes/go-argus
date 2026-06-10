@@ -34,7 +34,7 @@ var bgCtx = context.Background()
 
 // errsPool 校验错误切片对象池
 var errsPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		s := make(ValidationErrors, 0, 8)
 		return &s
 	},
@@ -42,7 +42,7 @@ var errsPool = sync.Pool{
 
 // fieldLevelPool 字段级别校验上下文对象池
 var fieldLevelPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		return &fieldLevel{}
 	},
 }
@@ -138,12 +138,12 @@ func (v *Validate) RegisterValidationCtx(tag string, fn FuncCtx, _ ...bool) erro
 }
 
 // Struct 根据结构体字段上的 validate 标签执行校验
-func (v *Validate) Struct(s interface{}) error {
+func (v *Validate) Struct(s any) error {
 	return v.StructCtx(bgCtx, s)
 }
 
 // StructCtx 根据结构体字段上的 validate 标签执行校验，并传递 context
-func (v *Validate) StructCtx(ctx context.Context, s interface{}) error {
+func (v *Validate) StructCtx(ctx context.Context, s any) error {
 	current := reflect.ValueOf(s)
 	if !current.IsValid() {
 		return &InvalidValidationError{}
@@ -166,17 +166,17 @@ func (v *Validate) StructCtx(ctx context.Context, s interface{}) error {
 }
 
 // Var 按标签表达式校验单个变量
-func (v *Validate) Var(field interface{}, tag string) error {
+func (v *Validate) Var(field any, tag string) error {
 	return v.VarCtx(bgCtx, field, tag)
 }
 
 // VarString 按标签表达式校验字符串变量，零分配快速路径
-func (v *Validate) VarString(field string, tag string) error {
+func (v *Validate) VarString(field, tag string) error {
 	return v.VarStringCtx(bgCtx, field, tag)
 }
 
 // VarCtx 按标签表达式校验单个变量，并传递 context
-func (v *Validate) VarCtx(ctx context.Context, field interface{}, tag string) error {
+func (v *Validate) VarCtx(ctx context.Context, field any, tag string) error {
 	switch val := field.(type) {
 	case string:
 		if tag == constants.RuleRequired {
@@ -238,7 +238,7 @@ func (v *Validate) VarCtx(ctx context.Context, field interface{}, tag string) er
 }
 
 // VarStringCtx 按标签表达式校验字符串变量，零反射快速路径
-func (v *Validate) VarStringCtx(ctx context.Context, field string, tag string) error {
+func (v *Validate) VarStringCtx(ctx context.Context, field, tag string) error {
 	return v.varStringRules(ctx, field, v.cachedVarRules(tag), false)
 }
 
@@ -350,7 +350,12 @@ func (v *Validate) cachedVarRules(tag string) []rule.RulePlan {
 }
 
 // validateStruct 递归校验结构体字段
-func (v *Validate) validateStruct(ctx context.Context, top reflect.Value, current reflect.Value, ns string, structNs string, errs *ValidationErrors) {
+func (v *Validate) validateStruct(
+	ctx context.Context,
+	top, current reflect.Value,
+	ns, structNs string,
+	errs *ValidationErrors,
+) {
 	current = validate.DerefReflect(current)
 	if !current.IsValid() || current.Kind() != reflect.Struct {
 		return
@@ -384,7 +389,13 @@ func (v *Validate) validateStruct(ctx context.Context, top reflect.Value, curren
 }
 
 // applyRules 按规则列表校验单个字段
-func (v *Validate) applyRules(ctx context.Context, top reflect.Value, parent reflect.Value, field reflect.Value, ns string, structNs string, fieldName string, structFieldName string, rules []rule.RulePlan, errs *ValidationErrors) {
+func (v *Validate) applyRules(
+	ctx context.Context,
+	top, parent, field reflect.Value,
+	ns, structNs, fieldName, structFieldName string,
+	rules []rule.RulePlan,
+	errs *ValidationErrors,
+) {
 	if len(rules) == 0 {
 		return
 	}
@@ -440,7 +451,13 @@ func (v *Validate) applyRules(ctx context.Context, top reflect.Value, parent ref
 }
 
 // applyDive 递归校验切片、数组和 map 元素
-func (v *Validate) applyDive(ctx context.Context, top reflect.Value, parent reflect.Value, field reflect.Value, ns string, structNs string, fieldName string, structFieldName string, rules []rule.RulePlan, errs *ValidationErrors) {
+func (v *Validate) applyDive(
+	ctx context.Context,
+	top, parent, field reflect.Value,
+	ns, structNs, fieldName, structFieldName string,
+	rules []rule.RulePlan,
+	errs *ValidationErrors,
+) {
 	field = validate.DerefReflect(field)
 	if !field.IsValid() {
 		return
@@ -459,7 +476,10 @@ func (v *Validate) applyDive(ctx context.Context, top reflect.Value, parent refl
 			childNS := ns + "[" + string(idxBuf) + "]"
 			childStructNS := structNs + "[" + string(idxBuf) + "]"
 			if len(valueRules) == 1 && valueRules[0].Name == constants.RuleRequired {
-				*errs = append(*errs, newFieldError(item, childNS, childStructNS, fieldName, structFieldName, valueRules[0]))
+				*errs = append(
+					*errs,
+					newFieldError(item, childNS, childStructNS, fieldName, structFieldName, valueRules[0]),
+				)
 				continue
 			}
 			v.applyRules(ctx, top, parent, item, childNS, childStructNS, fieldName, structFieldName, valueRules, errs)
@@ -495,7 +515,12 @@ func splitDiveRules(rules []rule.RulePlan) ([]rule.RulePlan, []rule.RulePlan) {
 }
 
 // applyRulesFast 校验成功路径，不构造错误命名空间
-func (v *Validate) applyRulesFast(ctx context.Context, top reflect.Value, parent reflect.Value, field reflect.Value, fieldName string, structFieldName string, rules []rule.RulePlan) bool {
+func (v *Validate) applyRulesFast(
+	ctx context.Context,
+	top, parent, field reflect.Value,
+	fieldName, structFieldName string,
+	rules []rule.RulePlan,
+) bool {
 	if len(rules) == 0 {
 		return true
 	}
@@ -525,13 +550,25 @@ func (v *Validate) applyRulesFast(ctx context.Context, top reflect.Value, parent
 			case reflect.Map:
 				for _, key := range derefed.MapKeys() {
 					if !v.applyRulesFast(ctx, top, parent, key, fieldName, structFieldName, keyRules) ||
-						!v.applyRulesFast(ctx, top, parent, derefed.MapIndex(key), fieldName, structFieldName, valueRules) {
+						!v.applyRulesFast(
+							ctx,
+							top,
+							parent,
+							derefed.MapIndex(key),
+							fieldName,
+							structFieldName,
+							valueRules,
+						) {
 						return false
 					}
 				}
 			}
 			return true
-		case constants.RuleKeys, constants.RuleEndKeys, constants.RuleStructOnly, constants.RuleNoStructLevel, constants.RuleEmpty:
+		case constants.RuleKeys,
+			constants.RuleEndKeys,
+			constants.RuleStructOnly,
+			constants.RuleNoStructLevel,
+			constants.RuleEmpty:
 			continue
 		}
 
@@ -565,7 +602,12 @@ func (v *Validate) applyRulesFast(ctx context.Context, top reflect.Value, parent
 }
 
 // evalRule 评估单条规则，优先查 dispatch 表，其次查 builtin 表，最后查自定义注册
-func (v *Validate) evalRule(ctx context.Context, top reflect.Value, parent reflect.Value, field reflect.Value, fieldName string, structFieldName string, plan rule.RulePlan) bool {
+func (v *Validate) evalRule(
+	ctx context.Context,
+	top, parent, field reflect.Value,
+	fieldName, structFieldName string,
+	plan rule.RulePlan,
+) bool {
 	if constants.IsScalarCompareRule(plan.Name) {
 		return plan.HasNumber && rule.CompareLengthOrNumber(field, plan.Number, plan.CmpOp)
 	}
@@ -811,8 +853,12 @@ var evalDispatchTable = map[string]evalDispatchFn{
 	constants.RuleNoneOfCI:           (*Validate).evalNoneOfCI,
 }
 
-func newFieldError(field reflect.Value, ns string, structNs string, fieldName string, structFieldName string, rule rule.RulePlan) FieldError {
-	value := interface{}(nil)
+func newFieldError(
+	field reflect.Value,
+	ns, structNs, fieldName, structFieldName string,
+	rule rule.RulePlan,
+) FieldError {
+	value := any(nil)
 	current := validate.DerefReflect(field)
 	if current.IsValid() && current.CanInterface() {
 		value = current.Interface()
@@ -843,7 +889,7 @@ func mayDiveStructType(typ reflect.Type, rules []rule.RulePlan) bool {
 			return false
 		}
 	}
-	for typ.Kind() == reflect.Ptr {
+	for typ.Kind() == reflect.Pointer {
 		typ = typ.Elem()
 	}
 	return typ.Kind() == reflect.Struct && !validate.IsTimeType(typ)

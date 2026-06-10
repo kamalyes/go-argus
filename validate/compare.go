@@ -15,6 +15,7 @@ package validate
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/kamalyes/go-argus/constants"
@@ -56,7 +57,10 @@ func CompareNumbers[T Number](actual, expect T, op constants.CompareOperator) Co
 		result.Message = i18n.Msg(MsgCompareUnsupportedNumberOp)
 	}
 	if !result.Success && result.Message == "" {
-		result.Message = i18n.Msg(MsgCompareNumberFailed, map[string]string{"actual": fmt.Sprint(actual), "op": op.String(), "expected": fmt.Sprint(expect)})
+		result.Message = i18n.Msg(
+			MsgCompareNumberFailed,
+			map[string]string{"actual": fmt.Sprint(actual), "op": op.String(), "expected": fmt.Sprint(expect)},
+		)
 	}
 	return result
 }
@@ -94,7 +98,10 @@ func CompareStrings(actual, expect string, op constants.CompareOperator) Compare
 		result.Message = i18n.Msg(MsgCompareUnsupportedStringOp)
 	}
 	if !result.Success && result.Message == "" {
-		result.Message = i18n.Msg(MsgCompareStringFailed, map[string]string{"actual": actual, "op": op.String(), "expected": expect})
+		result.Message = i18n.Msg(
+			MsgCompareStringFailed,
+			map[string]string{"actual": actual, "op": op.String(), "expected": expect},
+		)
 	}
 	return result
 }
@@ -122,12 +129,15 @@ func ValidateStatusCode(statusCode, expected int, op constants.CompareOperator) 
 // ValidateStatusCodeRange 校验 HTTP 状态码是否在闭区间内
 func ValidateStatusCodeRange(actual, min, max int) CompareResult {
 	result := CompareResult{
-		Actual: fmt.Sprint(actual),
+		Actual: strconv.Itoa(actual),
 		Expect: fmt.Sprintf("%d-%d", min, max),
 	}
 	result.Success = actual >= min && actual <= max
 	if !result.Success {
-		result.Message = i18n.Msg(MsgCompareStatusOutOfRange, map[string]string{"actual": fmt.Sprint(actual), "min": fmt.Sprint(min), "max": fmt.Sprint(max)})
+		result.Message = i18n.Msg(
+			MsgCompareStatusOutOfRange,
+			map[string]string{"actual": strconv.Itoa(actual), "min": strconv.Itoa(min), "max": strconv.Itoa(max)},
+		)
 	}
 	return result
 }

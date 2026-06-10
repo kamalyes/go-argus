@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -84,10 +85,18 @@ func CompareOp(actual, expect float64, op constants.CmpOp) bool {
 
 var (
 	ColorHexRegex = regexp.MustCompile(`^#?([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$`)
-	RGBRegex      = regexp.MustCompile(`^rgb\(\s*(25[0-5]|2[0-4]\d|1?\d?\d)\s*,\s*(25[0-5]|2[0-4]\d|1?\d?\d)\s*,\s*(25[0-5]|2[0-4]\d|1?\d?\d)\s*\)$`)
-	RGBARegex     = regexp.MustCompile(`^rgba\(\s*(25[0-5]|2[0-4]\d|1?\d?\d)\s*,\s*(25[0-5]|2[0-4]\d|1?\d?\d)\s*,\s*(25[0-5]|2[0-4]\d|1?\d?\d)\s*,\s*(0|1|0?\.\d+)\s*\)$`)
-	HSLRegex      = regexp.MustCompile(`^hsl\(\s*(360|3[0-5]\d|[12]?\d?\d)\s*,\s*(100|[1-9]?\d)%\s*,\s*(100|[1-9]?\d)%\s*\)$`)
-	HSLARegex     = regexp.MustCompile(`^hsla\(\s*(360|3[0-5]\d|[12]?\d?\d)\s*,\s*(100|[1-9]?\d)%\s*,\s*(100|[1-9]?\d)%\s*,\s*(0|1|0?\.\d+)\s*\)$`)
+	RGBRegex      = regexp.MustCompile(
+		`^rgb\(\s*(25[0-5]|2[0-4]\d|1?\d?\d)\s*,\s*(25[0-5]|2[0-4]\d|1?\d?\d)\s*,\s*(25[0-5]|2[0-4]\d|1?\d?\d)\s*\)$`,
+	)
+	RGBARegex = regexp.MustCompile(
+		`^rgba\(\s*(25[0-5]|2[0-4]\d|1?\d?\d)\s*,\s*(25[0-5]|2[0-4]\d|1?\d?\d)\s*,\s*(25[0-5]|2[0-4]\d|1?\d?\d)\s*,\s*(0|1|0?\.\d+)\s*\)$`,
+	)
+	HSLRegex = regexp.MustCompile(
+		`^hsl\(\s*(360|3[0-5]\d|[12]?\d?\d)\s*,\s*(100|[1-9]?\d)%\s*,\s*(100|[1-9]?\d)%\s*\)$`,
+	)
+	HSLARegex = regexp.MustCompile(
+		`^hsla\(\s*(360|3[0-5]\d|[12]?\d?\d)\s*,\s*(100|[1-9]?\d)%\s*,\s*(100|[1-9]?\d)%\s*,\s*(0|1|0?\.\d+)\s*\)$`,
+	)
 	E164Regex     = regexp.MustCompile(`^\+[1-9]\d{1,14}$`)
 	MongoIDRegex  = regexp.MustCompile(`^[0-9a-fA-F]{24}$`)
 	DNSLabelRegex = regexp.MustCompile(`^[a-z]([-a-z0-9]*[a-z0-9])?$`)
@@ -112,7 +121,7 @@ func StringIsDefault(s string) bool {
 	return IsBlankString(s)
 }
 
-func StringCompareLength(s string, param string, op constants.CmpOp) bool {
+func StringCompareLength(s, param string, op constants.CmpOp) bool {
 	n, ok := ParseFloat(param)
 	if !ok {
 		return false
@@ -121,47 +130,47 @@ func StringCompareLength(s string, param string, op constants.CmpOp) bool {
 	return CompareOp(actual, n, op)
 }
 
-func StringMin(s string, param string) bool {
+func StringMin(s, param string) bool {
 	return StringCompareLength(s, param, constants.CmpGTE)
 }
 
-func StringMax(s string, param string) bool {
+func StringMax(s, param string) bool {
 	return StringCompareLength(s, param, constants.CmpLTE)
 }
 
-func StringLen(s string, param string) bool {
+func StringLen(s, param string) bool {
 	return StringCompareLength(s, param, constants.CmpEQ)
 }
 
-func StringEq(s string, param string) bool {
+func StringEq(s, param string) bool {
 	return s == param
 }
 
-func StringEqIgnoreCase(s string, param string) bool {
+func StringEqIgnoreCase(s, param string) bool {
 	return strings.EqualFold(s, param)
 }
 
-func StringNe(s string, param string) bool {
+func StringNe(s, param string) bool {
 	return s != param
 }
 
-func StringNeIgnoreCase(s string, param string) bool {
+func StringNeIgnoreCase(s, param string) bool {
 	return !strings.EqualFold(s, param)
 }
 
-func StringGt(s string, param string) bool {
+func StringGt(s, param string) bool {
 	return StringCompareLength(s, param, constants.CmpGT)
 }
 
-func StringGte(s string, param string) bool {
+func StringGte(s, param string) bool {
 	return StringCompareLength(s, param, constants.CmpGTE)
 }
 
-func StringLt(s string, param string) bool {
+func StringLt(s, param string) bool {
 	return StringCompareLength(s, param, constants.CmpLT)
 }
 
-func StringLte(s string, param string) bool {
+func StringLte(s, param string) bool {
 	return StringCompareLength(s, param, constants.CmpLTE)
 }
 
@@ -182,7 +191,10 @@ func StringAlpha(s string) bool {
 }
 
 func StringAlphaSpace(s string) bool {
-	return StringMatchRunes(s, func(r rune) bool { return r == ' ' || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') })
+	return StringMatchRunes(
+		s,
+		func(r rune) bool { return r == ' ' || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') },
+	)
 }
 
 func StringAlphanum(s string) bool {
@@ -268,7 +280,7 @@ func StringE164(s string) bool {
 	return true
 }
 
-func parseRGBLike(s string, prefix string, alpha bool) bool {
+func parseRGBLike(s, prefix string, alpha bool) bool {
 	if !strings.HasPrefix(s, prefix) || len(s) <= len(prefix) || s[len(s)-1] != ')' {
 		return false
 	}
@@ -293,7 +305,7 @@ func parseRGBLike(s string, prefix string, alpha bool) bool {
 	return i == len(s)-1
 }
 
-func parseHSLLike(s string, prefix string, alpha bool) bool {
+func parseHSLLike(s, prefix string, alpha bool) bool {
 	if !strings.HasPrefix(s, prefix) || len(s) <= len(prefix) || s[len(s)-1] != ')' {
 		return false
 	}
@@ -582,7 +594,7 @@ func StringURI(s string) bool {
 	}
 	for i := 0; i < colon; i++ {
 		c := s[i]
-		if !(c >= 'a' && c <= 'z') && !(c >= 'A' && c <= 'Z') && !(c >= '0' && c <= '9') && c != '+' && c != '-' && c != '.' {
+		if (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && (c < '0' || c > '9') && c != '+' && c != '-' && c != '.' {
 			return false
 		}
 	}
@@ -726,7 +738,7 @@ func StringBase64RawURL(s string) bool {
 	return isBase64Syntax(ts, true, false)
 }
 
-func isBase64Syntax(s string, urlSafe bool, padded bool) bool {
+func isBase64Syntax(s string, urlSafe, padded bool) bool {
 	if s == "" {
 		return false
 	}
@@ -964,44 +976,44 @@ func StringUnique(s string) bool {
 	return true
 }
 
-func StringStartsWith(s string, param string) bool {
+func StringStartsWith(s, param string) bool {
 	return strings.HasPrefix(s, param)
 }
 
-func StringEndsWith(s string, param string) bool {
+func StringEndsWith(s, param string) bool {
 	return strings.HasSuffix(s, param)
 }
 
-func StringStartsNotWith(s string, param string) bool {
+func StringStartsNotWith(s, param string) bool {
 	return !strings.HasPrefix(s, param)
 }
 
-func StringEndsNotWith(s string, param string) bool {
+func StringEndsNotWith(s, param string) bool {
 	return !strings.HasSuffix(s, param)
 }
 
-func StringContains(s string, param string) bool {
+func StringContains(s, param string) bool {
 	return strings.Contains(s, param)
 }
 
-func StringContainsAny(s string, param string) bool {
+func StringContainsAny(s, param string) bool {
 	return strings.ContainsAny(s, param)
 }
 
-func StringContainsRune(s string, param string) bool {
+func StringContainsRune(s, param string) bool {
 	r, _ := utf8.DecodeRuneInString(param)
 	return r != utf8.RuneError && strings.ContainsRune(s, r)
 }
 
-func StringExcludes(s string, param string) bool {
+func StringExcludes(s, param string) bool {
 	return !strings.Contains(s, param)
 }
 
-func StringExcludesAll(s string, param string) bool {
+func StringExcludesAll(s, param string) bool {
 	return !strings.ContainsAny(s, param)
 }
 
-func StringExcludesRune(s string, param string) bool {
+func StringExcludesRune(s, param string) bool {
 	r, _ := utf8.DecodeRuneInString(param)
 	return r != utf8.RuneError && !strings.ContainsRune(s, r)
 }
@@ -1034,7 +1046,7 @@ func StringNumber(s string) bool {
 	return err == nil
 }
 
-func StringDatetime(s string, param string) bool {
+func StringDatetime(s, param string) bool {
 	if param == "" {
 		param = time.RFC3339
 	}
@@ -1114,11 +1126,11 @@ func StringEthAddr(s string) bool { return IsEthAddr(s) }
 func StringBtcAddr(s string) bool { return IsBtcAddr(s) }
 
 // StringRuleFunc 字符串规则函数签名
-type StringRuleFunc func(s string, param string) bool
+type StringRuleFunc func(s, param string) bool
 
 // noParamAdapter 将无参数的字符串校验函数适配为 StringRuleFunc
 func noParamAdapter(fn func(string) bool) StringRuleFunc {
-	return func(s string, _ string) bool { return fn(s) }
+	return func(s, _ string) bool { return fn(s) }
 }
 
 // StringRuleMap 字符串规则映射表，VarString 快速路径直接查表
@@ -1228,12 +1240,7 @@ var StringRuleMap = map[string]StringRuleFunc{
 
 // StringOneOf 判断字符串是否在候选列表中（精确匹配）
 func StringOneOf(s string, parts []string) bool {
-	for _, item := range parts {
-		if s == item {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(parts, s)
 }
 
 // StringOneOfCI 判断字符串是否在候选列表中（忽略大小写）

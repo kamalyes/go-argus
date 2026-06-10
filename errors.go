@@ -54,15 +54,17 @@ type FieldError interface {
 	StructNamespace() string
 	Field() string
 	StructField() string
-	Value() interface{}
+	Value() any
 	Param() string
 	Kind() reflect.Kind
 	Type() reflect.Type
 	Error() string
 }
 
-var _ FieldError = (*fieldError)(nil)
-var _ error = (*fieldError)(nil)
+var (
+	_ FieldError = (*fieldError)(nil)
+	_ error      = (*fieldError)(nil)
+)
 
 type fieldError struct {
 	tag         string
@@ -71,7 +73,7 @@ type fieldError struct {
 	structNs    string
 	field       string
 	structField string
-	value       interface{}
+	value       any
 	param       string
 	kind        reflect.Kind
 	typ         reflect.Type
@@ -108,7 +110,7 @@ func (fe *fieldError) StructField() string {
 }
 
 // Value 返回字段原始值
-func (fe *fieldError) Value() interface{} {
+func (fe *fieldError) Value() any {
 	return fe.value
 }
 
@@ -146,7 +148,7 @@ func (e *stringFieldError) Namespace() string       { return "" }
 func (e *stringFieldError) StructNamespace() string { return "" }
 func (e *stringFieldError) Field() string           { return "" }
 func (e *stringFieldError) StructField() string     { return "" }
-func (e *stringFieldError) Value() interface{}      { return e.value }
+func (e *stringFieldError) Value() any              { return e.value }
 func (e *stringFieldError) Param() string           { return e.param }
 func (e *stringFieldError) Kind() reflect.Kind      { return reflect.String }
 func (e *stringFieldError) Type() reflect.Type      { return reflect.TypeOf("") }

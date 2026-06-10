@@ -13,6 +13,7 @@ package validate
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -26,7 +27,7 @@ func ValidateJSON(data []byte) error {
 	if json.Valid(data) {
 		return nil
 	}
-	return fmt.Errorf(i18n.Msg(MsgJSONInvalid))
+	return errors.New(i18n.Msg(MsgJSONInvalid))
 }
 
 func IsValidJSONBytes(data []byte) bool {
@@ -172,7 +173,7 @@ func SkipJSONSpaces(data []byte, i int) int {
 // ScanJSONString 扫描 JSON 字符串，并返回字符串结束后一位的位置
 func ScanJSONString(data []byte, start int) (int, error) {
 	if start >= len(data) || data[start] != '"' {
-		return 0, fmt.Errorf(i18n.Msg(MsgJSONInvalid))
+		return 0, errors.New(i18n.Msg(MsgJSONInvalid))
 	}
 	for i := start + 1; i < len(data); i++ {
 		switch data[i] {
@@ -182,13 +183,13 @@ func ScanJSONString(data []byte, start int) (int, error) {
 			return i + 1, nil
 		}
 	}
-	return 0, fmt.Errorf(i18n.Msg(MsgJSONInvalid))
+	return 0, errors.New(i18n.Msg(MsgJSONInvalid))
 }
 
 // ScanJSONValueEnd 扫描任意 JSON 值，并返回值结束后一位的位置
 func ScanJSONValueEnd(data []byte, start int) (int, error) {
 	if start >= len(data) {
-		return 0, fmt.Errorf(i18n.Msg(MsgJSONInvalid))
+		return 0, errors.New(i18n.Msg(MsgJSONInvalid))
 	}
 	switch data[start] {
 	case '"':
@@ -217,7 +218,7 @@ func scanJSONCompositeEnd(data []byte, start int) (int, error) {
 		case '}', ']':
 			last := len(stack) - 1
 			if last < 0 || stack[last] != data[i] {
-				return 0, fmt.Errorf(i18n.Msg(MsgJSONInvalid))
+				return 0, errors.New(i18n.Msg(MsgJSONInvalid))
 			}
 			stack = stack[:last]
 			if len(stack) == 0 {
@@ -225,7 +226,7 @@ func scanJSONCompositeEnd(data []byte, start int) (int, error) {
 			}
 		}
 	}
-	return 0, fmt.Errorf(i18n.Msg(MsgJSONInvalid))
+	return 0, errors.New(i18n.Msg(MsgJSONInvalid))
 }
 
 func scanJSONScalarEnd(data []byte, start int) (int, error) {

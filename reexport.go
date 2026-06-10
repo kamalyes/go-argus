@@ -308,17 +308,17 @@ func IsTimeEmpty(t *time.Time) bool {
 }
 
 // IsTimeValid 判断时间值是否有效
-func IsTimeValid(timeVal interface{}) bool {
+func IsTimeValid(timeVal any) bool {
 	return validate.IsTimeValid(timeVal)
 }
 
 // HasEmpty 判断切片中是否存在空值
-func HasEmpty(elems []interface{}) (bool, int) {
+func HasEmpty(elems []any) (bool, int) {
 	return validate.HasEmpty(elems)
 }
 
 // IsAllEmpty 判断切片中所有元素是否都为空
-func IsAllEmpty(elems []interface{}) bool {
+func IsAllEmpty(elems []any) bool {
 	return validate.IsAllEmpty(elems)
 }
 
@@ -343,12 +343,12 @@ func ContainsChinese(s string) bool {
 }
 
 // EmptyToDefault 在字符串为空时返回默认值
-func EmptyToDefault(str string, defaultStr string) string {
+func EmptyToDefault(str, defaultStr string) string {
 	return validate.EmptyToDefault(str, defaultStr)
 }
 
 // IsNil 判断 interface 是否为 nil 或内部持有 nil
-func IsNil(x interface{}) bool {
+func IsNil(x any) bool {
 	return validate.IsNil(x)
 }
 
@@ -363,7 +363,7 @@ func IsCEmpty[T comparable](v T) bool {
 }
 
 // DerefValue 解开 interface 中的指针值
-func DerefValue(value interface{}) (interface{}, bool) {
+func DerefValue(value any) (any, bool) {
 	return validate.DerefValue(value)
 }
 
@@ -378,27 +378,27 @@ func IsAllowedField(field string, allowedFields ...[]string) bool {
 }
 
 // UnwrapProtobufWrapper 通过反射解开 protobuf wrapper
-func UnwrapProtobufWrapper(value interface{}) (interface{}, bool) {
+func UnwrapProtobufWrapper(value any) (any, bool) {
 	return validate.UnwrapProtobufWrapper(value)
 }
 
 // IsEmptyAfterDeref 解引用后判断值是否为空
-func IsEmptyAfterDeref(value interface{}) (interface{}, bool) {
+func IsEmptyAfterDeref(value any) (any, bool) {
 	return validate.IsEmptyAfterDeref(value)
 }
 
 // NormalizeFilterValue 归一化过滤值
-func NormalizeFilterValue(value interface{}) interface{} {
+func NormalizeFilterValue(value any) any {
 	return validate.NormalizeFilterValue(value)
 }
 
 // NormalizeFilterValueSlice 归一化过滤值切片
-func NormalizeFilterValueSlice(values []interface{}) []interface{} {
+func NormalizeFilterValueSlice(values []any) []any {
 	return validate.NormalizeFilterValueSlice(values)
 }
 
 // NormalizeFilterValueIfNotEmpty 过滤空值后返回归一化值
-func NormalizeFilterValueIfNotEmpty(value interface{}) (interface{}, bool) {
+func NormalizeFilterValueIfNotEmpty(value any) (any, bool) {
 	return validate.NormalizeFilterValueIfNotEmpty(value)
 }
 
@@ -456,12 +456,12 @@ type JSONSchema = schema.JSONSchema
 type SchemaBuilder = schema.SchemaBuilder
 
 // ValidateJSONSchema 校验数据是否符合 schema
-func ValidateJSONSchema(data interface{}, s interface{}) CompareResult {
+func ValidateJSONSchema(data, s any) CompareResult {
 	return schema.ValidateJSONSchema(data, s)
 }
 
 // ValidateStructWithSchema 校验结构体或 map 是否符合 schema
-func ValidateStructWithSchema(structData interface{}, s interface{}) CompareResult {
+func ValidateStructWithSchema(structData, s any) CompareResult {
 	return schema.ValidateStructWithSchema(structData, s)
 }
 
