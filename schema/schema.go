@@ -59,7 +59,9 @@ func ValidateStructWithSchema(structData, schema any) validate.CompareResult {
 		return validate.CompareResult{Message: err.Error()}
 	}
 	var data any
-	json.Unmarshal(raw, &data)
+	if err := json.Unmarshal(raw, &data); err != nil {
+		return validate.CompareResult{Message: err.Error()}
+	}
 	return ValidateJSONSchema(data, schema)
 }
 

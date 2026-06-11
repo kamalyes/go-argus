@@ -152,13 +152,14 @@ func TestTimeValueCallSecondsNanosBadReturn(t *testing.T) {
 	}
 }
 
-type timeField struct{}
+type timeField struct{} //nolint:unused // used for testing AsTime interface
 
+//nolint:unused // used for testing AsTime interface
 func (f timeField) AsTime() time.Time { return time.Time{} }
 
 func TestCallAsTimeCannotInterface(t *testing.T) {
 	type unsafeStruct struct {
-		unexported timeField
+		unexported timeField //nolint:unused // intentionally unexported for testing
 	}
 	s := unsafeStruct{}
 	v := reflect.ValueOf(s).Field(0)

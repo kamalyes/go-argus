@@ -991,9 +991,11 @@ func TestApplyRulesOmitNilNil(t *testing.T) {
 
 func TestEvalRuleCustomValidation(t *testing.T) {
 	v := New()
-	v.RegisterValidationCtx("custom", func(ctx context.Context, fl FieldLevel) bool {
+	if err := v.RegisterValidationCtx("custom", func(ctx context.Context, fl FieldLevel) bool {
 		return fl.Field().String() == "valid"
-	})
+	}); err != nil {
+		t.Fatalf("failed to register custom validation: %v", err)
+	}
 	if err := v.Var("invalid", "custom"); err == nil {
 		t.Fatal("expected custom validation to fail")
 	}
@@ -1168,9 +1170,11 @@ func TestValidateStructNestedNonStruct(t *testing.T) {
 
 func TestRenderTranslationUnknownTag(t *testing.T) {
 	v := New()
-	v.RegisterValidation("unknowntag", func(fl FieldLevel) bool {
+	if err := v.RegisterValidation("unknowntag", func(fl FieldLevel) bool {
 		return false
-	})
+	}); err != nil {
+		t.Fatalf("failed to register unknowntag validation: %v", err)
+	}
 	err := v.Var("test", "unknowntag")
 	if err == nil {
 		t.Fatal("expected unknowntag to fail")

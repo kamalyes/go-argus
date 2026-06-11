@@ -12,11 +12,11 @@
 package constants
 
 const (
-	RuleUnique   = "unique"   // 唯一性
-	RuleBoolean  = "boolean"  // 布尔值
-	RuleNumber   = "number"   // 数字
-	RuleNumeric  = "numeric"  // 数值（number 别名）
-	RuleJSON     = "json"     // JSON 格式
+	RuleUnique  = "unique"  // 唯一性
+	RuleBoolean = "boolean" // 布尔值
+	RuleNumber  = "number"  // 数字
+	RuleNumeric = "numeric" // 数值（number 别名）
+	RuleJSON    = "json"    // JSON 格式
 
 	RuleLatitude  = "latitude"  // 纬度
 	RuleLongitude = "longitude" // 经度

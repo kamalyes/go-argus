@@ -23,7 +23,7 @@ type cacheTestStruct struct {
 }
 
 type cacheTestPrivate struct {
-	name string `validate:"required"`
+	name string `validate:"required"` //nolint:unused // intentionally private for testing
 }
 
 type cacheTestSkip struct {

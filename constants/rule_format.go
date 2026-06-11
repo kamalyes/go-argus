@@ -17,8 +17,8 @@ const (
 
 	RuleIP     = "ip"      // IP 地址（v4 或 v6）
 	RuleIPAddr = "ip_addr" // IP 地址别名
-	RuleIPv4   = "ipv4"   // IPv4 地址
-	RuleIPv6   = "ipv6"   // IPv6 地址
+	RuleIPv4   = "ipv4"    // IPv4 地址
+	RuleIPv6   = "ipv6"    // IPv6 地址
 
 	RuleCIDR   = "cidr"   // CIDR 表示法
 	RuleCIDRv4 = "cidrv4" // IPv4 CIDR
@@ -32,10 +32,10 @@ const (
 	RuleHostnamePort    = "hostname_port"    // 主机名:端口
 	RulePort            = "port"             // 端口号
 
-	RuleURL        = "url"        // URL
-	RuleURI        = "uri"        // URI
-	RuleHTTPURL    = "http_url"   // HTTP URL
-	RuleHTTPSURL   = "https_url"  // HTTPS URL
+	RuleURL        = "url"         // URL
+	RuleURI        = "uri"         // URI
+	RuleHTTPURL    = "http_url"    // HTTP URL
+	RuleHTTPSURL   = "https_url"   // HTTPS URL
 	RuleURLEncoded = "url_encoded" // URL 编码字符串
 
 	RuleHTML        = "html"         // HTML 标签
@@ -61,19 +61,19 @@ const (
 	RuleHSL      = "hsl"      // HSL 颜色
 	RuleHSLA     = "hsla"     // HSLA 颜色
 
-	RuleSemver          = "semver"            // 语义化版本号
-	RuleISBN10          = "isbn10"            // ISBN-10
-	RuleISBN13          = "isbn13"            // ISBN-13
-	RuleISSN            = "issn"              // ISSN
-	RuleBIC             = "bic"               // BIC/SWIFT 代码
-	RuleCron            = "cron"              // Cron 表达式
-	RuleDataURI         = "datauri"           // Data URI
-	RuleBCP47           = "bcp47"             // BCP47 语言标签
-	RuleEthAddr         = "eth_addr"          // 以太坊地址
-	RuleBtcAddr         = "btc_addr"          // 比特币地址
+	RuleSemver  = "semver"   // 语义化版本号
+	RuleISBN10  = "isbn10"   // ISBN-10
+	RuleISBN13  = "isbn13"   // ISBN-13
+	RuleISSN    = "issn"     // ISSN
+	RuleBIC     = "bic"      // BIC/SWIFT 代码
+	RuleCron    = "cron"     // Cron 表达式
+	RuleDataURI = "datauri"  // Data URI
+	RuleBCP47   = "bcp47"    // BCP47 语言标签
+	RuleEthAddr = "eth_addr" // 以太坊地址
+	RuleBtcAddr = "btc_addr" // 比特币地址
 
 	RuleDatetime = "datetime" // 日期时间格式
-	RuleTimezone = "timezone"  // 时区
+	RuleTimezone = "timezone" // 时区
 
 	RuleFile     = "file"     // 文件路径
 	RuleFilepath = "filepath" // 文件路径（别名）

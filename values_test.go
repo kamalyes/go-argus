@@ -60,7 +60,7 @@ func TestHasEmpty(t *testing.T) {
 	if !has || idx != 1 {
 		t.Fatalf("expected empty at index 1, got has=%v idx=%d", has, idx)
 	}
-	has, idx = HasEmpty([]interface{}{"a", "b"})
+	has, _ = HasEmpty([]interface{}{"a", "b"})
 	if has {
 		t.Fatal("expected no empty values")
 	}
@@ -172,7 +172,7 @@ func TestDerefValue(t *testing.T) {
 	if !ok || result != 42 {
 		t.Fatalf("expected 42, got %v ok=%v", result, ok)
 	}
-	result, ok = DerefValue(nil)
+	_, ok = DerefValue(nil)
 	if ok {
 		t.Fatal("expected nil to not be deref-able")
 	}
@@ -270,7 +270,7 @@ func TestNormalizeFilterValueIfNotEmpty(t *testing.T) {
 	if val != "hello" {
 		t.Fatalf("expected hello, got %v", val)
 	}
-	val, ok = NormalizeFilterValueIfNotEmpty(nil)
+	_, ok = NormalizeFilterValueIfNotEmpty(nil)
 	if !ok {
 		t.Fatal("expected nil to be empty (ok=true)")
 	}

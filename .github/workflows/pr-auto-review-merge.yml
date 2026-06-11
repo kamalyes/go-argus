@@ -138,24 +138,32 @@ jobs:
 
           echo "should-merge=true" >> "$GITHUB_OUTPUT"
 
-  wait-for-tests:
+  wait-for-checks:
     needs: review
     if: needs.review.outputs.should-merge == 'true'
-    name: ⏳ Wait for Tests
+    name: ⏳ Wait for Checks
     runs-on: ubuntu-latest
     steps:
-      - name: ⏱️ Wait for check suites
+      - name: ⏱️ Wait for lint check
         uses: lewagon/wait-on-check-action@v1.3.4
-        id: wait_for_checks
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-          running-workflow-name: Wait for Tests
+          running-workflow-name: Wait for Checks
+          check-regexp: Lint
+          repo-token: ${{ secrets.GH_GPA_TOKEN }}
+          wait-interval: 30
+
+      - name: ⏱️ Wait for test check
+        uses: lewagon/wait-on-check-action@v1.3.4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          running-workflow-name: Wait for Checks
           check-regexp: Test
           repo-token: ${{ secrets.GH_GPA_TOKEN }}
           wait-interval: 30
 
   auto-merge:
-    needs: [review, wait-for-tests]
+    needs: [review, wait-for-checks]
     if: needs.review.outputs.should-merge == 'true'
     name: 🚀 Auto Merge
     runs-on: ubuntu-latest
