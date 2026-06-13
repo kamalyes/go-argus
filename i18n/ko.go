@@ -98,6 +98,7 @@ func KoMessages() map[string]string {
 		"ltecsfield":                      "{field}은(는) {param} 이하여야 합니다",
 		"fieldcontains":                   "{field}은(는) {param}을(를) 포함해야 합니다",
 		"fieldexcludes":                   "{field}은(는) {param}을(를) 포함하지 않아야 합니다",
+		"fieldlen":                        "{field}의 길이는 {param}과(와) 일치해야 합니다",
 		"after":                           "{field}은(는) {param} 이후여야 합니다",
 		"before":                          "{field}은(는) {param} 이전이어야 합니다",
 		"afterfield":                      "{field}은(는) {param} 이후여야 합니다",

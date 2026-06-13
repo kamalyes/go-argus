@@ -506,6 +506,36 @@ type mockProtoIntValue struct{}
 
 func (m mockProtoIntValue) GetValue() int { return 0 }
 
+// --- 模拟 protobuf wrapperspb 类型 ---
+
+type mockProtoInt32Value struct {
+	val int32
+}
+
+func (m mockProtoInt32Value) GetValue() int32 { return m.val }
+
+type mockProtoBoolValue struct {
+	val bool
+}
+
+func (m mockProtoBoolValue) GetValue() bool { return m.val }
+
+type mockProtoFloatValue struct {
+	val float64
+}
+
+func (m mockProtoFloatValue) GetValue() float64 { return m.val }
+
+type mockProtoNilPtrStringValue struct{}
+
+func (m mockProtoNilPtrStringValue) GetValue() *string { return nil }
+
+type mockProtoNonNilPtrStringValue struct {
+	val string
+}
+
+func (m mockProtoNonNilPtrStringValue) GetValue() *string { return &m.val }
+
 func TestUnwrapProtobufWrapper(t *testing.T) {
 	w := mockProtoWrapper{value: "test"}
 	v, ok := UnwrapProtobufWrapper(w)
@@ -711,5 +741,254 @@ func TestNormalizeFilterValueIfEmptySlice(t *testing.T) {
 	result := NormalizeFilterValueSlice(s)
 	if len(result) != 0 {
 		t.Fatal("expected empty slice to normalize to empty slice")
+	}
+}
+
+// --- UnwrapProtobufWrapper 对各种 wrapper 类型的完整测试 ---
+
+func TestUnwrapProtobufWrapperInt32(t *testing.T) {
+	w := mockProtoInt32Value{val: 42}
+	v, ok := UnwrapProtobufWrapper(w)
+	if !ok {
+		t.Fatal("expected int32 wrapper to unwrap")
+	}
+	if v.(int32) != 42 {
+		t.Fatalf("expected 42, got %v", v)
+	}
+}
+
+func TestUnwrapProtobufWrapperInt32Zero(t *testing.T) {
+	w := mockProtoInt32Value{val: 0}
+	v, ok := UnwrapProtobufWrapper(w)
+	if !ok {
+		t.Fatal("expected int32 zero wrapper to unwrap")
+	}
+	if v.(int32) != 0 {
+		t.Fatalf("expected 0, got %v", v)
+	}
+}
+
+func TestUnwrapProtobufWrapperBool(t *testing.T) {
+	w := mockProtoBoolValue{val: true}
+	v, ok := UnwrapProtobufWrapper(w)
+	if !ok {
+		t.Fatal("expected bool wrapper to unwrap")
+	}
+	if v.(bool) != true {
+		t.Fatalf("expected true, got %v", v)
+	}
+}
+
+func TestUnwrapProtobufWrapperBoolFalse(t *testing.T) {
+	w := mockProtoBoolValue{val: false}
+	v, ok := UnwrapProtobufWrapper(w)
+	if !ok {
+		t.Fatal("expected bool false wrapper to unwrap")
+	}
+	if v.(bool) != false {
+		t.Fatalf("expected false, got %v", v)
+	}
+}
+
+func TestUnwrapProtobufWrapperFloat(t *testing.T) {
+	w := mockProtoFloatValue{val: 3.14}
+	v, ok := UnwrapProtobufWrapper(w)
+	if !ok {
+		t.Fatal("expected float wrapper to unwrap")
+	}
+	if v.(float64) != 3.14 {
+		t.Fatalf("expected 3.14, got %v", v)
+	}
+}
+
+func TestUnwrapProtobufWrapperNilPtrString(t *testing.T) {
+	w := mockProtoNilPtrStringValue{}
+	v, ok := UnwrapProtobufWrapper(w)
+	if !ok {
+		t.Fatal("expected nil ptr string wrapper to unwrap")
+	}
+	// GetValue() 返回 *string 类型的 nil，Go typed nil != untyped nil
+	ptr, isPtr := v.(*string)
+	if !isPtr || ptr != nil {
+		t.Fatalf("expected nil *string, got %v", v)
+	}
+}
+
+func TestUnwrapProtobufWrapperNonNilPtrString(t *testing.T) {
+	w := mockProtoNonNilPtrStringValue{val: "hello"}
+	v, ok := UnwrapProtobufWrapper(w)
+	if !ok {
+		t.Fatal("expected non-nil ptr string wrapper to unwrap")
+	}
+	ptr, isPtr := v.(*string)
+	if !isPtr || ptr == nil || *ptr != "hello" {
+		t.Fatalf("expected *string with 'hello', got %v", v)
+	}
+}
+
+// --- IsEmptyAfterDeref 对各种 wrapper 类型的完整链路测试 ---
+
+func TestIsEmptyAfterDerefInt32NonZero(t *testing.T) {
+	v, empty := IsEmptyAfterDeref(mockProtoInt32Value{val: 42})
+	if empty {
+		t.Fatal("expected int32 non-zero to not be empty")
+	}
+	if v.(int32) != 42 {
+		t.Fatalf("expected 42, got %v", v)
+	}
+}
+
+func TestIsEmptyAfterDerefInt32Zero(t *testing.T) {
+	v, empty := IsEmptyAfterDeref(mockProtoInt32Value{val: 0})
+	if empty {
+		t.Fatal("expected int32 zero to not be empty (scalar kind)")
+	}
+	if v.(int32) != 0 {
+		t.Fatalf("expected 0, got %v", v)
+	}
+}
+
+func TestIsEmptyAfterDerefBoolTrue(t *testing.T) {
+	v, empty := IsEmptyAfterDeref(mockProtoBoolValue{val: true})
+	if empty {
+		t.Fatal("expected bool true to not be empty")
+	}
+	if v.(bool) != true {
+		t.Fatalf("expected true, got %v", v)
+	}
+}
+
+func TestIsEmptyAfterDerefBoolFalse(t *testing.T) {
+	v, empty := IsEmptyAfterDeref(mockProtoBoolValue{val: false})
+	if empty {
+		t.Fatal("expected bool false to not be empty (scalar kind)")
+	}
+	if v.(bool) != false {
+		t.Fatalf("expected false, got %v", v)
+	}
+}
+
+func TestIsEmptyAfterDerefFloatNonZero(t *testing.T) {
+	v, empty := IsEmptyAfterDeref(mockProtoFloatValue{val: 1.5})
+	if empty {
+		t.Fatal("expected float non-zero to not be empty")
+	}
+	if v.(float64) != 1.5 {
+		t.Fatalf("expected 1.5, got %v", v)
+	}
+}
+
+func TestIsEmptyAfterDerefFloatZero(t *testing.T) {
+	v, empty := IsEmptyAfterDeref(mockProtoFloatValue{val: 0.0})
+	if empty {
+		t.Fatal("expected float zero to not be empty (scalar kind)")
+	}
+	if v.(float64) != 0.0 {
+		t.Fatalf("expected 0.0, got %v", v)
+	}
+}
+
+func TestIsEmptyAfterDerefNilPtrString(t *testing.T) {
+	_, empty := IsEmptyAfterDeref(mockProtoNilPtrStringValue{})
+	if !empty {
+		t.Fatal("expected nil ptr string wrapper to be empty")
+	}
+}
+
+func TestIsEmptyAfterDerefNonNilPtrStringNonEmpty(t *testing.T) {
+	v, empty := IsEmptyAfterDeref(mockProtoNonNilPtrStringValue{val: "hello"})
+	if empty {
+		t.Fatal("expected non-nil ptr string to not be empty")
+	}
+	s, ok := v.(string)
+	if !ok || s != "hello" {
+		t.Fatalf("expected dereferenced string 'hello', got %v", v)
+	}
+}
+
+func TestIsEmptyAfterDerefNonNilPtrStringEmpty(t *testing.T) {
+	v, empty := IsEmptyAfterDeref(mockProtoNonNilPtrStringValue{val: ""})
+	if !empty {
+		t.Fatal("expected non-nil ptr string with empty value to be empty")
+	}
+	_ = v
+}
+
+// --- NormalizeFilterValueIfNotEmpty 对各种 wrapper 类型的完整链路测试 ---
+
+func TestNormalizeFilterValueIfNotEmptyInt32NonZero(t *testing.T) {
+	v, empty := NormalizeFilterValueIfNotEmpty(mockProtoInt32Value{val: 42})
+	if empty {
+		t.Fatal("expected int32 non-zero to not be empty")
+	}
+	if v.(int32) != 42 {
+		t.Fatalf("expected 42, got %v", v)
+	}
+}
+
+func TestNormalizeFilterValueIfNotEmptyInt32Zero(t *testing.T) {
+	v, empty := NormalizeFilterValueIfNotEmpty(mockProtoInt32Value{val: 0})
+	if empty {
+		t.Fatal("expected int32 zero to not be empty (scalar kind)")
+	}
+	if v.(int32) != 0 {
+		t.Fatalf("expected 0, got %v", v)
+	}
+}
+
+func TestNormalizeFilterValueIfNotEmptyBoolTrue(t *testing.T) {
+	v, empty := NormalizeFilterValueIfNotEmpty(mockProtoBoolValue{val: true})
+	if empty {
+		t.Fatal("expected bool true to not be empty")
+	}
+	if v.(bool) != true {
+		t.Fatalf("expected true, got %v", v)
+	}
+}
+
+func TestNormalizeFilterValueIfNotEmptyBoolFalse(t *testing.T) {
+	v, empty := NormalizeFilterValueIfNotEmpty(mockProtoBoolValue{val: false})
+	if empty {
+		t.Fatal("expected bool false to not be empty (scalar kind)")
+	}
+	if v.(bool) != false {
+		t.Fatalf("expected false, got %v", v)
+	}
+}
+
+func TestNormalizeFilterValueIfNotEmptyNilPtrString(t *testing.T) {
+	_, empty := NormalizeFilterValueIfNotEmpty(mockProtoNilPtrStringValue{})
+	if !empty {
+		t.Fatal("expected nil ptr string to be empty")
+	}
+}
+
+func TestNormalizeFilterValueIfNotEmptyNonNilPtrStringNonEmpty(t *testing.T) {
+	v, empty := NormalizeFilterValueIfNotEmpty(mockProtoNonNilPtrStringValue{val: "hello"})
+	if empty {
+		t.Fatal("expected non-nil ptr string to not be empty")
+	}
+	s, ok := v.(string)
+	if !ok || s != "hello" {
+		t.Fatalf("expected dereferenced string 'hello', got %v", v)
+	}
+}
+
+func TestNormalizeFilterValueIfNotEmptySliceWithWrappers(t *testing.T) {
+	// 切片中包含 protobuf wrapper
+	slice := []any{mockProtoInt32Value{val: 1}, mockProtoWrapper{value: "test"}}
+	v, empty := NormalizeFilterValueIfNotEmpty(slice)
+	if empty {
+		t.Fatal("expected slice with wrappers to not be empty")
+	}
+	result, ok := v.([]any)
+	if !ok || len(result) != 2 {
+		t.Fatalf("expected slice of 2, got %v", v)
+	}
+	if result[0].(int32) != 1 {
+		t.Fatalf("expected first element 1, got %v", result[0])
+	}
+	if result[1].(string) != "test" {
+		t.Fatalf("expected second element 'test', got %v", result[1])
 	}
 }

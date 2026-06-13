@@ -105,6 +105,7 @@ func ZhMessages() map[string]string {
 		"ltecsfield":           "{field} 必须小于或等于 {param}",
 		"fieldcontains":        "{field} 必须包含 {param}",
 		"fieldexcludes":        "{field} 不能包含 {param}",
+		"fieldlen":             "{field} 长度必须与 {param} 匹配",
 		"after":                "{field} 必须晚于 {param}",
 		"before":               "{field} 必须早于 {param}",
 		"afterfield":           "{field} 必须晚于 {param}",

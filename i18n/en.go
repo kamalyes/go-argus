@@ -112,6 +112,7 @@ func EnMessages() map[string]string {
 		"ltecsfield":           "{field} must be less than or equal to {param}",
 		"fieldcontains":        "{field} must contain {param}",
 		"fieldexcludes":        "{field} must not contain {param}",
+		"fieldlen":             "{field} length must match {param}",
 		"after":                "{field} must be after {param}",
 		"before":               "{field} must be before {param}",
 		"afterfield":           "{field} must be after {param}",

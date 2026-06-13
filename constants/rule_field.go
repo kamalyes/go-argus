@@ -21,6 +21,8 @@ const (
 	RuleAfterField  = "afterfield"  // 时间晚于指定字段
 	RuleBeforeField = "beforefield" // 时间早于指定字段
 
+	RuleFieldLen = "fieldlen" // 与指定字段长度比较，参数格式: FieldName 或 op:FieldName（op 可选 eq/ne/gt/gte/lt/lte，默认 eq）
+
 	RuleEqCSField  = "eqcsfield"  // 等于跨结构体字段
 	RuleNeCSField  = "necsfield"  // 不等于跨结构体字段
 	RuleGTCSField  = "gtcsfield"  // 大于跨结构体字段

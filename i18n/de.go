@@ -98,6 +98,7 @@ func DeMessages() map[string]string {
 		"ltecsfield":                      "{field} muss kleiner oder gleich {param} sein",
 		"fieldcontains":                   "{field} muss {param} enthalten",
 		"fieldexcludes":                   "{field} darf {param} nicht enthalten",
+		"fieldlen":                        "{field} muss dieselbe Länge wie {param} haben",
 		"after":                           "{field} muss nach {param} sein",
 		"before":                          "{field} muss vor {param} sein",
 		"afterfield":                      "{field} muss nach {param} sein",

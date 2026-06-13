@@ -98,6 +98,7 @@ func FrMessages() map[string]string {
 		"ltecsfield":                      "{field} doit être inférieur ou égal à {param}",
 		"fieldcontains":                   "{field} doit contenir {param}",
 		"fieldexcludes":                   "{field} ne doit pas contenir {param}",
+		"fieldlen":                        "{field} doit avoir la même longueur que {param}",
 		"after":                           "{field} doit être après {param}",
 		"before":                          "{field} doit être avant {param}",
 		"afterfield":                      "{field} doit être après {param}",

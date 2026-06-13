@@ -98,6 +98,7 @@ func RuMessages() map[string]string {
 		"ltecsfield":                      "{field} должно быть меньше или равно {param}",
 		"fieldcontains":                   "{field} должно содержать {param}",
 		"fieldexcludes":                   "{field} не должно содержать {param}",
+		"fieldlen":                        "{field} должно иметь ту же длину, что и {param}",
 		"after":                           "{field} должно быть после {param}",
 		"before":                          "{field} должно быть до {param}",
 		"afterfield":                      "{field} должно быть после {param}",

@@ -98,6 +98,7 @@ func EsMessages() map[string]string {
 		"ltecsfield":                      "{field} debe ser menor o igual a {param}",
 		"fieldcontains":                   "{field} debe contener {param}",
 		"fieldexcludes":                   "{field} no debe contener {param}",
+		"fieldlen":                        "{field} debe tener la misma longitud que {param}",
 		"after":                           "{field} debe ser después de {param}",
 		"before":                          "{field} debe ser antes de {param}",
 		"afterfield":                      "{field} debe ser después de {param}",

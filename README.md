@@ -20,7 +20,7 @@
 - 🚀 **Zero third-party dependencies** — Only Go standard library, supply-chain secure
 - ⚡ **Zero-reflection VarString fast path** — String variable validation bypasses `reflect` entirely, 0 heap allocations, 2~3× faster than reflection path
 - 🏷️ **97+ built-in field rules** — required, min/max, email, IP, UUID, datetime, Luhn checksum, semver, ISBN, ISSN, BIC/SWIFT, cron, Data URI, BCP 47, Ethereum/Bitcoin address, etc.
-- 🔗 **Cross-field rules** — range, fieldcontains, requiredWithout, etc.
+- 🔗 **Cross-field rules** — range, fieldcontains, fieldlen, requiredWithout, etc.
 - 🌍 **i18n native support** — 9 built-in language translations (en/zh/zh-TW/ja/ko/fr/de/es/ru), switch with one line, extensible to any language
 - 🔄 **go-playground/validator compatible** — Struct tag syntax and API highly compatible, minimal migration cost
 - 🧩 **JSON Schema validation** — Lightweight JSON Schema subset validation, suitable for API gateway scenarios

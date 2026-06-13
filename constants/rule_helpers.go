@@ -38,7 +38,8 @@ func IsScalarCompareRule(name string) bool {
 func IsFieldCompareRule(name string) bool {
 	switch name {
 	case RuleEqField, RuleNeField, RuleGTField, RuleAfterField, RuleGTEField, RuleLTField, RuleBeforeField, RuleLTEField,
-		RuleEqCSField, RuleNeCSField, RuleGTCSField, RuleGTECSField, RuleLTCSField, RuleLTECSField:
+		RuleEqCSField, RuleNeCSField, RuleGTCSField, RuleGTECSField, RuleLTCSField, RuleLTECSField,
+		RuleFieldLen:
 		return true
 	default:
 		return false
@@ -48,7 +49,8 @@ func IsFieldCompareRule(name string) bool {
 // IsLocalFieldCompareRule 是否为同结构体字段比较规则
 func IsLocalFieldCompareRule(name string) bool {
 	switch name {
-	case RuleEqField, RuleNeField, RuleGTField, RuleAfterField, RuleGTEField, RuleLTField, RuleBeforeField, RuleLTEField:
+	case RuleEqField, RuleNeField, RuleGTField, RuleAfterField, RuleGTEField, RuleLTField, RuleBeforeField, RuleLTEField,
+		RuleFieldLen:
 		return true
 	default:
 		return false

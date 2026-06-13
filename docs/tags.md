@@ -510,7 +510,7 @@ type PriceRange struct {
 
 ***
 
-### `eqcsfield` / `necsfield` / `gtcsfield` / `gtecsfield` / `ltcsfield` / `ltecsfield`
+### `eqcsfield` / `necsfield` / `gtcsfield` / `gtecsfield` / `ltcsfield` / `ltecsfield` / `fieldlen`
 
 **场景**：与**顶层**结构体中的字段比较（跨嵌套层级）
 
@@ -555,6 +555,62 @@ type Req struct {
 ```
 
 **校验逻辑**：与 `fieldcontains` 相反，检查当前字符串不包含目标字段的值
+
+***
+
+### `fieldlen`
+
+**场景**：当前字段的长度/元素个数必须与指定字段的长度/元素个数满足比较关系，常用于校验 map 的 key 数量与另一个 slice 的元素数量一致
+
+```go
+type Req struct {
+    Tags  []string          `validate:"required,fieldlen=Names"`    // Tags 元素数必须等于 Names 元素数
+    Names []string          `validate:"required"`
+    Images map[string]string `validate:"required,fieldlen=Names"`   // Images key 数量必须等于 Names 元素数
+}
+```
+
+**参数格式**：`FieldName` 或 `op:FieldName`
+
+- 省略操作符时默认 `eq`（等于）
+- `op` 可选值：`eq`（等于）、`ne`（不等于）、`gt`（大于）、`gte`（大于等于）、`lt`（小于）、`lte`（小于等于）
+
+**支持的长度计算**：
+
+| 类型 | 长度含义 |
+|------|---------|
+| `string` | Unicode 字符数（rune 长度） |
+| `slice` / `array` | 元素个数 |
+| `map` | key 数量 |
+| `chan` | 缓冲区中元素数量 |
+| 其他类型 | 长度为 0，校验通常失败 |
+
+**高级用法**：
+
+```go
+// 带操作符
+type Req struct {
+    Tags  []string `validate:"required,fieldlen=gt:Names"`   // Tags 元素数必须大于 Names
+    Names []string `validate:"required"`
+}
+
+// 跨层级访问
+type Inner struct {
+    Names []string `validate:"required"`
+}
+type Req struct {
+    Tags  []string `validate:"required,fieldlen=Inner.Names"`
+    Inner Inner    `validate:""`
+}
+
+// map 与 map 长度比较
+type Req struct {
+    Images map[string]string `validate:"required,fieldlen=Labels"`
+    Labels map[string]string `validate:"required"`
+}
+```
+
+**校验逻辑**：分别计算当前字段和目标字段的长度，按指定操作符比较。目标字段查找规则与 `eqfield` 等跨字段规则一致，支持嵌套路径
 
 ***
 

@@ -20,7 +20,7 @@
 - 🚀 **零第三方依赖** — 仅依赖 Go 标准库，供应链安全无忧
 - ⚡ **零反射 VarString 快速路径** — 字符串变量校验完全绕过 `reflect`，0 堆分配，比反射路径快 2~3 倍
 - 🏷️ **97+ 内置字段规则** — required、min/max、email、IP、UUID、datetime、Luhn 校验、semver、ISBN、ISSN、BIC/SWIFT、cron、Data URI、BCP 47、以太坊/比特币地址等
-- 🔗 **跨字段规则** — range（范围校验）、fieldcontains（字段包含）、requiredWithout 等
+- 🔗 **跨字段规则** — range（范围校验）、fieldcontains（字段包含）、fieldlen（字段长度比较）、requiredWithout 等
 - 🌍 **i18n 原生支持** — 内置 9 种语言翻译（en/zh/zh-TW/ja/ko/fr/de/es/ru），一行代码切换，可扩展任意语言
 - 🔄 **go-playground/validator 兼容** — struct tag 语法和 API 高度兼容，迁移成本极低
 - 🧩 **JSON Schema 校验** — 轻量 JSON Schema 子集校验，适合 API 网关场景

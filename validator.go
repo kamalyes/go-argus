@@ -778,6 +778,51 @@ func (v *Validate) evalCmpField(top, parent, field reflect.Value, plan rule.Rule
 	return rule.CompareValueOp(derefed, other, plan.CmpOp)
 }
 
+// evalCmpFieldLen 跨字段长度比较，参数格式: FieldName 或 op:FieldName（op 可选 eq/ne/gt/gte/lt/lte，默认 eq）
+// 支持嵌套字段路径如 Inner.Field，从顶层结构体开始查找
+func (v *Validate) evalCmpFieldLen(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+	opStr := constants.RuleEq
+	targetPath := plan.Param
+	if idx := strings.Index(plan.Param, ":"); idx >= 0 {
+		candidate := plan.Param[:idx]
+		switch candidate {
+		case constants.RuleEq, constants.RuleNe, constants.RuleGT, constants.RuleGTE, constants.RuleLT, constants.RuleLTE:
+			opStr = candidate
+			targetPath = plan.Param[idx+1:]
+		}
+	}
+	cmpOp := constants.CmpOpFromStr(opStr)
+
+	currentLen := fieldLen(field)
+	// 优先从 parent 查找，找不到则从 top（根结构体）查找，支持跨层级访问
+	other, ok := rule.FieldByPath(parent, targetPath)
+	if !ok {
+		other, ok = rule.FieldByPath(top, targetPath)
+	}
+	if !ok {
+		return false
+	}
+	otherLen := fieldLen(other)
+
+	return validate.CompareOp(float64(currentLen), float64(otherLen), cmpOp)
+}
+
+// fieldLen 获取字段的长度（支持 slice/array/map/string/chan，其他类型返回 0）
+func fieldLen(v reflect.Value) int {
+	v = validate.DerefReflect(v)
+	if !v.IsValid() {
+		return 0
+	}
+	switch v.Kind() {
+	case reflect.String:
+		return utf8.RuneCountInString(v.String())
+	case reflect.Slice, reflect.Array, reflect.Map, reflect.Chan:
+		return v.Len()
+	default:
+		return 0
+	}
+}
+
 func (v *Validate) evalFieldContains(top, parent, field reflect.Value, plan rule.RulePlan) bool {
 	return rule.FieldContains(field, parent, plan.Param)
 }
@@ -844,6 +889,7 @@ var evalDispatchTable = map[string]evalDispatchFn{
 	constants.RuleLTECSField:         (*Validate).evalCmpField,
 	constants.RuleFieldContains:      (*Validate).evalFieldContains,
 	constants.RuleFieldExcludes:      (*Validate).evalFieldExcludes,
+	constants.RuleFieldLen:           (*Validate).evalCmpFieldLen,
 	constants.RuleAfter:              (*Validate).evalAfter,
 	constants.RuleBefore:             (*Validate).evalBefore,
 	constants.RuleRange:              (*Validate).evalRange,

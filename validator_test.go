@@ -487,6 +487,196 @@ func TestLteField(t *testing.T) {
 	}
 }
 
+func TestFieldLen(t *testing.T) {
+	// 默认 eq 比较 — slice
+	type req struct {
+		Tags  []string `validate:"required,fieldlen=Names"`
+		Names []string `validate:"required"`
+	}
+	v := New()
+	if err := v.Struct(req{Tags: []string{"a", "b"}, Names: []string{"x", "y"}}); err != nil {
+		t.Fatalf("expected fieldlen (eq) to pass: %v", err)
+	}
+	if err := v.Struct(req{Tags: []string{"a"}, Names: []string{"x", "y"}}); err == nil {
+		t.Fatal("expected fieldlen (eq) to fail on different lengths")
+	}
+}
+
+func TestFieldLenString(t *testing.T) {
+	// string 长度比较
+	type req struct {
+		Code string `validate:"required,fieldlen=Names"`
+		Name string `validate:"required" json:"Names"`
+	}
+	v := New()
+	if err := v.Struct(req{Code: "ab", Name: "xy"}); err != nil {
+		t.Fatalf("expected fieldlen (string eq) to pass: %v", err)
+	}
+	if err := v.Struct(req{Code: "a", Name: "xy"}); err == nil {
+		t.Fatal("expected fieldlen (string eq) to fail on different lengths")
+	}
+}
+
+func TestFieldLenWithOp(t *testing.T) {
+	// gt 操作符
+	type reqGT struct {
+		Tags  []string `validate:"required,fieldlen=gt:Names"`
+		Names []string `validate:"required"`
+	}
+	v := New()
+	if err := v.Struct(reqGT{Tags: []string{"a", "b", "c"}, Names: []string{"x", "y"}}); err != nil {
+		t.Fatalf("expected fieldlen (gt) to pass: %v", err)
+	}
+	if err := v.Struct(reqGT{Tags: []string{"a"}, Names: []string{"x", "y"}}); err == nil {
+		t.Fatal("expected fieldlen (gt) to fail")
+	}
+	// gt 相等时也应失败
+	if err := v.Struct(reqGT{Tags: []string{"a", "b"}, Names: []string{"x", "y"}}); err == nil {
+		t.Fatal("expected fieldlen (gt) to fail when equal")
+	}
+}
+
+func TestFieldLenWithOpGTE(t *testing.T) {
+	type req struct {
+		Tags  []string `validate:"required,fieldlen=gte:Names"`
+		Names []string `validate:"required"`
+	}
+	v := New()
+	// 大于
+	if err := v.Struct(req{Tags: []string{"a", "b", "c"}, Names: []string{"x", "y"}}); err != nil {
+		t.Fatalf("expected fieldlen (gte) to pass when greater: %v", err)
+	}
+	// 等于
+	if err := v.Struct(req{Tags: []string{"a", "b"}, Names: []string{"x", "y"}}); err != nil {
+		t.Fatalf("expected fieldlen (gte) to pass when equal: %v", err)
+	}
+	// 小于
+	if err := v.Struct(req{Tags: []string{"a"}, Names: []string{"x", "y"}}); err == nil {
+		t.Fatal("expected fieldlen (gte) to fail when less")
+	}
+}
+
+func TestFieldLenWithOpLT(t *testing.T) {
+	type req struct {
+		Tags  []string `validate:"required,fieldlen=lt:Names"`
+		Names []string `validate:"required"`
+	}
+	v := New()
+	if err := v.Struct(req{Tags: []string{"a"}, Names: []string{"x", "y"}}); err != nil {
+		t.Fatalf("expected fieldlen (lt) to pass: %v", err)
+	}
+	if err := v.Struct(req{Tags: []string{"a", "b"}, Names: []string{"x", "y"}}); err == nil {
+		t.Fatal("expected fieldlen (lt) to fail when equal")
+	}
+}
+
+func TestFieldLenWithOpLTE(t *testing.T) {
+	type req struct {
+		Tags  []string `validate:"required,fieldlen=lte:Names"`
+		Names []string `validate:"required"`
+	}
+	v := New()
+	// 小于
+	if err := v.Struct(req{Tags: []string{"a"}, Names: []string{"x", "y"}}); err != nil {
+		t.Fatalf("expected fieldlen (lte) to pass when less: %v", err)
+	}
+	// 等于
+	if err := v.Struct(req{Tags: []string{"a", "b"}, Names: []string{"x", "y"}}); err != nil {
+		t.Fatalf("expected fieldlen (lte) to pass when equal: %v", err)
+	}
+	// 大于
+	if err := v.Struct(req{Tags: []string{"a", "b", "c"}, Names: []string{"x", "y"}}); err == nil {
+		t.Fatal("expected fieldlen (lte) to fail when greater")
+	}
+}
+
+func TestFieldLenWithOpNE(t *testing.T) {
+	type req struct {
+		Tags  []string `validate:"required,fieldlen=ne:Names"`
+		Names []string `validate:"required"`
+	}
+	v := New()
+	if err := v.Struct(req{Tags: []string{"a"}, Names: []string{"x", "y"}}); err != nil {
+		t.Fatalf("expected fieldlen (ne) to pass on different lengths: %v", err)
+	}
+	if err := v.Struct(req{Tags: []string{"a", "b"}, Names: []string{"x", "y"}}); err == nil {
+		t.Fatal("expected fieldlen (ne) to fail when equal")
+	}
+}
+
+func TestFieldLenMap(t *testing.T) {
+	// map 长度比较
+	type req struct {
+		Images map[string]string `validate:"required,fieldlen=Names"`
+		Names  []string          `validate:"required"`
+	}
+	v := New()
+	if err := v.Struct(req{Images: map[string]string{"a": "1", "b": "2"}, Names: []string{"x", "y"}}); err != nil {
+		t.Fatalf("expected fieldlen (map) to pass: %v", err)
+	}
+	if err := v.Struct(req{Images: map[string]string{"a": "1"}, Names: []string{"x", "y"}}); err == nil {
+		t.Fatal("expected fieldlen (map) to fail on different lengths")
+	}
+}
+
+func TestFieldLenMapToMap(t *testing.T) {
+	// map 与 map 长度比较
+	type req struct {
+		Images map[string]string `validate:"required,fieldlen=Labels"`
+		Labels map[string]string `validate:"required"`
+	}
+	v := New()
+	if err := v.Struct(req{Images: map[string]string{"a": "1", "b": "2"}, Labels: map[string]string{"x": "1", "y": "2"}}); err != nil {
+		t.Fatalf("expected fieldlen (map-map) to pass: %v", err)
+	}
+	if err := v.Struct(req{Images: map[string]string{"a": "1"}, Labels: map[string]string{"x": "1", "y": "2"}}); err == nil {
+		t.Fatal("expected fieldlen (map-map) to fail on different lengths")
+	}
+}
+
+func TestFieldLenCrossLevel(t *testing.T) {
+	// 跨层级访问
+	type inner struct {
+		Names []string `validate:"required"`
+	}
+	type req struct {
+		Tags  []string `validate:"required,fieldlen=Inner.Names"`
+		Inner inner    `validate:""`
+	}
+	v := New()
+	if err := v.Struct(req{Tags: []string{"a", "b"}, Inner: inner{Names: []string{"x", "y"}}}); err != nil {
+		t.Fatalf("expected fieldlen (cross-level) to pass: %v", err)
+	}
+	if err := v.Struct(req{Tags: []string{"a"}, Inner: inner{Names: []string{"x", "y"}}}); err == nil {
+		t.Fatal("expected fieldlen (cross-level) to fail on different lengths")
+	}
+}
+
+func TestFieldLenErrorMessage(t *testing.T) {
+	type req struct {
+		Tags  []string `validate:"required,fieldlen=Names"`
+		Names []string `validate:"required"`
+	}
+	v := New()
+	err := v.Struct(req{Tags: []string{"a"}, Names: []string{"x", "y"}})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	msgs := TranslateValidationErrors(err, "en")
+	if len(msgs) == 0 {
+		t.Fatal("expected translated error messages")
+	}
+	found := false
+	for _, m := range msgs {
+		if m.Tag == "fieldlen" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected fieldlen tag in error messages, got: %+v", msgs)
+	}
+}
+
 func TestEqCsField(t *testing.T) {
 	type inner struct {
 		Value string `validate:"eqcsfield=Name"`

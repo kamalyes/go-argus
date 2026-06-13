@@ -98,6 +98,7 @@ func ZhTWMessages() map[string]string {
 		"ltecsfield":                      "{field} 必須小於或等於 {param}",
 		"fieldcontains":                   "{field} 必須包含 {param}",
 		"fieldexcludes":                   "{field} 不能包含 {param}",
+		"fieldlen":                        "{field} 長度必須與 {param} 匹配",
 		"after":                           "{field} 必須晚於 {param}",
 		"before":                          "{field} 必須早於 {param}",
 		"afterfield":                      "{field} 必須晚於 {param}",

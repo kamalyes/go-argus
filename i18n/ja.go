@@ -98,6 +98,7 @@ func JaMessages() map[string]string {
 		"ltecsfield":                      "{field} は {param} 以下である必要があります",
 		"fieldcontains":                   "{field} は {param} を含む必要があります",
 		"fieldexcludes":                   "{field} は {param} を含まない必要があります",
+		"fieldlen":                        "{field} の長さは {param} と一致する必要があります",
 		"after":                           "{field} は {param} より後である必要があります",
 		"before":                          "{field} は {param} より前である必要があります",
 		"afterfield":                      "{field} は {param} より後である必要があります",
