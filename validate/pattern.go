@@ -27,9 +27,6 @@ import (
 // 数字校验（手动字节扫描）
 // ────────────────────────────────────────
 
-// isDigitByte 判断字节是否为 ASCII 数字（内联，零开销）
-func isDigitByte(c byte) bool { return c >= '0' && c <= '9' }
-
 // isLowerHexByte 判断字节是否为小写十六进制字符
 func isLowerHexByte(c byte) bool { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') }
 
