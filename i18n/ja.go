@@ -196,5 +196,17 @@ func JaMessages() map[string]string {
 		"bcp47":                           "{field} は有効なBCP 47言語タグである必要があります",
 		"eth_addr":                        "{field} は有効なイーサリアムアドレスである必要があります",
 		"btc_addr":                        "{field} は有効なビットコインアドレスである必要があります",
+		"digits":                          "{field} は数字のみを含む必要があります",
+		"int_or_float":                    "{field} は整数または小数点以下2桁以内の数値である必要があります",
+		"word_chars":                      "{field} は英字、数字、アンダースコアのみを含む必要があります",
+		"upper_alpha":                     "{field} は大文字の英字のみを含む必要があります",
+		"lower_alpha":                     "{field} は小文字の英字のみを含む必要があります",
+		"strong_password":                 "{field} は強力なパスワードである必要があります（8文字+大小文字+数字+特殊文字）",
+		"has_special":                     "{field} は特殊文字を含む必要があります",
+		"has_double_byte":                 "{field} はダブルバイト文字を含む必要があります",
+		"empty_line":                      "{field} は空行である必要があります",
+		"cn_phone":                        "{field} は有効な中国の電話番号である必要があります",
+		"cn_idcard":                       "{field} は有効な中国の身分証明書番号である必要があります",
+		"cn_idcard_strict":                "{field} は有効な中国の身分証明書番号である必要があります（チェックサム検証付き）",
 	}
 }

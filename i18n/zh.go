@@ -203,5 +203,17 @@ func ZhMessages() map[string]string {
 		"bcp47":                "{field} 必须是有效的 BCP 47 语言标签",
 		"eth_addr":             "{field} 必须是有效的以太坊地址",
 		"btc_addr":             "{field} 必须是有效的比特币地址",
+		"digits":               "{field} 只能包含数字",
+		"int_or_float":         "{field} 必须是整数或最多2位小数",
+		"word_chars":           "{field} 只能包含字母、数字和下划线",
+		"upper_alpha":          "{field} 只能包含大写字母",
+		"lower_alpha":          "{field} 只能包含小写字母",
+		"strong_password":      "{field} 必须是强密码（8位+大小写+数字+特殊字符）",
+		"has_special":          "{field} 必须包含特殊字符",
+		"has_double_byte":      "{field} 必须包含双字节字符",
+		"empty_line":           "{field} 必须是空白行",
+		"cn_phone":             "{field} 必须是有效的中国大陆手机号",
+		"cn_idcard":            "{field} 必须是有效的中国大陆身份证号",
+		"cn_idcard_strict":     "{field} 必须是有效的中国大陆身份证号（含校验和验证）",
 	}
 }

@@ -196,5 +196,17 @@ func KoMessages() map[string]string {
 		"bcp47":                           "{field}은(는) 유효한 BCP 47 언어 태그여야 합니다",
 		"eth_addr":                        "{field}은(는) 유효한 이더리움 주소여야 합니다",
 		"btc_addr":                        "{field}은(는) 유효한 비트코인 주소여야 합니다",
+		"digits":                          "{field}은(는) 숫자만 포함해야 합니다",
+		"int_or_float":                    "{field}은(는) 정수 또는 소수점 이하 2자리 이내의 숫자여야 합니다",
+		"word_chars":                      "{field}은(는) 영문자, 숫자, 밑줄만 포함해야 합니다",
+		"upper_alpha":                     "{field}은(는) 대문자 알파벳만 포함해야 합니다",
+		"lower_alpha":                     "{field}은(는) 소문자 알파벳만 포함해야 합니다",
+		"strong_password":                 "{field}은(는) 강력한 비밀번호여야 합니다 (8자+대소문자+숫자+특수문자)",
+		"has_special":                     "{field}은(는) 특수문자를 포함해야 합니다",
+		"has_double_byte":                 "{field}은(는) 더블바이트 문자를 포함해야 합니다",
+		"empty_line":                      "{field}은(는) 빈 줄이어야 합니다",
+		"cn_phone":                        "{field}은(는) 유효한 중국 전화번호여야 합니다",
+		"cn_idcard":                       "{field}은(는) 유효한 중국 신분증 번호여야 합니다",
+		"cn_idcard_strict":                "{field}은(는) 유효한 중국 신분증 번호여야 합니다 (체크섬 검증 포함)",
 	}
 }

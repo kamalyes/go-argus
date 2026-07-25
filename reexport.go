@@ -465,6 +465,133 @@ func ValidateIP(ipStr string) CompareResult {
 }
 
 // ────────────────────────────────────────
+// 模式校验（validate/pattern）
+// ────────────────────────────────────────
+
+// IsIntOrFloat 检查字符串是否为整数或最多2位小数
+func IsIntOrFloat(s string) bool { return validate.IsIntOrFloat(s) }
+
+// IsDigits 检查字符串是否全部由数字组成（空串返回 true）
+func IsDigits(s string) bool { return validate.IsDigits(s) }
+
+// IsDigitsLengthN 检查字符串是否为长度等于 n 的纯数字
+func IsDigitsLengthN(s string, n int) bool { return validate.IsDigitsLengthN(s, n) }
+
+// IsDigitsLengthGeN 检查字符串是否为长度不小于 n 的纯数字
+func IsDigitsLengthGeN(s string, n int) bool { return validate.IsDigitsLengthGeN(s, n) }
+
+// IsDigitsLengthMN 检查字符串是否为长度在 m 到 n 之间的纯数字
+func IsDigitsLengthMN(s string, m, n int) bool { return validate.IsDigitsLengthMN(s, m, n) }
+
+// IsNonZeroLeadingDigits 检查字符串是否为非零开头的纯数字
+func IsNonZeroLeadingDigits(s string) bool { return validate.IsNonZeroLeadingDigits(s) }
+
+// IsPositiveNonZeroInt 检查字符串是否为正整数（可选+前缀，首位非零）
+func IsPositiveNonZeroInt(s string) bool { return validate.IsPositiveNonZeroInt(s) }
+
+// IsNegativeNonZeroInt 检查字符串是否为负整数（首位非零）
+func IsNegativeNonZeroInt(s string) bool { return validate.IsNegativeNonZeroInt(s) }
+
+// IsDecimalN 检查字符串是否为有 n 位小数的正实数
+func IsDecimalN(s string, n int) bool { return validate.IsDecimalN(s, n) }
+
+// IsDecimalMN 检查字符串是否为有 m 到 n 位小数的正实数
+func IsDecimalMN(s string, m, n int) bool { return validate.IsDecimalMN(s, m, n) }
+
+// IsAlpha 检查字符串是否全部由英文字母组成
+func IsAlpha(s string) bool { return validate.IsAlpha(s) }
+
+// IsUpperAlpha 检查字符串是否全部由大写英文字母组成
+func IsUpperAlpha(s string) bool { return validate.IsUpperAlpha(s) }
+
+// IsLowerAlpha 检查字符串是否全部由小写英文字母组成
+func IsLowerAlpha(s string) bool { return validate.IsLowerAlpha(s) }
+
+// IsAlphanumeric 检查字符串是否由数字和英文字母组成
+func IsAlphanumeric(s string) bool { return validate.IsAlphanumeric(s) }
+
+// IsWordChars 检查字符串是否由字母、数字、下划线组成
+func IsWordChars(s string) bool { return validate.IsWordChars(s) }
+
+// IsLengthN 检查字符串的 rune 长度是否等于 n
+func IsLengthN(s string, n int) bool { return validate.IsLengthN(s, n) }
+
+// IsHex 检查字符串是否为有效的十六进制数
+func IsHex(s string) bool { return validate.IsHex(s) }
+
+// HasSpecialChars 检查字符串是否包含特殊字符
+func HasSpecialChars(s string) bool { return validate.HasSpecialChars(s) }
+
+// HasDoubleByte 检查字符串是否包含双字节字符（非 ASCII）
+func HasDoubleByte(s string) bool { return validate.HasDoubleByte(s) }
+
+// IsEmptyLine 检查字符串是否为空白行
+func IsEmptyLine(s string) bool { return validate.IsEmptyLine(s) }
+
+// IsTimeFormat 校验时间格式
+func IsTimeFormat(s string) bool { return validate.IsTimeFormat(s) }
+
+// IsPasswordPattern 检查密码是否符合规则（字母开头，字母数字下划线，长度 m~n）
+func IsPasswordPattern(s string, m, n int) bool { return validate.IsPasswordPattern(s, m, n) }
+
+// IsStrongPassword 检查密码强度（8位+大小写+数字+特殊字符）
+func IsStrongPassword(s string) bool { return validate.IsStrongPassword(s) }
+
+// IsAllChinese 检查字符串是否全部由汉字组成，返回是否全为汉字及非汉字字符数
+func IsAllChinese(str string) (bool, int) { return validate.IsAllChinese(str) }
+
+// ContainsChineseChars 检查字符串是否包含中文字符
+func ContainsChineseChars(s string) bool { return validate.ContainsChineseChars(s) }
+
+// IsTrueString 判断字符串是否表示 true（true/1/yes，大小写不敏感）
+func IsTrueString(s string) bool { return validate.IsTrueString(s) }
+
+// ────────────────────────────────────────
+// 中国大陆格式校验（validate/chinese）
+// ────────────────────────────────────────
+
+// IsChinesePhoneNumber 检查字符串是否为有效的大陆手机号
+func IsChinesePhoneNumber(s string) bool { return validate.IsChinesePhoneNumber(s) }
+
+// IsChineseIDCard 检查字符串是否为有效的大陆身份证号（15位或18位格式）
+func IsChineseIDCard(s string) bool { return validate.IsChineseIDCard(s) }
+
+// IsChineseIDCardWithChecksum 检查18位身份证号（含校验位验证）
+func IsChineseIDCardWithChecksum(s string) bool { return validate.IsChineseIDCardWithChecksum(s) }
+
+// CalculateIDCardChecksum 计算给定17位身份证号的校验和字符
+func CalculateIDCardChecksum(id string) string { return validate.CalculateIDCardChecksum(id) }
+
+// ────────────────────────────────────────
+// IP 工具函数（validate/ip_util）
+// ────────────────────────────────────────
+
+// HasLocalIP 判断 IP 字符串是否为本地或私有地址
+func HasLocalIP(ip string) bool { return validate.HasLocalIP(ip) }
+
+// IsLinkLocalIP 判断 IP 是否为链路本地地址
+func IsLinkLocalIP(ip net.IP) bool { return validate.IsLinkLocalIP(ip) }
+
+// IsUniqueLocalAddress 判断 IP 是否为 IPv6 唯一本地地址（ULA）
+func IsUniqueLocalAddress(ip net.IP) bool { return validate.IsUniqueLocalAddress(ip) }
+
+// IsGlobalUnicast 判断 IP 字符串是否为全球单播地址
+func IsGlobalUnicast(ip string) bool { return validate.IsGlobalUnicast(ip) }
+
+// IsDocumentationAddress 判断 IP 是否为文档专用地址
+func IsDocumentationAddress(ip net.IP) bool { return validate.IsDocumentationAddress(ip) }
+
+// ────────────────────────────────────────
+// 时间解析（validate/time_parse）
+// ────────────────────────────────────────
+
+// ParseWeek 解析星期字段，返回 time.Weekday
+func ParseWeek(week string) (time.Weekday, error) { return validate.ParseWeek(week) }
+
+// ParseMonth 解析月份字段，返回 time.Month
+func ParseMonth(month string) (time.Month, error) { return validate.ParseMonth(month) }
+
+// ────────────────────────────────────────
 // Schema 校验（schema 子包）
 // ────────────────────────────────────────
 

@@ -196,5 +196,17 @@ func ZhTWMessages() map[string]string {
 		"bcp47":                           "{field} 必須是有效的 BCP 47 語言標籤",
 		"eth_addr":                        "{field} 必須是有效的以太坊地址",
 		"btc_addr":                        "{field} 必須是有效的比特幣地址",
+		"digits":                          "{field} 只能包含數字",
+		"int_or_float":                    "{field} 必須是整數或最多2位小數",
+		"word_chars":                      "{field} 只能包含字母、數字和底線",
+		"upper_alpha":                     "{field} 只能包含大寫字母",
+		"lower_alpha":                     "{field} 只能包含小寫字母",
+		"strong_password":                 "{field} 必須是強密碼（8位+大小寫+數字+特殊字元）",
+		"has_special":                     "{field} 必須包含特殊字元",
+		"has_double_byte":                 "{field} 必須包含雙位元字元",
+		"empty_line":                      "{field} 必須是空白行",
+		"cn_phone":                        "{field} 必須是有效的中國大陸手機號",
+		"cn_idcard":                       "{field} 必須是有效的中國大陸身分證號",
+		"cn_idcard_strict":                "{field} 必須是有效的中國大陸身分證號（含校驗和驗證）",
 	}
 }

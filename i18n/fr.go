@@ -196,5 +196,17 @@ func FrMessages() map[string]string {
 		"bcp47":                           "{field} doit être une balise de langue BCP 47 valide",
 		"eth_addr":                        "{field} doit être une adresse Ethereum valide",
 		"btc_addr":                        "{field} doit être une adresse Bitcoin valide",
+		"digits":                          "{field} ne doit contenir que des chiffres",
+		"int_or_float":                    "{field} doit être un entier ou un nombre à 2 décimales maximum",
+		"word_chars":                      "{field} ne doit contenir que des caractères de mot (lettres, chiffres, tiret bas)",
+		"upper_alpha":                     "{field} ne doit contenir que des lettres majuscules",
+		"lower_alpha":                     "{field} ne doit contenir que des lettres minuscules",
+		"strong_password":                 "{field} doit être un mot de passe fort (8+ caractères avec majuscule, minuscule, chiffre et spécial)",
+		"has_special":                     "{field} doit contenir au moins un caractère spécial",
+		"has_double_byte":                 "{field} doit contenir au moins un caractère à double octet",
+		"empty_line":                      "{field} doit être une ligne vide",
+		"cn_phone":                        "{field} doit être un numéro de téléphone chinois valide",
+		"cn_idcard":                       "{field} doit être un numéro de carte d'identité chinoise valide",
+		"cn_idcard_strict":                "{field} doit être un numéro de carte d'identité chinoise valide (avec somme de contrôle)",
 	}
 }

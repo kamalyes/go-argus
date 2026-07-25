@@ -196,5 +196,17 @@ func EsMessages() map[string]string {
 		"bcp47":                           "{field} debe ser una etiqueta de idioma BCP 47 válida",
 		"eth_addr":                        "{field} debe ser una dirección Ethereum válida",
 		"btc_addr":                        "{field} debe ser una dirección Bitcoin válida",
+		"digits":                          "{field} solo debe contener dígitos",
+		"int_or_float":                    "{field} debe ser un entero o un número con máximo 2 decimales",
+		"word_chars":                      "{field} solo debe contener caracteres de palabra (letras, dígitos, guion bajo)",
+		"upper_alpha":                     "{field} solo debe contener letras mayúsculas",
+		"lower_alpha":                     "{field} solo debe contener letras minúsculas",
+		"strong_password":                 "{field} debe ser una contraseña fuerte (8+ caracteres con mayúscula, minúscula, dígito y especial)",
+		"has_special":                     "{field} debe contener al menos un carácter especial",
+		"has_double_byte":                 "{field} debe contener al menos un carácter de doble byte",
+		"empty_line":                      "{field} debe ser una línea vacía",
+		"cn_phone":                        "{field} debe ser un número de teléfono chino válido",
+		"cn_idcard":                       "{field} debe ser un número de tarjeta de identidad china válido",
+		"cn_idcard_strict":                "{field} debe ser un número de tarjeta de identidad china válido (con suma de comprobación)",
 	}
 }

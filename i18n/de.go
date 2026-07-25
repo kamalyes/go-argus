@@ -196,5 +196,17 @@ func DeMessages() map[string]string {
 		"bcp47":                           "{field} muss ein gültiges BCP-47-Sprachtag sein",
 		"eth_addr":                        "{field} muss eine gültige Ethereum-Adresse sein",
 		"btc_addr":                        "{field} muss eine gültige Bitcoin-Adresse sein",
+		"digits":                          "{field} darf nur Ziffern enthalten",
+		"int_or_float":                    "{field} muss eine Ganzzahl oder eine Zahl mit höchstens 2 Dezimalstellen sein",
+		"word_chars":                      "{field} darf nur Wortzeichen (Buchstaben, Ziffern, Unterstrich) enthalten",
+		"upper_alpha":                     "{field} darf nur Großbuchstaben enthalten",
+		"lower_alpha":                     "{field} darf nur Kleinbuchstaben enthalten",
+		"strong_password":                 "{field} muss ein starkes Passwort sein (8+ Zeichen mit Groß-, Kleinbuchstabe, Ziffer und Sonderzeichen)",
+		"has_special":                     "{field} muss mindestens ein Sonderzeichen enthalten",
+		"has_double_byte":                 "{field} muss mindestens ein Doppelbyte-Zeichen enthalten",
+		"empty_line":                      "{field} muss eine leere Zeile sein",
+		"cn_phone":                        "{field} muss eine gültige chinesische Telefonnummer sein",
+		"cn_idcard":                       "{field} muss eine gültige chinesische Personalausweisnummer sein",
+		"cn_idcard_strict":                "{field} muss eine gültige chinesische Personalausweisnummer sein (mit Prüfsumme)",
 	}
 }

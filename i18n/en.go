@@ -210,5 +210,17 @@ func EnMessages() map[string]string {
 		"bcp47":                "{field} must be a valid BCP 47 language tag",
 		"eth_addr":             "{field} must be a valid Ethereum address",
 		"btc_addr":             "{field} must be a valid Bitcoin address",
+		"digits":               "{field} must contain only digits",
+		"int_or_float":         "{field} must be an integer or a float with at most 2 decimal places",
+		"word_chars":           "{field} must contain only word characters (letters, digits, underscore)",
+		"upper_alpha":          "{field} must contain only uppercase alphabetic characters",
+		"lower_alpha":          "{field} must contain only lowercase alphabetic characters",
+		"strong_password":      "{field} must be a strong password (8+ chars with upper, lower, digit and special)",
+		"has_special":          "{field} must contain at least one special character",
+		"has_double_byte":      "{field} must contain at least one double-byte character",
+		"empty_line":           "{field} must be an empty line",
+		"cn_phone":             "{field} must be a valid Chinese phone number",
+		"cn_idcard":            "{field} must be a valid Chinese ID card number",
+		"cn_idcard_strict":     "{field} must be a valid Chinese ID card number (with checksum)",
 	}
 }
