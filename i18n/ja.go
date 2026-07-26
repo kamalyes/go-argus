@@ -174,6 +174,7 @@ func JaMessages() map[string]string {
 		"boolean":                         "{field} は有効なブール値である必要があります",
 		"number":                          "{field} は有効な数値である必要があります",
 		"numeric":                         "{field} は有効な数値である必要があります",
+		"integer":                         "{field} は整数である必要があります",
 		"datetime":                        "{field} は有効な日時である必要があります",
 		"timezone":                        "{field} は有効なタイムゾーンである必要があります",
 		"latitude":                        "{field} は有効な緯度である必要があります",

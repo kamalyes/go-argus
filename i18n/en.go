@@ -188,6 +188,7 @@ func EnMessages() map[string]string {
 		"boolean":              "{field} must be a valid boolean value",
 		"number":               "{field} must be a valid number",
 		"numeric":              "{field} must be a valid numeric value",
+		"integer":              "{field} must be an integer",
 		"datetime":             "{field} must be a valid datetime",
 		"timezone":             "{field} must be a valid timezone",
 		"latitude":             "{field} must be a valid latitude",

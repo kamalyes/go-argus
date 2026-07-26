@@ -107,6 +107,81 @@ func TestRegisterTagNameFunc(t *testing.T) {
 	}
 }
 
+// integerTestStruct 用于测试 validate:"integer" tag 规则
+type integerTestStruct struct {
+	IntField    int     `json:"int_field" validate:"integer"`
+	FloatField  float64 `json:"float_field" validate:"integer"`
+	StringField string  `json:"string_field" validate:"integer"`
+	UintField   uint    `json:"uint_field" validate:"integer"`
+}
+
+func TestRuleIntegerTag(t *testing.T) {
+	v := New(WithRequiredStructEnabled())
+
+	t.Run("全部有效整数", func(t *testing.T) {
+		req := integerTestStruct{
+			IntField:    42,
+			FloatField:  100.0,
+			StringField: "123",
+			UintField:   10,
+		}
+		if err := v.Struct(req); err != nil {
+			t.Fatalf("expected valid, got %v", err)
+		}
+	})
+
+	t.Run("float 非整数失败", func(t *testing.T) {
+		req := integerTestStruct{
+			IntField:    42,
+			FloatField:  3.14, // 非整数
+			StringField: "123",
+			UintField:   10,
+		}
+		err := v.Struct(req)
+		if err == nil {
+			t.Fatal("expected float 3.14 to fail integer rule")
+		}
+	})
+
+	t.Run("string 非整数失败", func(t *testing.T) {
+		req := integerTestStruct{
+			IntField:    42,
+			FloatField:  100.0,
+			StringField: "12.3", // 非整数
+			UintField:   10,
+		}
+		err := v.Struct(req)
+		if err == nil {
+			t.Fatal("expected string \"12.3\" to fail integer rule")
+		}
+	})
+
+	t.Run("string 含非数字失败", func(t *testing.T) {
+		req := integerTestStruct{
+			IntField:    42,
+			FloatField:  100.0,
+			StringField: "12abc", // 含非数字
+			UintField:   10,
+		}
+		err := v.Struct(req)
+		if err == nil {
+			t.Fatal("expected string \"12abc\" to fail integer rule")
+		}
+	})
+
+	t.Run("负数字符串有效", func(t *testing.T) {
+		req := integerTestStruct{
+			IntField:    42,
+			FloatField:  100.0,
+			StringField: "-123", // 负整数
+			UintField:   10,
+		}
+		if err := v.Struct(req); err != nil {
+			t.Fatalf("expected \"-123\" to pass integer rule, got %v", err)
+		}
+	})
+}
+
 func TestStructInvalidInput(t *testing.T) {
 	v := New()
 	err := v.Struct(nil)

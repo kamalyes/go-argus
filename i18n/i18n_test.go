@@ -288,6 +288,39 @@ func TestAllMessageFunctionsReturnNonEmpty(t *testing.T) {
 	}
 }
 
+// TestAllLocalesHaveSameKeysAsEn 确保所有语言的键集合与 en 完全一致，防止遗漏翻译键
+func TestAllLocalesHaveSameKeysAsEn(t *testing.T) {
+	allFuncs := map[string]func() map[string]string{
+		"zh":    ZhMessages,
+		"zh-TW": ZhTWMessages,
+		"ja":    JaMessages,
+		"ko":    KoMessages,
+		"fr":    FrMessages,
+		"de":    DeMessages,
+		"es":    EsMessages,
+		"ru":    RuMessages,
+	}
+
+	enKeys := make(map[string]struct{}, len(EnMessages()))
+	for k := range EnMessages() {
+		enKeys[k] = struct{}{}
+	}
+
+	for locale, fn := range allFuncs {
+		msgs := fn()
+		for k := range enKeys {
+			if _, ok := msgs[k]; !ok {
+				t.Errorf("locale %q is missing key %q (present in en)", locale, k)
+			}
+		}
+		for k := range msgs {
+			if _, ok := enKeys[k]; !ok {
+				t.Errorf("locale %q has extra key %q (not in en)", locale, k)
+			}
+		}
+	}
+}
+
 func TestMsgWithEmptyArgs(t *testing.T) {
 	original := GetLocale()
 	SetLocale("en")

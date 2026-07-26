@@ -174,6 +174,7 @@ func KoMessages() map[string]string {
 		"boolean":                         "{field}은(는) 유효한 부울 값이어야 합니다",
 		"number":                          "{field}은(는) 유효한 숫자여야 합니다",
 		"numeric":                         "{field}은(는) 유효한 수치여야 합니다",
+		"integer":                         "{field}은(는) 정수여야 합니다",
 		"datetime":                        "{field}은(는) 유효한 날짜/시간이어야 합니다",
 		"timezone":                        "{field}은(는) 유효한 시간대여야 합니다",
 		"latitude":                        "{field}은(는) 유효한 위도여야 합니다",

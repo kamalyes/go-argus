@@ -174,6 +174,7 @@ func DeMessages() map[string]string {
 		"boolean":                         "{field} muss ein gültiger Boolescher Wert sein",
 		"number":                          "{field} muss eine gültige Zahl sein",
 		"numeric":                         "{field} muss ein gültiger numerischer Wert sein",
+		"integer":                         "{field} muss eine Ganzzahl sein",
 		"datetime":                        "{field} muss ein gültiges Datum/Zeit sein",
 		"timezone":                        "{field} muss eine gültige Zeitzone sein",
 		"latitude":                        "{field} muss ein gültiger Breitengrad sein",

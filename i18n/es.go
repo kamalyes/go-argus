@@ -174,6 +174,7 @@ func EsMessages() map[string]string {
 		"boolean":                         "{field} debe ser un valor booleano válido",
 		"number":                          "{field} debe ser un número válido",
 		"numeric":                         "{field} debe ser un valor numérico válido",
+		"integer":                         "{field} debe ser un entero",
 		"datetime":                        "{field} debe ser una fecha/hora válida",
 		"timezone":                        "{field} debe ser una zona horaria válida",
 		"latitude":                        "{field} debe ser una latitud válida",

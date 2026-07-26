@@ -181,6 +181,7 @@ func ZhMessages() map[string]string {
 		"boolean":              "{field} 必须是有效的布尔值",
 		"number":               "{field} 必须是有效的数字",
 		"numeric":              "{field} 必须是有效的数值",
+		"integer":              "{field} 必须是整数",
 		"datetime":             "{field} 必须是有效的日期时间",
 		"timezone":             "{field} 必须是有效的时区",
 		"latitude":             "{field} 必须是有效的纬度",

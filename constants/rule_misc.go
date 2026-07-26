@@ -16,6 +16,7 @@ const (
 	RuleBoolean = "boolean" // 布尔值
 	RuleNumber  = "number"  // 数字
 	RuleNumeric = "numeric" // 数值（number 别名）
+	RuleInteger = "integer" // 整数（数值字段必须为整数，字符串字段必须为纯整数）
 	RuleJSON    = "json"    // JSON 格式
 
 	RuleLatitude  = "latitude"  // 纬度

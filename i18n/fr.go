@@ -174,6 +174,7 @@ func FrMessages() map[string]string {
 		"boolean":                         "{field} doit être une valeur booléenne valide",
 		"number":                          "{field} doit être un nombre valide",
 		"numeric":                         "{field} doit être une valeur numérique valide",
+		"integer":                         "{field} doit être un entier",
 		"datetime":                        "{field} doit être une date/heure valide",
 		"timezone":                        "{field} doit être un fuseau horaire valide",
 		"latitude":                        "{field} doit être une latitude valide",

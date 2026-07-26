@@ -174,6 +174,7 @@ func ZhTWMessages() map[string]string {
 		"boolean":                         "{field} 必須是有效的布林值",
 		"number":                          "{field} 必須是有效的數字",
 		"numeric":                         "{field} 必須是有效的數值",
+		"integer":                         "{field} 必須是整數",
 		"datetime":                        "{field} 必須是有效的日期時間",
 		"timezone":                        "{field} 必須是有效的時區",
 		"latitude":                        "{field} 必須是有效的緯度",

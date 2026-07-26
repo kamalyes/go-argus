@@ -145,6 +145,34 @@ func RuleNumber(field reflect.Value, _ string, _ bool) bool {
 	}
 }
 
+// RuleInteger 判断字段是否为整数
+//
+// 与 RuleNumber 的区别：
+//   - RuleNumber 接受任何数值（含浮点）
+//   - RuleInteger 要求整数：int/uint 类型直接通过，float 类型必须为整数值，字符串必须为纯整数
+//
+// 性能：零分配
+//   - int/uint 类型：O(1) switch 命中
+//   - float 类型：单次 IsWholeNumber 比较
+//   - string 类型：手动字节扫描（StringInteger），无 strconv 分配
+func RuleInteger(field reflect.Value, _ string, _ bool) bool {
+	field = validate.DerefReflect(field)
+	if !field.IsValid() {
+		return false
+	}
+	switch field.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		return true
+	case reflect.Float32, reflect.Float64:
+		return validate.IsWholeNumber(field.Float())
+	case reflect.String:
+		return validate.StringInteger(field.String())
+	default:
+		return false
+	}
+}
+
 func RuleJSON(field reflect.Value, _ string, _ bool) bool {
 	if b, ok := validate.BytesValue(field); ok {
 		return validate.IsValidJSONBytes(b)
@@ -257,6 +285,7 @@ var BuiltinRules = map[string]BuiltinRule{
 	constants.RuleBoolean:             RuleBoolean,
 	constants.RuleNumber:              RuleNumber,
 	constants.RuleNumeric:             RuleNumber,
+	constants.RuleInteger:             RuleInteger,
 	constants.RuleJSON:                RuleJSON,
 	constants.RuleLatitude:            RuleLatitude,
 	constants.RuleLongitude:           RuleLongitude,
