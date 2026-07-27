@@ -525,6 +525,9 @@ func HasSpecialChars(s string) bool { return validate.HasSpecialChars(s) }
 // HasDoubleByte 检查字符串是否包含双字节字符（非 ASCII）
 func HasDoubleByte(s string) bool { return validate.HasDoubleByte(s) }
 
+// IsBlankString 检查字符串是否为空白（仅含空格、制表符、换行符等）
+func IsBlankString(s string) bool { return validate.IsBlankString(s) }
+
 // IsEmptyLine 检查字符串是否为空白行
 func IsEmptyLine(s string) bool { return validate.IsEmptyLine(s) }
 

@@ -832,10 +832,16 @@ func (v *Validate) evalFieldExcludes(top, parent, field reflect.Value, plan rule
 }
 
 func (v *Validate) evalAfter(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+	if validate.IsEmptyValueWithStruct(field, v.requiredStructEnabled) {
+		return true
+	}
 	return rule.CompareTimeExpr(field, plan.Param, constants.RuleGT, time.Now())
 }
 
 func (v *Validate) evalBefore(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+	if validate.IsEmptyValueWithStruct(field, v.requiredStructEnabled) {
+		return true
+	}
 	return rule.CompareTimeExpr(field, plan.Param, constants.RuleLT, time.Now())
 }
 
