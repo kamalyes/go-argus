@@ -47,7 +47,7 @@ func TestIsWholeNumber(t *testing.T) {
 	if !IsWholeNumber(0) {
 		t.Error("IsWholeNumber(0) = false; want true")
 	}
-	if !IsWholeNumber(-0.0) {
+	if !IsWholeNumber(math.Copysign(0, -1)) {
 		t.Error("IsWholeNumber(-0.0) = false; want true")
 	}
 
