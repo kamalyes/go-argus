@@ -382,6 +382,11 @@ func UnwrapProtobufWrapper(value any) (any, bool) {
 	return validate.UnwrapProtobufWrapper(value)
 }
 
+// UnwrapProtobufEnum 通过反射解开 protobuf enum，提取底层数值
+func UnwrapProtobufEnum(value any) (any, bool) {
+	return validate.UnwrapProtobufEnum(value)
+}
+
 // IsEmptyAfterDeref 解引用后判断值是否为空
 func IsEmptyAfterDeref(value any) (any, bool) {
 	return validate.IsEmptyAfterDeref(value)

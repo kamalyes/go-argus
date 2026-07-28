@@ -260,7 +260,7 @@ func UnwrapProtobufWrapper(value any) (any, bool) {
 	if IsNilValue(v) {
 		return nil, true
 	}
-	method := findZeroArgGetValueMethod(v)
+	method := findZeroArgMethod(v, "GetValue")
 	if !method.IsValid() || method.Type().NumIn() != 0 || method.Type().NumOut() != 1 {
 		return nil, false
 	}
@@ -285,6 +285,18 @@ func IsEmptyAfterDeref(value any) (any, bool) {
 		return deref, false
 	}
 
+	// protobuf enum：Number() 返回底层数值，零值（UNSPECIFIED）视为空
+	if unwrapped, ok := UnwrapProtobufEnum(value); ok {
+		if unwrapped == nil {
+			return nil, true
+		}
+		uv := reflect.ValueOf(unwrapped)
+		if IsEmptyValue(uv) {
+			return nil, true
+		}
+		return unwrapped, false
+	}
+
 	deref, ok := DerefValue(value)
 	if !ok {
 		return nil, true
@@ -303,9 +315,12 @@ func IsEmptyAfterDeref(value any) (any, bool) {
 	return deref, false
 }
 
-// NormalizeFilterValue 归一化过滤值，支持 protobuf wrapper 和任意切片
+// NormalizeFilterValue 归一化过滤值，支持 protobuf wrapper、protobuf enum 和任意切片
 func NormalizeFilterValue(value any) any {
 	if normalized, ok := UnwrapProtobufWrapper(value); ok {
+		return normalized
+	}
+	if normalized, ok := UnwrapProtobufEnum(value); ok {
 		return normalized
 	}
 	v := reflect.ValueOf(value)
@@ -348,8 +363,8 @@ func NormalizeFilterValueIfNotEmpty(value any) (any, bool) {
 	return NormalizeFilterValue(deref), false
 }
 
-func findZeroArgGetValueMethod(v reflect.Value) reflect.Value {
-	method := v.MethodByName("GetValue")
+func findZeroArgMethod(v reflect.Value, name string) reflect.Value {
+	method := v.MethodByName(name)
 	if method.IsValid() {
 		return method
 	}
@@ -358,7 +373,33 @@ func findZeroArgGetValueMethod(v reflect.Value) reflect.Value {
 	}
 	pv := reflect.New(v.Type())
 	pv.Elem().Set(v)
-	return pv.MethodByName("GetValue")
+	return pv.MethodByName(name)
+}
+
+// UnwrapProtobufEnum 通过反射解开 protobuf enum，避免引入 protobuf 依赖
+// protobuf enum 具有 Number() 方法，返回 protoreflect.EnumNumber（即 int32）
+// 必须转换为基础数值类型，否则 ClickHouse 等驱动会调用 String() 方法序列化为枚举名（如 "LOGIN_RESULT_STATUS_FAILURE"）导致 TYPE_MISMATCH
+func UnwrapProtobufEnum(value any) (any, bool) {
+	if value == nil {
+		return nil, false
+	}
+	v := reflect.ValueOf(value)
+	if IsNilValue(v) {
+		return nil, true
+	}
+	method := findZeroArgMethod(v, "Number")
+	if !method.IsValid() || method.Type().NumIn() != 0 || method.Type().NumOut() != 1 {
+		return nil, false
+	}
+	out := method.Call(nil)
+	switch out[0].Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return out[0].Int(), true
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return out[0].Uint(), true
+	default:
+		return out[0].Interface(), true
+	}
 }
 
 // IsFilterScalarKind 判断 Kind 是否属于过滤场景下的标量类型（bool/number）

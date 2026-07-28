@@ -11,6 +11,7 @@
 package validate
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -497,6 +498,39 @@ type mockProtoWrapper struct {
 }
 
 func (m mockProtoWrapper) GetValue() string { return m.value }
+
+// --- protobuf enum mock 类型 ---
+// 模拟 protoc-gen-go 生成的 enum：type XXX int32 + Number() + String()
+// Number() 返回命名类型 mockEnumNumber（对应 protoreflect.EnumNumber）
+// String() 返回枚举名（对应 LOGIN_RESULT_STATUS_FAILURE 等）
+
+type mockEnumNumber int32
+
+type mockProtobufEnum int32
+
+const (
+	mockProtobufEnumUnspecified mockProtobufEnum = 0
+	mockProtobufEnumSuccess     mockProtobufEnum = 1
+	mockProtobufEnumFailure     mockProtobufEnum = 2
+)
+
+func (e mockProtobufEnum) Number() mockEnumNumber { return mockEnumNumber(e) }
+
+func (e mockProtobufEnum) String() string {
+	switch e {
+	case mockProtobufEnumSuccess:
+		return "MOCK_ENUM_SUCCESS"
+	case mockProtobufEnumFailure:
+		return "MOCK_ENUM_FAILURE"
+	default:
+		return "MOCK_ENUM_UNSPECIFIED"
+	}
+}
+
+// mockProtobufEnumNoMethod 没有 Number() 方法的类型，不应被解包
+type mockProtobufEnumNoMethod int32
+
+func (e mockProtobufEnumNoMethod) String() string { return "NO_METHOD" }
 
 type mockProtoNilPtrValue struct{}
 
@@ -990,5 +1024,125 @@ func TestNormalizeFilterValueIfNotEmptySliceWithWrappers(t *testing.T) {
 	}
 	if result[1].(string) != "test" {
 		t.Fatalf("expected second element 'test', got %v", result[1])
+	}
+}
+
+// --- UnwrapProtobufEnum 测试 ---
+
+func TestUnwrapProtobufEnumNonZero(t *testing.T) {
+	v, ok := UnwrapProtobufEnum(mockProtobufEnumFailure)
+	if !ok {
+		t.Fatal("expected protobuf enum to be unwrapped")
+	}
+	// Number() 返回 mockEnumNumber(int32)，应转换为 int64
+	n, isInt := v.(int64)
+	if !isInt {
+		t.Fatalf("expected int64, got %T", v)
+	}
+	if n != 2 {
+		t.Fatalf("expected 2, got %d", n)
+	}
+}
+
+func TestUnwrapProtobufEnumZero(t *testing.T) {
+	v, ok := UnwrapProtobufEnum(mockProtobufEnumUnspecified)
+	if !ok {
+		t.Fatal("expected protobuf enum zero to be unwrapped")
+	}
+	if v.(int64) != 0 {
+		t.Fatalf("expected 0, got %v", v)
+	}
+}
+
+func TestUnwrapProtobufEnumNil(t *testing.T) {
+	_, ok := UnwrapProtobufEnum(nil)
+	if ok {
+		t.Fatal("expected nil to not be unwrapped")
+	}
+}
+
+func TestUnwrapProtobufEnumNoNumberMethod(t *testing.T) {
+	_, ok := UnwrapProtobufEnum(mockProtobufEnumNoMethod(2))
+	if ok {
+		t.Fatal("expected type without Number() to not be unwrapped")
+	}
+}
+
+func TestUnwrapProtobufEnumPlainInt32(t *testing.T) {
+	_, ok := UnwrapProtobufEnum(int32(2))
+	if ok {
+		t.Fatal("expected plain int32 to not be unwrapped")
+	}
+}
+
+// --- IsEmptyAfterDeref 对 protobuf enum 的测试 ---
+
+func TestIsEmptyAfterDerefEnumNonZero(t *testing.T) {
+	v, empty := IsEmptyAfterDeref(mockProtobufEnumFailure)
+	if empty {
+		t.Fatal("expected protobuf enum non-zero to not be empty")
+	}
+	if v.(int64) != 2 {
+		t.Fatalf("expected 2, got %v", v)
+	}
+}
+
+func TestIsEmptyAfterDerefEnumZero(t *testing.T) {
+	_, empty := IsEmptyAfterDeref(mockProtobufEnumUnspecified)
+	if !empty {
+		t.Fatal("expected protobuf enum zero (UNSPECIFIED) to be empty")
+	}
+}
+
+// --- NormalizeFilterValue 对 protobuf enum 的测试 ---
+
+func TestNormalizeFilterValueEnum(t *testing.T) {
+	result := NormalizeFilterValue(mockProtobufEnumFailure)
+	n, ok := result.(int64)
+	if !ok {
+		t.Fatalf("expected int64, got %T (%v)", result, result)
+	}
+	if n != 2 {
+		t.Fatalf("expected 2, got %d", n)
+	}
+}
+
+func TestNormalizeFilterValueEnumZero(t *testing.T) {
+	result := NormalizeFilterValue(mockProtobufEnumUnspecified)
+	if result.(int64) != 0 {
+		t.Fatalf("expected 0, got %v", result)
+	}
+}
+
+// --- NormalizeFilterValueIfNotEmpty 对 protobuf enum 的完整链路测试 ---
+
+func TestNormalizeFilterValueIfNotEmptyEnumNonZero(t *testing.T) {
+	v, empty := NormalizeFilterValueIfNotEmpty(mockProtobufEnumFailure)
+	if empty {
+		t.Fatal("expected protobuf enum non-zero to not be empty")
+	}
+	n, ok := v.(int64)
+	if !ok {
+		t.Fatalf("expected int64, got %T (%v)", v, v)
+	}
+	if n != 2 {
+		t.Fatalf("expected 2, got %d", n)
+	}
+}
+
+func TestNormalizeFilterValueIfNotEmptyEnumZero(t *testing.T) {
+	_, empty := NormalizeFilterValueIfNotEmpty(mockProtobufEnumUnspecified)
+	if !empty {
+		t.Fatal("expected protobuf enum zero (UNSPECIFIED) to be empty")
+	}
+}
+
+// TestNormalizeFilterValueEnumResultHasNoStringMethod 验证解包后的值不会被驱动序列化为枚举名
+// 这是 ClickHouse HTTP 驱动 TYPE_MISMATCH 错误的根因：原枚举值有 String() 方法返回枚举名
+func TestNormalizeFilterValueEnumResultHasNoStringMethod(t *testing.T) {
+	result := NormalizeFilterValue(mockProtobufEnumFailure)
+	// int64 没有 String() 方法，fmt.Sprintf("%v") 会输出数字而非枚举名
+	if fmt.Sprintf("%v", result) != "2" {
+		t.Fatalf("expected '2', got '%s'", fmt.Sprintf("%v", result))
 	}
 }
