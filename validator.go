@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -89,6 +90,7 @@ type Validate struct {
 	validations map[string]FuncCtx
 	structCache sync.Map
 	varCache    sync.Map
+	varSlot     atomic.Pointer[varRuleSlot]
 }
 
 // New 创建校验器实例
@@ -239,6 +241,12 @@ func (v *Validate) VarCtx(ctx context.Context, field any, tag string) error {
 
 // VarStringCtx 按标签表达式校验字符串变量，零反射快速路径
 func (v *Validate) VarStringCtx(ctx context.Context, field, tag string) error {
+	if tag == constants.RuleRequired {
+		if validate.StringRequired(field) {
+			return nil
+		}
+		return &stringFieldError{tag: constants.RuleRequired, value: field}
+	}
 	return v.varStringRules(ctx, field, v.cachedVarRules(tag), false)
 }
 
@@ -246,15 +254,18 @@ func (v *Validate) VarStringCtx(ctx context.Context, field, tag string) error {
 func (v *Validate) varStringRules(ctx context.Context, field string, rules []rule.RulePlan, wrapError bool) error {
 	for i := 0; i < len(rules); i++ {
 		r := rules[i]
-		switch r.Name {
-		case constants.RuleOmitEmpty, constants.RuleOmitZero:
-			if validate.IsBlankString(field) {
-				return nil
+		if r.Kind&rule.KindControl != 0 {
+			switch r.Name {
+			case constants.RuleOmitEmpty, constants.RuleOmitZero:
+				if validate.IsBlankString(field) {
+					return nil
+				}
+			case constants.RuleOmitNil, constants.RuleStructOnly,
+				constants.RuleNoStructLevel, constants.RuleEmpty:
+			default:
+				// dive/keys 等控制规则在字符串快速路径无意义，回退反射路径
+				return v.varStringReflectPath(ctx, field, rules)
 			}
-			continue
-		case constants.RuleOmitNil:
-			continue
-		case constants.RuleStructOnly, constants.RuleNoStructLevel, constants.RuleEmpty:
 			continue
 		}
 		if len(r.OrRules) > 0 {
@@ -294,12 +305,13 @@ func (v *Validate) evalStringOr(ctx context.Context, field string, rules []rule.
 }
 
 // evalStringRule 评估单条字符串规则，返回 (是否通过, 是否已处理)
+// 类别与函数已在解析期预解析，运行期零字符串比较、零查表
 func evalStringRule(field string, r rule.RulePlan) (bool, bool) {
-	if constants.IsScalarCompareRule(r.Name) {
+	if r.Kind&rule.KindScalarCompare != 0 {
 		return r.HasNumber && validate.CompareOp(float64(utf8.RuneCountInString(field)), r.Number, r.CmpOp), true
 	}
-	if fn, ok := rule.StringRuleMap[r.Name]; ok {
-		return fn == nil || fn(field, r.Param), true
+	if r.Kind&rule.KindHasStr != 0 {
+		return r.StrFn == nil || r.StrFn(field, r.Param), true
 	}
 	switch r.Name {
 	case constants.RuleOneOf:
@@ -339,14 +351,27 @@ func (v *Validate) varStringReflectPath(ctx context.Context, field string, rules
 	return nil
 }
 
-// cachedVarRules 缓存变量规则解析结果
+// varRuleSlot 单槽旁路缓存条目，热点 tag 免走 sync.Map 遍历
+type varRuleSlot struct {
+	tag   string
+	rules []rule.RulePlan
+}
+
+// cachedVarRules 缓存变量规则解析结果，单槽旁路优先，未命中再走 sync.Map
 func (v *Validate) cachedVarRules(tag string) []rule.RulePlan {
-	if cached, ok := v.varCache.Load(tag); ok {
-		return cached.([]rule.RulePlan)
+	if slot := v.varSlot.Load(); slot != nil && slot.tag == tag {
+		return slot.rules
 	}
-	rules := rule.ParseRules(tag)
-	actual, _ := v.varCache.LoadOrStore(tag, rules)
-	return actual.([]rule.RulePlan)
+	var rules []rule.RulePlan
+	if cached, ok := v.varCache.Load(tag); ok {
+		rules = cached.([]rule.RulePlan)
+	} else {
+		parsed := rule.ParseRules(tag)
+		actual, _ := v.varCache.LoadOrStore(tag, parsed)
+		rules = actual.([]rule.RulePlan)
+	}
+	v.varSlot.Store(&varRuleSlot{tag: tag, rules: rules})
+	return rules
 }
 
 // validateStruct 递归校验结构体字段
@@ -401,31 +426,39 @@ func (v *Validate) applyRules(
 	}
 	derefed := validate.DerefReflect(field)
 	for i := 0; i < len(rules); i++ {
-		rule := rules[i]
-		switch rule.Name {
-		case constants.RuleOmitEmpty, constants.RuleOmitZero:
-			if validate.IsEmptyValueWithStruct(derefed, v.requiredStructEnabled) {
+		r := rules[i]
+		if r.Kind&rule.KindControl != 0 {
+			switch r.Name {
+			case constants.RuleOmitEmpty, constants.RuleOmitZero:
+				if validate.IsEmptyValueWithStruct(derefed, v.requiredStructEnabled) {
+					return
+				}
+				continue
+			case constants.RuleOmitNil:
+				if validate.IsNilValue(field) {
+					return
+				}
+				continue
+			case constants.RuleDive:
+				v.applyDive(ctx, top, parent, derefed, ns, structNs, fieldName, structFieldName, rules[i+1:], errs)
 				return
+			case constants.RuleStructOnly, constants.RuleNoStructLevel, constants.RuleEmpty:
+				continue
 			}
-			continue
-		case constants.RuleOmitNil:
-			if validate.IsNilValue(field) {
-				return
-			}
-			continue
-		case constants.RuleDive:
-			v.applyDive(ctx, top, parent, derefed, ns, structNs, fieldName, structFieldName, rules[i+1:], errs)
-			return
-		case constants.RuleStructOnly, constants.RuleNoStructLevel, constants.RuleEmpty:
-			continue
+			// 未消费的 keys/endkeys 等控制规则保持原有求值兜底路径
 		}
 
 		ok := false
-		if len(rule.OrRules) > 0 {
-			for j := 0; j < len(rule.OrRules); j++ {
-				orRule := rule.OrRules[j]
-				// 快速路径：or 规则通常是 builtin，直接查表避免完整 evalRule 开销
-				if action, found := evalTable[orRule.Name]; found {
+		if len(r.OrRules) > 0 {
+			for j := 0; j < len(r.OrRules); j++ {
+				orRule := r.OrRules[j]
+				// 快速路径：or 规则已预解析函数直接调用，其余查表或走完整 evalRule
+				if orRule.Kind&rule.KindHasBuiltin != 0 {
+					if orRule.Builtin(derefed, orRule.Param, v.requiredStructEnabled) {
+						ok = true
+						break
+					}
+				} else if action, found := evalTable[orRule.Name]; found {
 					if action.dispatch != nil {
 						if action.dispatch(v, top, parent, derefed, orRule) {
 							ok = true
@@ -441,10 +474,10 @@ func (v *Validate) applyRules(
 				}
 			}
 		} else {
-			ok = v.evalRule(ctx, top, parent, derefed, fieldName, structFieldName, rule)
+			ok = v.evalRule(ctx, top, parent, derefed, fieldName, structFieldName, r)
 		}
 		if !ok {
-			*errs = append(*errs, newFieldError(derefed, ns, structNs, fieldName, structFieldName, rule))
+			*errs = append(*errs, newFieldError(derefed, ns, structNs, fieldName, structFieldName, r))
 			return
 		}
 	}
@@ -526,57 +559,64 @@ func (v *Validate) applyRulesFast(
 	}
 	derefed := validate.DerefReflect(field)
 	for i := 0; i < len(rules); i++ {
-		rule := rules[i]
-		switch rule.Name {
-		case constants.RuleOmitEmpty, constants.RuleOmitZero:
-			if validate.IsEmptyValueWithStruct(derefed, v.requiredStructEnabled) {
-				return true
-			}
-			continue
-		case constants.RuleOmitNil:
-			if validate.IsNilValue(field) {
-				return true
-			}
-			continue
-		case constants.RuleDive:
-			keyRules, valueRules := splitDiveRules(rules[i+1:])
-			switch derefed.Kind() {
-			case reflect.Slice, reflect.Array:
-				for j := 0; j < derefed.Len(); j++ {
-					if !v.applyRulesFast(ctx, top, parent, derefed.Index(j), fieldName, structFieldName, valueRules) {
-						return false
+		r := rules[i]
+		if r.Kind&rule.KindControl != 0 {
+			switch r.Name {
+			case constants.RuleOmitEmpty, constants.RuleOmitZero:
+				if validate.IsEmptyValueWithStruct(derefed, v.requiredStructEnabled) {
+					return true
+				}
+				continue
+			case constants.RuleOmitNil:
+				if validate.IsNilValue(field) {
+					return true
+				}
+				continue
+			case constants.RuleDive:
+				keyRules, valueRules := splitDiveRules(rules[i+1:])
+				switch derefed.Kind() {
+				case reflect.Slice, reflect.Array:
+					for j := 0; j < derefed.Len(); j++ {
+						if !v.applyRulesFast(ctx, top, parent, derefed.Index(j), fieldName, structFieldName, valueRules) {
+							return false
+						}
+					}
+				case reflect.Map:
+					for _, key := range derefed.MapKeys() {
+						if !v.applyRulesFast(ctx, top, parent, key, fieldName, structFieldName, keyRules) ||
+							!v.applyRulesFast(
+								ctx,
+								top,
+								parent,
+								derefed.MapIndex(key),
+								fieldName,
+								structFieldName,
+								valueRules,
+							) {
+							return false
+						}
 					}
 				}
-			case reflect.Map:
-				for _, key := range derefed.MapKeys() {
-					if !v.applyRulesFast(ctx, top, parent, key, fieldName, structFieldName, keyRules) ||
-						!v.applyRulesFast(
-							ctx,
-							top,
-							parent,
-							derefed.MapIndex(key),
-							fieldName,
-							structFieldName,
-							valueRules,
-						) {
-						return false
-					}
-				}
+				return true
+			case constants.RuleKeys,
+				constants.RuleEndKeys,
+				constants.RuleStructOnly,
+				constants.RuleNoStructLevel,
+				constants.RuleEmpty:
+				continue
 			}
-			return true
-		case constants.RuleKeys,
-			constants.RuleEndKeys,
-			constants.RuleStructOnly,
-			constants.RuleNoStructLevel,
-			constants.RuleEmpty:
-			continue
 		}
 
 		ok := false
-		if len(rule.OrRules) > 0 {
-			for j := 0; j < len(rule.OrRules); j++ {
-				orRule := rule.OrRules[j]
-				if action, found := evalTable[orRule.Name]; found {
+		if len(r.OrRules) > 0 {
+			for j := 0; j < len(r.OrRules); j++ {
+				orRule := r.OrRules[j]
+				if orRule.Kind&rule.KindHasBuiltin != 0 {
+					if orRule.Builtin(derefed, orRule.Param, v.requiredStructEnabled) {
+						ok = true
+						break
+					}
+				} else if action, found := evalTable[orRule.Name]; found {
 					if action.dispatch != nil {
 						if action.dispatch(v, top, parent, derefed, orRule) {
 							ok = true
@@ -592,7 +632,7 @@ func (v *Validate) applyRulesFast(
 				}
 			}
 		} else {
-			ok = v.evalRule(ctx, top, parent, derefed, fieldName, structFieldName, rule)
+			ok = v.evalRule(ctx, top, parent, derefed, fieldName, structFieldName, r)
 		}
 		if !ok {
 			return false
@@ -601,15 +641,18 @@ func (v *Validate) applyRulesFast(
 	return true
 }
 
-// evalRule 评估单条规则，优先查 dispatch 表，其次查 builtin 表，最后查自定义注册
+// evalRule 评估单条规则，类别与函数已在解析期预解析，仅 dispatch 与自定义规则需查表
 func (v *Validate) evalRule(
 	ctx context.Context,
 	top, parent, field reflect.Value,
 	fieldName, structFieldName string,
 	plan rule.RulePlan,
 ) bool {
-	if constants.IsScalarCompareRule(plan.Name) {
+	if plan.Kind&rule.KindScalarCompare != 0 {
 		return plan.HasNumber && rule.CompareLengthOrNumber(field, plan.Number, plan.CmpOp)
+	}
+	if plan.Kind&rule.KindHasBuiltin != 0 {
+		return plan.Builtin(field, plan.Param, v.requiredStructEnabled)
 	}
 	if action, ok := evalTable[plan.Name]; ok {
 		if action.dispatch != nil {

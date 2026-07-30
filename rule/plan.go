@@ -19,6 +19,20 @@ import (
 	"github.com/kamalyes/go-argus/validate"
 )
 
+// RuleKind 规则类别位掩码，解析期一次性预分类，运行期以 int 位测试替代字符串比较与查表
+type RuleKind uint8
+
+const (
+	// KindScalarCompare 标量比较规则（min/max/len/gt/gte/lt/lte），求值路径最优先短路
+	KindScalarCompare RuleKind = 1 << iota
+	// KindControl 流程控制规则（omitempty/dive/keys 等），不产生求值
+	KindControl
+	// KindHasStr StringRuleMap 命中，StrFn 为预解析函数
+	KindHasStr
+	// KindHasBuiltin BuiltinRules 命中，Builtin 为预解析函数
+	KindHasBuiltin
+)
+
 // RulePlan 表示一条规则的运行计划
 type RulePlan struct {
 	Name       string     // 规则名称
@@ -30,6 +44,9 @@ type RulePlan struct {
 	FieldIndex []int
 	Number     float64
 	HasNumber  bool
+	Kind       RuleKind       // 类别位掩码
+	StrFn      StringRuleFunc // StringRuleMap 预解析函数
+	Builtin    BuiltinRule    // BuiltinRules 预解析函数
 }
 
 // FieldPlan 表示结构体字段的校验计划
@@ -91,6 +108,7 @@ func ParseSingleRulePlan(raw string) RulePlan {
 }
 
 // PrepareRulePlan 对规则计划做后处理，预拆分需要空白分词的规则参数
+// 同时完成类别预分类与函数预解析，类别判定的优先级与求值路径保持一致（标量比较最优先短路）
 func PrepareRulePlan(rp RulePlan) RulePlan {
 	if constants.NeedsParamParts(rp.Name) {
 		if rp.Param != "" {
@@ -98,17 +116,42 @@ func PrepareRulePlan(rp RulePlan) RulePlan {
 		}
 	}
 	if constants.IsScalarCompareRule(rp.Name) {
+		rp.Kind |= KindScalarCompare
 		rp.CmpOp = CmpOpForRule(rp.Name)
 		rp.HasCmpOp = true
 		if rp.Param != "" {
 			rp.Number, rp.HasNumber = validate.ParseFloat(rp.Param)
 		}
+		return rp
+	}
+	if IsControlRule(rp.Name) {
+		rp.Kind |= KindControl
+		return rp
+	}
+	if fn, ok := StringRuleMap[rp.Name]; ok {
+		rp.Kind |= KindHasStr
+		rp.StrFn = fn
+	}
+	if fn, ok := BuiltinRules[rp.Name]; ok {
+		rp.Kind |= KindHasBuiltin
+		rp.Builtin = fn
 	}
 	if constants.IsFieldCompareRule(rp.Name) {
 		rp.CmpOp = CmpOpForRule(rp.Name)
 		rp.HasCmpOp = true
 	}
 	return rp
+}
+
+// IsControlRule 是否为流程控制规则，不参与规则求值
+func IsControlRule(name string) bool {
+	switch name {
+	case constants.RuleOmitEmpty, constants.RuleOmitZero, constants.RuleOmitNil,
+		constants.RuleDive, constants.RuleKeys, constants.RuleEndKeys,
+		constants.RuleStructOnly, constants.RuleNoStructLevel, constants.RuleEmpty:
+		return true
+	}
+	return false
 }
 
 // CmpOpForRule maps validation rules to comparison operators.
