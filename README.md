@@ -162,6 +162,22 @@ func main() {
 }
 ```
 
+## 🔌 Framework Integration
+
+Argus seamlessly replaces the default validator of mainstream web frameworks. Existing binding flows like `ShouldBindJSON` and `httpx.Parse` trigger validation automatically, zero intrusion into business code:
+
+| Framework | Injection Point |
+|-----------|-----------------|
+| gin | `binding.Validator` |
+| Echo | `e.Validator` |
+| Fiber | `fiber.Config.StructValidator` |
+| go-zero | `httpx.SetValidator` |
+| chi & others | manual `v.Struct` in handler |
+
+Complete integration examples (runnable example code, curl demos, and unified error responses): **[docs/frameworks.md](docs/frameworks.md)**
+
+---
+
 ## ⚡ VarString Zero-Reflection Fast Path
 
 For string variable validation, `VarString` provides a zero-allocation fast path that completely bypasses `reflect`:
@@ -193,6 +209,7 @@ err = v.VarString("user@example.com", "email")
 | [docs/tags.md](docs/tags.md) | Complete reference for all validation tags |
 | [docs/i18n.md](docs/i18n.md) | Internationalization guide |
 | [docs/examples.md](docs/examples.md) | Complete usage examples |
+| [docs/frameworks.md](docs/frameworks.md) | gin / go-zero framework integration guide |
 
 ---
 

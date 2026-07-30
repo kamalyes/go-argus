@@ -162,6 +162,22 @@ func main() {
 }
 ```
 
+## 🔌 框架集成
+
+Argus 可无缝替换主流 Web 框架的默认校验器，`ShouldBindJSON`、`httpx.Parse` 等既有绑定流程自动触发，业务代码零侵入：
+
+| 框架 | 注入点 |
+|------|--------|
+| gin | `binding.Validator` |
+| Echo | `e.Validator` |
+| Fiber | `fiber.Config.StructValidator` |
+| go-zero | `httpx.SetValidator` |
+| chi 等轻量路由 | handler 内手动 `v.Struct` |
+
+完整接入示例（含可运行的 example 代码、curl 演示与统一错误响应）：**[docs/frameworks.md](docs/frameworks.md)**
+
+---
+
 ## ⚡ VarString 零反射快速路径
 
 对于字符串变量校验场景，`VarString` 提供完全绕过 `reflect` 的零分配快速路径：
@@ -193,6 +209,7 @@ err = v.VarString("user@example.com", "email")
 | [docs/tags.md](docs/tags.md) | 所有校验标签完整参考 |
 | [docs/i18n.md](docs/i18n.md) | 国际化使用指南 |
 | [docs/examples.md](docs/examples.md) | 完整使用示例 |
+| [docs/frameworks.md](docs/frameworks.md) | gin / go-zero 框架集成指南 |
 
 ---
 
