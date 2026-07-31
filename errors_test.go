@@ -55,10 +55,8 @@ func TestFieldErrorMethods(t *testing.T) {
 		structNs:    "User.Name",
 		field:       "name",
 		structField: "Name",
-		value:       "ab",
+		fieldVal:    reflect.ValueOf("ab"),
 		param:       "3",
-		kind:        reflect.String,
-		typ:         reflect.TypeOf(""),
 	}
 	if fe.Tag() != "min" {
 		t.Fatalf("expected tag min, got %s", fe.Tag())
@@ -97,12 +95,12 @@ func TestFieldErrorMethods(t *testing.T) {
 }
 
 func TestFieldErrorNilValue(t *testing.T) {
+	// 零值 fieldVal 即 invalid，Value/Kind/Type 均返回零值
 	fe := &fieldError{
 		tag:         "required",
 		ns:          "Test.Field",
 		field:       "field",
 		structField: "Field",
-		kind:        reflect.Invalid,
 	}
 	if fe.Value() != nil {
 		t.Fatal("expected nil value")

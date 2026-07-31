@@ -73,10 +73,9 @@ type fieldError struct {
 	structNs    string
 	field       string
 	structField string
-	value       any
+	fieldVal    reflect.Value // 惰性求值源，Value/Kind/Type 访问时才解引用
+	value       any           // Value() 首次访问装箱缓存
 	param       string
-	kind        reflect.Kind
-	typ         reflect.Type
 }
 
 // Tag 返回失败的规则名
@@ -109,8 +108,11 @@ func (fe *fieldError) StructField() string {
 	return fe.structField
 }
 
-// Value 返回字段原始值
+// Value 返回字段原始值，首次访问时从 reflect.Value 装箱并缓存
 func (fe *fieldError) Value() any {
+	if fe.value == nil && fe.fieldVal.IsValid() && fe.fieldVal.CanInterface() {
+		fe.value = fe.fieldVal.Interface()
+	}
 	return fe.value
 }
 
@@ -119,14 +121,20 @@ func (fe *fieldError) Param() string {
 	return fe.param
 }
 
-// Kind 返回字段反射 Kind
+// Kind 返回字段反射 Kind，无效值返回 reflect.Invalid
 func (fe *fieldError) Kind() reflect.Kind {
-	return fe.kind
+	if !fe.fieldVal.IsValid() {
+		return reflect.Invalid
+	}
+	return fe.fieldVal.Kind()
 }
 
-// Type 返回字段反射 Type
+// Type 返回字段反射 Type，无效值返回 nil
 func (fe *fieldError) Type() reflect.Type {
-	return fe.typ
+	if !fe.fieldVal.IsValid() {
+		return nil
+	}
+	return fe.fieldVal.Type()
 }
 
 // Error 返回兼容 go-playground 的错误字符串

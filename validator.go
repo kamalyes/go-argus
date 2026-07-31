@@ -156,7 +156,8 @@ func (v *Validate) StructCtx(ctx context.Context, s any) error {
 	}
 
 	errs := acquireErrors()
-	v.validateStruct(ctx, current, current, current.Type().Name(), current.Type().Name(), errs)
+	typeName := current.Type().Name()
+	v.validateStruct(ctx, current, current, typeName, typeName, errs)
 	if len(*errs) > 0 {
 		result := make(ValidationErrors, len(*errs))
 		copy(result, *errs)
@@ -253,7 +254,7 @@ func (v *Validate) VarStringCtx(ctx context.Context, field, tag string) error {
 // varStringRules 零反射快速路径，按规则列表校验字符串
 func (v *Validate) varStringRules(ctx context.Context, field string, rules []rule.RulePlan, wrapError bool) error {
 	for i := 0; i < len(rules); i++ {
-		r := rules[i]
+		r := &rules[i]
 		if r.Kind&rule.KindControl != 0 {
 			switch r.Name {
 			case constants.RuleOmitEmpty, constants.RuleOmitZero:
@@ -293,7 +294,7 @@ func (v *Validate) varStringRules(ctx context.Context, field string, rules []rul
 // evalStringOr 评估字符串或规则，任一通过即返回 true
 func (v *Validate) evalStringOr(ctx context.Context, field string, rules []rule.RulePlan) (bool, bool) {
 	for i := 0; i < len(rules); i++ {
-		ok, handled := evalStringRule(field, rules[i])
+		ok, handled := evalStringRule(field, &rules[i])
 		if !handled {
 			return false, false
 		}
@@ -306,7 +307,7 @@ func (v *Validate) evalStringOr(ctx context.Context, field string, rules []rule.
 
 // evalStringRule 评估单条字符串规则，返回 (是否通过, 是否已处理)
 // 类别与函数已在解析期预解析，运行期零字符串比较、零查表
-func evalStringRule(field string, r rule.RulePlan) (bool, bool) {
+func evalStringRule(field string, r *rule.RulePlan) (bool, bool) {
 	if r.Kind&rule.KindScalarCompare != 0 {
 		return r.HasNumber && validate.CompareOp(float64(utf8.RuneCountInString(field)), r.Number, r.CmpOp), true
 	}
@@ -328,8 +329,8 @@ func evalStringRule(field string, r rule.RulePlan) (bool, bool) {
 }
 
 // stringRuleError 构造字符串规则校验失败错误
-func (v *Validate) stringRuleError(field string, rule rule.RulePlan, wrap bool) error {
-	fe := &stringFieldError{tag: rule.Name, param: rule.Param, value: field}
+func (v *Validate) stringRuleError(field string, r *rule.RulePlan, wrap bool) error {
+	fe := &stringFieldError{tag: r.Name, param: r.Param, value: field}
 	if wrap {
 		return ValidationErrors{fe}
 	}
@@ -426,7 +427,7 @@ func (v *Validate) applyRules(
 	}
 	derefed := validate.DerefReflect(field)
 	for i := 0; i < len(rules); i++ {
-		r := rules[i]
+		r := &rules[i]
 		if r.Kind&rule.KindControl != 0 {
 			switch r.Name {
 			case constants.RuleOmitEmpty, constants.RuleOmitZero:
@@ -451,7 +452,7 @@ func (v *Validate) applyRules(
 		ok := false
 		if len(r.OrRules) > 0 {
 			for j := 0; j < len(r.OrRules); j++ {
-				orRule := r.OrRules[j]
+				orRule := &r.OrRules[j]
 				// 快速路径：or 规则已预解析函数直接调用，其余查表或走完整 evalRule
 				if orRule.Kind&rule.KindHasBuiltin != 0 {
 					if orRule.Builtin(derefed, orRule.Param, v.requiredStructEnabled) {
@@ -511,7 +512,7 @@ func (v *Validate) applyDive(
 			if len(valueRules) == 1 && valueRules[0].Name == constants.RuleRequired {
 				*errs = append(
 					*errs,
-					newFieldError(item, childNS, childStructNS, fieldName, structFieldName, valueRules[0]),
+					newFieldError(item, childNS, childStructNS, fieldName, structFieldName, &valueRules[0]),
 				)
 				continue
 			}
@@ -559,7 +560,7 @@ func (v *Validate) applyRulesFast(
 	}
 	derefed := validate.DerefReflect(field)
 	for i := 0; i < len(rules); i++ {
-		r := rules[i]
+		r := &rules[i]
 		if r.Kind&rule.KindControl != 0 {
 			switch r.Name {
 			case constants.RuleOmitEmpty, constants.RuleOmitZero:
@@ -610,7 +611,7 @@ func (v *Validate) applyRulesFast(
 		ok := false
 		if len(r.OrRules) > 0 {
 			for j := 0; j < len(r.OrRules); j++ {
-				orRule := r.OrRules[j]
+				orRule := &r.OrRules[j]
 				if orRule.Kind&rule.KindHasBuiltin != 0 {
 					if orRule.Builtin(derefed, orRule.Param, v.requiredStructEnabled) {
 						ok = true
@@ -646,7 +647,7 @@ func (v *Validate) evalRule(
 	ctx context.Context,
 	top, parent, field reflect.Value,
 	fieldName, structFieldName string,
-	plan rule.RulePlan,
+	plan *rule.RulePlan,
 ) bool {
 	if plan.Kind&rule.KindScalarCompare != 0 {
 		return plan.HasNumber && rule.CompareLengthOrNumber(field, plan.Number, plan.CmpOp)
@@ -688,7 +689,7 @@ func (v *Validate) getCustomValidation(name string) FuncCtx {
 }
 
 // evalDispatchFn 规则分派函数签名
-type evalDispatchFn func(v *Validate, top, parent, field reflect.Value, plan rule.RulePlan) bool
+type evalDispatchFn func(v *Validate, top, parent, field reflect.Value, plan *rule.RulePlan) bool
 
 // evalAction 规则执行动作，dispatch 和 builtin 二选一
 type evalAction struct {
@@ -711,91 +712,91 @@ func init() {
 	}
 }
 
-func (v *Validate) evalRequiredIf(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+func (v *Validate) evalRequiredIf(top, parent, field reflect.Value, plan *rule.RulePlan) bool {
 	if !rule.IsRequiredIf(parent, plan.ParamParts) {
 		return true
 	}
 	return !validate.IsEmptyValueWithStruct(field, v.requiredStructEnabled)
 }
 
-func (v *Validate) evalRequiredUnless(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+func (v *Validate) evalRequiredUnless(top, parent, field reflect.Value, plan *rule.RulePlan) bool {
 	if rule.IsRequiredIf(parent, plan.ParamParts) {
 		return true
 	}
 	return !validate.IsEmptyValueWithStruct(field, v.requiredStructEnabled)
 }
 
-func (v *Validate) evalRequiredWith(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+func (v *Validate) evalRequiredWith(top, parent, field reflect.Value, plan *rule.RulePlan) bool {
 	if !rule.IsRequiredWith(parent, plan.Param) {
 		return true
 	}
 	return !validate.IsEmptyValueWithStruct(field, v.requiredStructEnabled)
 }
 
-func (v *Validate) evalRequiredWithAll(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+func (v *Validate) evalRequiredWithAll(top, parent, field reflect.Value, plan *rule.RulePlan) bool {
 	if !rule.IsRequiredWithAll(parent, plan.ParamParts) {
 		return true
 	}
 	return !validate.IsEmptyValueWithStruct(field, v.requiredStructEnabled)
 }
 
-func (v *Validate) evalRequiredWithout(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+func (v *Validate) evalRequiredWithout(top, parent, field reflect.Value, plan *rule.RulePlan) bool {
 	if !rule.IsRequiredWithout(parent, plan.ParamParts) {
 		return true
 	}
 	return !validate.IsEmptyValueWithStruct(field, v.requiredStructEnabled)
 }
 
-func (v *Validate) evalRequiredWithoutAll(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+func (v *Validate) evalRequiredWithoutAll(top, parent, field reflect.Value, plan *rule.RulePlan) bool {
 	if !rule.IsRequiredWithoutAll(parent, plan.ParamParts) {
 		return true
 	}
 	return !validate.IsEmptyValueWithStruct(field, v.requiredStructEnabled)
 }
 
-func (v *Validate) evalExcludedIf(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+func (v *Validate) evalExcludedIf(top, parent, field reflect.Value, plan *rule.RulePlan) bool {
 	if !rule.IsRequiredIf(parent, plan.ParamParts) {
 		return true
 	}
 	return validate.IsEmptyValueWithStruct(field, v.requiredStructEnabled)
 }
 
-func (v *Validate) evalExcludedUnless(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+func (v *Validate) evalExcludedUnless(top, parent, field reflect.Value, plan *rule.RulePlan) bool {
 	if rule.IsRequiredIf(parent, plan.ParamParts) {
 		return true
 	}
 	return validate.IsEmptyValueWithStruct(field, v.requiredStructEnabled)
 }
 
-func (v *Validate) evalExcludedWith(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+func (v *Validate) evalExcludedWith(top, parent, field reflect.Value, plan *rule.RulePlan) bool {
 	if !rule.IsRequiredWith(parent, plan.Param) {
 		return true
 	}
 	return validate.IsEmptyValueWithStruct(field, v.requiredStructEnabled)
 }
 
-func (v *Validate) evalExcludedWithAll(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+func (v *Validate) evalExcludedWithAll(top, parent, field reflect.Value, plan *rule.RulePlan) bool {
 	if !rule.IsRequiredWithAll(parent, plan.ParamParts) {
 		return true
 	}
 	return validate.IsEmptyValueWithStruct(field, v.requiredStructEnabled)
 }
 
-func (v *Validate) evalExcludedWithout(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+func (v *Validate) evalExcludedWithout(top, parent, field reflect.Value, plan *rule.RulePlan) bool {
 	if !rule.IsRequiredWithout(parent, plan.ParamParts) {
 		return true
 	}
 	return validate.IsEmptyValueWithStruct(field, v.requiredStructEnabled)
 }
 
-func (v *Validate) evalExcludedWithoutAll(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+func (v *Validate) evalExcludedWithoutAll(top, parent, field reflect.Value, plan *rule.RulePlan) bool {
 	if !rule.IsRequiredWithoutAll(parent, plan.ParamParts) {
 		return true
 	}
 	return validate.IsEmptyValueWithStruct(field, v.requiredStructEnabled)
 }
 
-func (v *Validate) evalCmpField(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+func (v *Validate) evalCmpField(top, parent, field reflect.Value, plan *rule.RulePlan) bool {
 	target := parent
 	if constants.IsCrossStructFieldCompareRule(plan.Name) {
 		target = top
@@ -823,7 +824,7 @@ func (v *Validate) evalCmpField(top, parent, field reflect.Value, plan rule.Rule
 
 // evalCmpFieldLen 跨字段长度比较，参数格式: FieldName 或 op:FieldName（op 可选 eq/ne/gt/gte/lt/lte，默认 eq）
 // 支持嵌套字段路径如 Inner.Field，从顶层结构体开始查找
-func (v *Validate) evalCmpFieldLen(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+func (v *Validate) evalCmpFieldLen(top, parent, field reflect.Value, plan *rule.RulePlan) bool {
 	opStr := constants.RuleEq
 	targetPath := plan.Param
 	if idx := strings.Index(plan.Param, ":"); idx >= 0 {
@@ -866,45 +867,45 @@ func fieldLen(v reflect.Value) int {
 	}
 }
 
-func (v *Validate) evalFieldContains(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+func (v *Validate) evalFieldContains(top, parent, field reflect.Value, plan *rule.RulePlan) bool {
 	return rule.FieldContains(field, parent, plan.Param)
 }
 
-func (v *Validate) evalFieldExcludes(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+func (v *Validate) evalFieldExcludes(top, parent, field reflect.Value, plan *rule.RulePlan) bool {
 	return !rule.FieldContains(field, parent, plan.Param)
 }
 
-func (v *Validate) evalAfter(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+func (v *Validate) evalAfter(top, parent, field reflect.Value, plan *rule.RulePlan) bool {
 	if validate.IsEmptyValueWithStruct(field, v.requiredStructEnabled) {
 		return true
 	}
 	return rule.CompareTimeExpr(field, plan.Param, constants.RuleGT, time.Now())
 }
 
-func (v *Validate) evalBefore(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+func (v *Validate) evalBefore(top, parent, field reflect.Value, plan *rule.RulePlan) bool {
 	if validate.IsEmptyValueWithStruct(field, v.requiredStructEnabled) {
 		return true
 	}
 	return rule.CompareTimeExpr(field, plan.Param, constants.RuleLT, time.Now())
 }
 
-func (v *Validate) evalRange(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+func (v *Validate) evalRange(top, parent, field reflect.Value, plan *rule.RulePlan) bool {
 	return rule.Range(parent, plan.Param)
 }
 
-func (v *Validate) evalOneOf(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+func (v *Validate) evalOneOf(top, parent, field reflect.Value, plan *rule.RulePlan) bool {
 	return rule.OneOfFast(field, plan.ParamParts)
 }
 
-func (v *Validate) evalOneOfCI(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+func (v *Validate) evalOneOfCI(top, parent, field reflect.Value, plan *rule.RulePlan) bool {
 	return rule.OneOfCIFast(field, plan.ParamParts)
 }
 
-func (v *Validate) evalNoneOf(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+func (v *Validate) evalNoneOf(top, parent, field reflect.Value, plan *rule.RulePlan) bool {
 	return !rule.OneOfFast(field, plan.ParamParts)
 }
 
-func (v *Validate) evalNoneOfCI(top, parent, field reflect.Value, plan rule.RulePlan) bool {
+func (v *Validate) evalNoneOfCI(top, parent, field reflect.Value, plan *rule.RulePlan) bool {
 	return !rule.OneOfCIFast(field, plan.ParamParts)
 }
 
@@ -951,30 +952,20 @@ var evalDispatchTable = map[string]evalDispatchFn{
 func newFieldError(
 	field reflect.Value,
 	ns, structNs, fieldName, structFieldName string,
-	rule rule.RulePlan,
+	r *rule.RulePlan,
 ) FieldError {
-	value := any(nil)
+	// 惰性求值：构造仅存 deref 后的 reflect.Value，装箱与 Kind/Type 推迟到访问器
+	// 失败路径每错误省去一次 Interface 装箱分配与两次反射调用
 	current := validate.DerefReflect(field)
-	if current.IsValid() && current.CanInterface() {
-		value = current.Interface()
-	}
-	kind := reflect.Invalid
-	var typ reflect.Type
-	if current.IsValid() {
-		kind = current.Kind()
-		typ = current.Type()
-	}
 	return &fieldError{
-		tag:         rule.Name,
-		actualTag:   rule.Name,
+		tag:         r.Name,
+		actualTag:   r.Name,
 		ns:          ns,
 		structNs:    structNs,
 		field:       fieldName,
 		structField: structFieldName,
-		value:       value,
-		param:       rule.Param,
-		kind:        kind,
-		typ:         typ,
+		fieldVal:    current,
+		param:       r.Param,
 	}
 }
 
