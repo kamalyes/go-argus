@@ -48,6 +48,15 @@ func noParamScalarBuiltinAdapter(fn func(string) bool) BuiltinRule {
 	}
 }
 
+// bytesBuiltinAdapter 将字节切片校验函数适配为 BuiltinRule
+// 仅接受 []byte 字段，不做 string 回退，避免字符串转字节的拷贝开销
+func bytesBuiltinAdapter(fn func([]byte) bool) BuiltinRule {
+	return func(field reflect.Value, _ string, _ bool) bool {
+		b, ok := validate.BytesValue(field)
+		return ok && fn(b)
+	}
+}
+
 // --- 需要特殊逻辑的规则，无法用适配器自动生成 ---
 
 func RuleRequired(field reflect.Value, _ string, requiredStructEnabled bool) bool {
@@ -179,6 +188,19 @@ func RuleJSON(field reflect.Value, _ string, _ bool) bool {
 	}
 	s, ok := validate.StringValueFromField(field)
 	return ok && validate.StringJSON(s)
+}
+
+// RuleImage 校验字段为有效且完整的图片
+// param 为空表示任意支持格式，非空为空格分隔的格式白名单（如 image=png jpg），出现未知格式名时校验失败
+func RuleImage(field reflect.Value, param string, _ bool) bool {
+	b, ok := validate.BytesValue(field)
+	if !ok {
+		return false
+	}
+	if param == "" {
+		return validate.IsImage(b)
+	}
+	return validate.IsImageInFormats(b, param)
 }
 
 func RuleLatitude(field reflect.Value, _ string, _ bool) bool {
@@ -372,4 +394,16 @@ var BuiltinRules = map[string]BuiltinRule{
 	constants.RuleChinesePhone:        noParamBuiltinAdapter(validate.IsChinesePhoneNumber),
 	constants.RuleChineseIDCard:       noParamBuiltinAdapter(validate.IsChineseIDCard),
 	constants.RuleChineseIDCardStrict: noParamBuiltinAdapter(validate.IsChineseIDCardWithChecksum),
+	constants.RuleImage:               RuleImage,
+	constants.RulePNG:                 bytesBuiltinAdapter(validate.IsPNG),
+	constants.RuleJPG:                 bytesBuiltinAdapter(validate.IsJPEG),
+	constants.RuleJPEG:                bytesBuiltinAdapter(validate.IsJPEG),
+	constants.RuleGIF:                 bytesBuiltinAdapter(validate.IsGIF),
+	constants.RuleWebP:                bytesBuiltinAdapter(validate.IsWebP),
+	constants.RuleBMP:                 bytesBuiltinAdapter(validate.IsBMP),
+	constants.RuleTIFF:                bytesBuiltinAdapter(validate.IsTIFF),
+	constants.RuleICO:                 bytesBuiltinAdapter(validate.IsICO),
+	constants.RuleAVIF:                bytesBuiltinAdapter(validate.IsAVIF),
+	constants.RuleHEIC:                bytesBuiltinAdapter(validate.IsHEIC),
+	constants.RuleSVG:                 bytesBuiltinAdapter(validate.IsSVG),
 }

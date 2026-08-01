@@ -285,6 +285,90 @@ func ValidateJSONPathExists(body []byte, jsonPath string) CompareResult {
 }
 
 // ────────────────────────────────────────
+// 图片校验（validate/image）
+// ────────────────────────────────────────
+
+// DetectImageFormat 基于魔数嗅探图片格式，返回规范格式名，无法识别时返回空字符串
+func DetectImageFormat(data []byte) string {
+	return validate.DetectImageFormat(data)
+}
+
+// NormalizeImageFormat 归一化图片格式名，忽略大小写且 jpg 等价 jpeg，未知格式名返回 false
+func NormalizeImageFormat(name string) (string, bool) {
+	return validate.NormalizeImageFormat(name)
+}
+
+// IsImage 判断字节内容是否为有效且完整的图片（任意支持格式）
+func IsImage(data []byte) bool {
+	return validate.IsImage(data)
+}
+
+// IsImageInFormats 判断字节内容是否为白名单内的有效图片，白名单为空格分隔的格式名，出现未知格式名时校验失败
+func IsImageInFormats(data []byte, formats string) bool {
+	return validate.IsImageInFormats(data, formats)
+}
+
+// IsPNG 判断字节内容是否为完整的 PNG 图片（含 IEND 尾块检查）
+func IsPNG(data []byte) bool {
+	return validate.IsPNG(data)
+}
+
+// IsJPEG 判断字节内容是否为完整的 JPEG 图片（含 EOI 尾部检查）
+func IsJPEG(data []byte) bool {
+	return validate.IsJPEG(data)
+}
+
+// IsGIF 判断字节内容是否为完整的 GIF 图片（含流结束符检查）
+func IsGIF(data []byte) bool {
+	return validate.IsGIF(data)
+}
+
+// IsWebP 判断字节内容是否为有效的 WebP 图片
+func IsWebP(data []byte) bool {
+	return validate.IsWebP(data)
+}
+
+// IsBMP 判断字节内容是否为有效的 BMP 图片
+func IsBMP(data []byte) bool {
+	return validate.IsBMP(data)
+}
+
+// IsTIFF 判断字节内容是否为有效的 TIFF 图片
+func IsTIFF(data []byte) bool {
+	return validate.IsTIFF(data)
+}
+
+// IsICO 判断字节内容是否为有效的 ICO 图标
+func IsICO(data []byte) bool {
+	return validate.IsICO(data)
+}
+
+// IsAVIF 判断字节内容是否为有效的 AVIF 图片
+func IsAVIF(data []byte) bool {
+	return validate.IsAVIF(data)
+}
+
+// IsHEIC 判断字节内容是否为有效的 HEIC/HEIF 图片
+func IsHEIC(data []byte) bool {
+	return validate.IsHEIC(data)
+}
+
+// IsSVG 判断字节内容是否为有效的 SVG 文档
+func IsSVG(data []byte) bool {
+	return validate.IsSVG(data)
+}
+
+// ValidateImage 校验字节内容是否为有效且完整的图片
+func ValidateImage(data []byte) CompareResult {
+	return validate.ValidateImage(data)
+}
+
+// ValidateImageInFormats 校验字节内容是否为白名单内的有效图片
+func ValidateImageInFormats(data []byte, formats string) CompareResult {
+	return validate.ValidateImageInFormats(data, formats)
+}
+
+// ────────────────────────────────────────
 // 枚举校验（validate/enum）
 // ────────────────────────────────────────
 

@@ -43,6 +43,8 @@ func ZhMessages() map[string]string {
 		"format.bcp47_invalid":            "无效的 BCP 47 语言标签",
 		"format.eth_addr_invalid":         "无效的以太坊地址",
 		"format.btc_addr_invalid":         "无效的比特币地址",
+		"format.image_invalid":            "无效或损坏的图片数据",
+		"format.image_format_not_allowed": "不支持的图片格式: {actual}，允许: {expected}",
 
 		"enum.invalid_value": "无效的枚举值: {value}",
 
@@ -216,5 +218,17 @@ func ZhMessages() map[string]string {
 		"cn_phone":             "{field} 必须是有效的中国大陆手机号",
 		"cn_idcard":            "{field} 必须是有效的中国大陆身份证号",
 		"cn_idcard_strict":     "{field} 必须是有效的中国大陆身份证号（含校验和验证）",
+		"image":                "{field} 必须是有效的图片",
+		"png":                  "{field} 必须是有效的 PNG 图片",
+		"jpg":                  "{field} 必须是有效的 JPEG 图片",
+		"jpeg":                 "{field} 必须是有效的 JPEG 图片",
+		"gif":                  "{field} 必须是有效的 GIF 图片",
+		"webp":                 "{field} 必须是有效的 WebP 图片",
+		"bmp":                  "{field} 必须是有效的 BMP 图片",
+		"tiff":                 "{field} 必须是有效的 TIFF 图片",
+		"ico":                  "{field} 必须是有效的 ICO 图标",
+		"avif":                 "{field} 必须是有效的 AVIF 图片",
+		"heic":                 "{field} 必须是有效的 HEIC 图片",
+		"svg":                  "{field} 必须是有效的 SVG 文档",
 	}
 }

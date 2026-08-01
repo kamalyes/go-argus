@@ -44,6 +44,8 @@ const (
 	MsgFormatBCP47Invalid           = "format.bcp47_invalid"
 	MsgFormatEthAddrInvalid         = "format.eth_addr_invalid"
 	MsgFormatBtcAddrInvalid         = "format.btc_addr_invalid"
+	MsgFormatImageInvalid           = "format.image_invalid"
+	MsgFormatImageNotAllowed        = "format.image_format_not_allowed"
 )
 
 // enum 系列消息键 —— 枚举校验相关

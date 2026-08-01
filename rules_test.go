@@ -15,6 +15,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/kamalyes/go-argus/constants"
 	"github.com/kamalyes/go-argus/rule"
 	"github.com/kamalyes/go-argus/validate"
 )
@@ -2561,5 +2562,106 @@ func TestBuiltinRuleBtcAddrLegacyTooShort(t *testing.T) {
 func TestBuiltinRuleSemverPatchFail(t *testing.T) {
 	if rule.BuiltinRules["semver"](reflect.ValueOf("1.2."), "", false) {
 		t.Fatal("expected semver to fail for empty patch")
+	}
+}
+
+// 图片校验样本：魔数与尾部结构真实，字段内容从简
+var (
+	rulesPngSample  = []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\x0dIHDR\x08\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x00\x00\x00\x00\x00\x00IEND\xae\x42\x60\x82")
+	rulesJpegSample = []byte("\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xff\xd9")
+	rulesGifSample  = []byte("GIF89a\x01\x00\x01\x00\x00\x00\x00\x00\x3b")
+	rulesSvgSample  = []byte(`<?xml version="1.0"?><svg/>`)
+)
+
+func TestRuleImageVar(t *testing.T) {
+	v := New()
+	if err := v.Var(rulesPngSample, "image"); err != nil {
+		t.Fatalf("expected png bytes to pass image, got %v", err)
+	}
+	if err := v.Var(rulesJpegSample, "image"); err != nil {
+		t.Fatalf("expected jpeg bytes to pass image, got %v", err)
+	}
+	if err := v.Var(rulesSvgSample, "image"); err != nil {
+		t.Fatalf("expected svg bytes to pass image, got %v", err)
+	}
+	if err := v.Var([]byte("plain text"), "image"); err == nil {
+		t.Fatal("expected non-image bytes to fail image")
+	}
+	if err := v.Var(rulesPngSample, "image=png jpg"); err != nil {
+		t.Fatalf("expected png bytes to pass image=png jpg, got %v", err)
+	}
+	if err := v.Var(rulesGifSample, "image=png jpg"); err == nil {
+		t.Fatal("expected gif bytes to fail image=png jpg")
+	}
+	if err := v.Var(rulesPngSample, "png"); err != nil {
+		t.Fatalf("expected png bytes to pass png, got %v", err)
+	}
+	if err := v.Var(rulesJpegSample, "jpg"); err != nil {
+		t.Fatalf("expected jpeg bytes to pass jpg, got %v", err)
+	}
+	if err := v.Var(rulesPngSample[:len(rulesPngSample)-6], "image"); err == nil {
+		t.Fatal("expected truncated png to fail image")
+	}
+}
+
+func TestRuleImageBankIconStruct(t *testing.T) {
+	// 复刻业务场景：银行图标非空、不超 2MiB、仅允许 PNG/JPEG
+	type bankIconRequest struct {
+		Icon []byte `json:"icon" validate:"required,max=2097152,image=png jpg"`
+	}
+	v := New()
+
+	if err := v.Struct(bankIconRequest{Icon: rulesPngSample}); err != nil {
+		t.Fatalf("expected valid png icon to pass, got %v", err)
+	}
+	if err := v.Struct(bankIconRequest{Icon: rulesJpegSample}); err != nil {
+		t.Fatalf("expected valid jpeg icon to pass, got %v", err)
+	}
+	if err := v.Struct(bankIconRequest{Icon: nil}); err == nil {
+		t.Fatal("expected empty icon to fail required")
+	}
+	if err := v.Struct(bankIconRequest{Icon: rulesGifSample}); err == nil {
+		t.Fatal("expected gif icon to fail format whitelist")
+	}
+	if err := v.Struct(bankIconRequest{Icon: make([]byte, 2097153)}); err == nil {
+		t.Fatal("expected oversized icon to fail max")
+	}
+
+	messages := TranslateValidationErrors(v.Struct(bankIconRequest{Icon: rulesGifSample}), "zh-CN")
+	if len(messages) != 1 || messages[0].Tag != "image" {
+		t.Fatalf("expected one image tag error, got %+v", messages)
+	}
+	if messages[0].Message == "" {
+		t.Fatal("expected non-empty zh message for image rule")
+	}
+}
+
+func TestImageRuleConstantsSync(t *testing.T) {
+	// constants 的图片规则名与 validate 的格式归一化词汇表必须保持同步，防止一侧改名后另一侧静默失效
+	formatRules := map[string]string{
+		"png":  constants.RulePNG,
+		"jpg":  constants.RuleJPG,
+		"jpeg": constants.RuleJPEG,
+		"gif":  constants.RuleGIF,
+		"webp": constants.RuleWebP,
+		"bmp":  constants.RuleBMP,
+		"tiff": constants.RuleTIFF,
+		"ico":  constants.RuleICO,
+		"avif": constants.RuleAVIF,
+		"heic": constants.RuleHEIC,
+		"svg":  constants.RuleSVG,
+	}
+	for want, ruleName := range formatRules {
+		normalized, ok := validate.NormalizeImageFormat(ruleName)
+		if !ok {
+			t.Errorf("NormalizeImageFormat(%q) not recognized, constants and validate vocabularies are out of sync", ruleName)
+			continue
+		}
+		if want == "jpg" {
+			want = "jpeg" // jpg 为 jpeg 的别名，归一化后应等价
+		}
+		if normalized != want {
+			t.Errorf("NormalizeImageFormat(%q) = %q, want %q", ruleName, normalized, want)
+		}
 	}
 }

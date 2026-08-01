@@ -45,6 +45,8 @@ func EnMessages() map[string]string {
 		"format.bcp47_invalid":            "invalid BCP 47 language tag",
 		"format.eth_addr_invalid":         "invalid Ethereum address",
 		"format.btc_addr_invalid":         "invalid Bitcoin address",
+		"format.image_invalid":            "invalid or corrupted image data",
+		"format.image_format_not_allowed": "unsupported image format: {actual}, expected one of: {expected}",
 
 		// ─── enum 内部消息 ───
 		"enum.invalid_value": "invalid enum value: {value}",
@@ -223,5 +225,17 @@ func EnMessages() map[string]string {
 		"cn_phone":             "{field} must be a valid Chinese phone number",
 		"cn_idcard":            "{field} must be a valid Chinese ID card number",
 		"cn_idcard_strict":     "{field} must be a valid Chinese ID card number (with checksum)",
+		"image":                "{field} must be a valid image",
+		"png":                  "{field} must be a valid PNG image",
+		"jpg":                  "{field} must be a valid JPEG image",
+		"jpeg":                 "{field} must be a valid JPEG image",
+		"gif":                  "{field} must be a valid GIF image",
+		"webp":                 "{field} must be a valid WebP image",
+		"bmp":                  "{field} must be a valid BMP image",
+		"tiff":                 "{field} must be a valid TIFF image",
+		"ico":                  "{field} must be a valid ICO icon",
+		"avif":                 "{field} must be a valid AVIF image",
+		"heic":                 "{field} must be a valid HEIC image",
+		"svg":                  "{field} must be a valid SVG document",
 	}
 }

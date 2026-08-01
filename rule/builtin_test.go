@@ -726,6 +726,72 @@ func TestRuleJSONBytes(t *testing.T) {
 	}
 }
 
+// 图片样本与 validate/image_test.go 保持同构：魔数与尾部结构真实，字段内容从简
+var (
+	builtinPngSample  = []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\x0dIHDR\x08\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x00\x00\x00\x00\x00\x00IEND\xae\x42\x60\x82")
+	builtinJpegSample = []byte("\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xff\xd9")
+	builtinGifSample  = []byte("GIF89a\x01\x00\x01\x00\x00\x00\x00\x00\x3b")
+	builtinSvgSample  = []byte(`<?xml version="1.0"?><svg/>`)
+)
+
+func TestRuleImage(t *testing.T) {
+	if !RuleImage(reflect.ValueOf(builtinPngSample), "", false) {
+		t.Fatal("expected image to pass for png bytes")
+	}
+	if RuleImage(reflect.ValueOf([]byte("plain text")), "", false) {
+		t.Fatal("expected image to fail for non-image bytes")
+	}
+	if !RuleImage(reflect.ValueOf(builtinPngSample), "png jpg", false) {
+		t.Fatal("expected image whitelist to pass for png bytes")
+	}
+	if RuleImage(reflect.ValueOf(builtinGifSample), "png jpg", false) {
+		t.Fatal("expected image whitelist to fail for gif bytes")
+	}
+	if RuleImage(reflect.ValueOf(builtinPngSample), "png tiffx", false) {
+		t.Fatal("expected image whitelist to fail for unknown format name")
+	}
+}
+
+func TestBuiltinImageTags(t *testing.T) {
+	if !callBuiltin("image", reflect.ValueOf(builtinPngSample), "") {
+		t.Fatal("expected image tag to pass")
+	}
+	if !callBuiltin("png", reflect.ValueOf(builtinPngSample), "") {
+		t.Fatal("expected png tag to pass")
+	}
+	if callBuiltin("png", reflect.ValueOf(builtinJpegSample), "") {
+		t.Fatal("expected png tag to fail for jpeg bytes")
+	}
+	if !callBuiltin("jpg", reflect.ValueOf(builtinJpegSample), "") {
+		t.Fatal("expected jpg tag to pass")
+	}
+	if !callBuiltin("jpeg", reflect.ValueOf(builtinJpegSample), "") {
+		t.Fatal("expected jpeg tag to pass")
+	}
+	if !callBuiltin("gif", reflect.ValueOf(builtinGifSample), "") {
+		t.Fatal("expected gif tag to pass")
+	}
+	if !callBuiltin("svg", reflect.ValueOf(builtinSvgSample), "") {
+		t.Fatal("expected svg tag to pass")
+	}
+	if callBuiltin("png", reflect.ValueOf("not bytes"), "") {
+		t.Fatal("expected png tag to fail for string field")
+	}
+	if callBuiltin("image", reflect.ValueOf(nil), "") {
+		t.Fatal("expected image tag to fail for nil field")
+	}
+}
+
+func TestBuiltinImageTruncated(t *testing.T) {
+	truncatedPng := builtinPngSample[:len(builtinPngSample)-6]
+	if callBuiltin("png", reflect.ValueOf(truncatedPng), "") {
+		t.Fatal("expected png tag to fail for truncated bytes")
+	}
+	if callBuiltin("image", reflect.ValueOf(truncatedPng), "") {
+		t.Fatal("expected image tag to fail for truncated bytes")
+	}
+}
+
 func TestRuleMultibyteInvalid(t *testing.T) {
 	if callBuiltin("multibyte", reflect.ValueOf(42), "") {
 		t.Fatal("expected multibyte to fail for int")
