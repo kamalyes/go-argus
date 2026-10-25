@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-06 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2023-12-06 00:00:00
+ * @LastEditTime: 2026-10-25 17:35:19
  * @FilePath: \go-argus\options.go
  * @Description: 校验器配置项，提供兼容 go-playground validator 的构造选项
  *
@@ -27,6 +27,21 @@ func WithRequiredStructEnabled() Option {
 func WithPrivateFieldValidation() Option {
 	return func(v *Validate) {
 		v.privateFieldValidation = true
+	}
+}
+
+// WithFailFast 首个错误即停止校验（默认关闭）
+//
+// 默认行为是收集全部字段错误：命中失败后仍继续遍历剩余字段，
+// 因此"首字段失败"与"末字段失败"耗时相同（实测 15 字段结构体 482.9 vs 461.7 ns）。
+// 请求入口的常见诉求是"拒绝这个请求"，调用方往往只需首个错误或 err != nil，
+// 此时继续校验剩余字段是纯浪费。
+//
+// 开启后 ValidationErrors 只含首个错误。必须显式开启而非默认——
+// 依赖"拿到全部错误"（如表单逐字段回显）的调用方不能被静默改掉语义。
+func WithFailFast() Option {
+	return func(v *Validate) {
+		v.failFast = true
 	}
 }
 

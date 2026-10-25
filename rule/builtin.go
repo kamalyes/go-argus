@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2026-05-19 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2026-07-27 10:25:29
+ * @LastEditTime: 2026-10-25 17:35:19
  * @FilePath: \go-argus\rule\builtin.go
  * @Description: 内置字段规则，负责单字段格式、长度、数值和枚举校验
  *
@@ -268,8 +268,10 @@ func IsUniqueSlice(field reflect.Value) bool {
 // IsUniqueMap 判断 Map 值是否唯一
 func IsUniqueMap(field reflect.Value) bool {
 	seen := make(map[string]struct{}, field.Len())
-	for _, key := range field.MapKeys() {
-		valueKey := validate.StringValue(validate.DerefReflect(field.MapIndex(key)))
+	// MapRange 就地迭代，省去 MapKeys() 物化键切片的一次分配
+	iter := field.MapRange()
+	for iter.Next() {
+		valueKey := validate.StringValue(validate.DerefReflect(iter.Value()))
 		if _, ok := seen[valueKey]; ok {
 			return false
 		}

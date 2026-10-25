@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-06 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2026-10-25 13:39:09
+ * @LastEditTime: 2026-10-25 17:35:19
  * @FilePath: \go-argus\validator.go
  * @Description: Argus 根校验器，提供 struct tag 校验、变量校验、自定义规则和兼容入口
  *
@@ -84,20 +84,29 @@ type Validate struct {
 	tagName                string
 	requiredStructEnabled  bool
 	privateFieldValidation bool
+	failFast               bool
 	tagNameFunc            TagNameFunc
 
-	mu          sync.RWMutex
-	validations map[string]FuncCtx
+	// regMu 仅序列化注册（写）路径，校验（读）路径不参与
+	regMu sync.Mutex
+	// validations 自定义规则表，写时复制
+	//
+	// 原实现是 mu.RWMutex + 裸 map，校验路径每次自定义规则求值都要 RLock——
+	// RLock 对共享 readerCount 做原子 RMW，多核在同一缓存行上乒乓，
+	// 实测 10 核比单核慢 1.9×（62.20→119.3 ns），而无锁的内建规则路径是 5.08× 正向扩展。
+	// 改为写时复制后读路径退化为一次无竞争原子加载；注册是启动期行为，克隆成本无关紧要。
+	// 与同结构体内 varSlots 的 atomic.Pointer 用法保持一致。
+	validations atomic.Pointer[map[string]FuncCtx]
 	structCache sync.Map
 	varCache    sync.Map
-	varSlot     atomic.Pointer[varRuleSlot]
+	// varSlots Var/VarString 规则的分槽旁路缓存（见 varSlotCount）
+	varSlots [varSlotCount]atomic.Pointer[varRuleSlot]
 }
 
 // New 创建校验器实例
 func New(options ...Option) *Validate {
 	v := &Validate{
-		tagName:     defaultTagName,
-		validations: make(map[string]FuncCtx),
+		tagName: defaultTagName,
 	}
 	for _, opt := range options {
 		if opt != nil {
@@ -133,9 +142,23 @@ func (v *Validate) RegisterValidationCtx(tag string, fn FuncCtx, _ ...bool) erro
 	if tag == "" || fn == nil {
 		return &InvalidValidationError{}
 	}
-	v.mu.Lock()
-	defer v.mu.Unlock()
-	v.validations[tag] = fn
+	// 写时复制：克隆当前表、写入新规则、整体发布。
+	// 注册期间并发校验读到的仍是旧快照（合法：该规则此刻尚未注册完成），
+	// 发布后续读立即可见——与原 RWMutex 的可见性语义等价。
+	v.regMu.Lock()
+	defer v.regMu.Unlock()
+
+	var next map[string]FuncCtx
+	if cur := v.validations.Load(); cur != nil {
+		next = make(map[string]FuncCtx, len(*cur)+1)
+		for k, f := range *cur {
+			next[k] = f
+		}
+	} else {
+		next = make(map[string]FuncCtx, 1)
+	}
+	next[tag] = fn
+	v.validations.Store(&next)
 	return nil
 }
 
@@ -352,15 +375,44 @@ func (v *Validate) varStringReflectPath(ctx context.Context, field string, rules
 	return nil
 }
 
-// varRuleSlot 单槽旁路缓存条目，热点 tag 免走 sync.Map 遍历
+// varRuleSlot 旁路缓存条目，热点 tag 免走 sync.Map 遍历
 type varRuleSlot struct {
 	tag   string
 	rules []rule.RulePlan
 }
 
-// cachedVarRules 缓存变量规则解析结果，单槽旁路优先，未命中再走 sync.Map
+// varSlotCount 旁路缓存槽位数，必须为 2 的幂（下标用掩码取）
+//
+// 原实现是单槽：两个以上热点 tag 轮转时互相驱逐，每次都未命中，
+// 既要新分配一个 varRuleSlot（48B），又要向同一个共享 atomic.Pointer 写入——
+// 实测单 tag 11.79ns/0 分配，二 tag 退化到 33.18ns/48B，
+// 四 tag 并行更是 49.61ns，比单 tag 并行（1.82ns）慢 27×，且慢于自身串行（34.62ns）：
+// 典型的缓存行争用负扩展。
+// 分槽后不同 tag 落入不同槽位，各自稳定为零分配，写入也不再挤同一缓存行。
+const varSlotCount = 16
+
+// varSlotIndex 按 tag 计算槽位下标
+//
+// 采样长度 + 首字节 + 两个内部字节（1/3、2/3 处）+ 末字节，常数时间，不遍历整串。
+//
+// 必须采样内部字节：规则 tag 高度同构，普遍共享前后缀——
+// "min=2,max=50" 与 "min=3,max=40" 长度、首字节、末字节全同，差异只在中间。
+// 仅用首尾会让这类 tag 全部撞进同一槽位，分槽退化为单槽。
+func varSlotIndex(tag string) uint {
+	n := len(tag)
+	if n == 0 {
+		return 0
+	}
+	h := uint(n)*31 + uint(tag[0])*7 + uint(tag[n-1])*13
+	h += uint(tag[n/3]) * 131
+	h += uint(tag[2*n/3]) * 17
+	return h & (varSlotCount - 1)
+}
+
+// cachedVarRules 缓存变量规则解析结果，分槽旁路优先，未命中再走 sync.Map
 func (v *Validate) cachedVarRules(tag string) []rule.RulePlan {
-	if slot := v.varSlot.Load(); slot != nil && slot.tag == tag {
+	idx := varSlotIndex(tag)
+	if slot := v.varSlots[idx].Load(); slot != nil && slot.tag == tag {
 		return slot.rules
 	}
 	var rules []rule.RulePlan
@@ -371,7 +423,7 @@ func (v *Validate) cachedVarRules(tag string) []rule.RulePlan {
 		actual, _ := v.varCache.LoadOrStore(tag, parsed)
 		rules = actual.([]rule.RulePlan)
 	}
-	v.varSlot.Store(&varRuleSlot{tag: tag, rules: rules})
+	v.varSlots[idx].Store(&varRuleSlot{tag: tag, rules: rules})
 	return rules
 }
 
@@ -402,6 +454,10 @@ func (v *Validate) validateStruct(
 		before := len(*errs)
 		v.applyRules(ctx, top, current, field, fieldNS, fieldStructNS, fp.AltName, fp.Name, fp.Rules, errs)
 		if len(*errs) != before {
+			// failFast：首个错误即收口，不再遍历剩余字段
+			if v.failFast {
+				return
+			}
 			continue
 		}
 
@@ -409,6 +465,10 @@ func (v *Validate) validateStruct(
 			nested := validate.DerefReflect(field)
 			if nested.IsValid() && nested.Kind() == reflect.Struct {
 				v.validateStruct(ctx, top, nested, fieldNS, fieldStructNS, errs)
+				// failFast：嵌套结构体内部出错同样立即收口
+				if v.failFast && len(*errs) > 0 {
+					return
+				}
 			}
 		}
 	}
@@ -514,17 +574,50 @@ func (v *Validate) applyDive(
 					*errs,
 					newFieldError(item, childNS, childStructNS, fieldName, structFieldName, &valueRules[0]),
 				)
+				if v.failFast {
+					return
+				}
 				continue
 			}
 			v.applyRules(ctx, top, parent, item, childNS, childStructNS, fieldName, structFieldName, valueRules, errs)
+			// failFast：元素出错即停，不再遍历剩余元素
+			if v.failFast && len(*errs) > 0 {
+				return
+			}
 		}
 	case reflect.Map:
-		for _, key := range field.MapKeys() {
-			value := field.MapIndex(key)
-			if v.applyRulesFast(ctx, top, parent, key, fieldName, structFieldName, keyRules) &&
-				v.applyRulesFast(ctx, top, parent, value, fieldName, structFieldName, valueRules) {
+		// MapRange 迭代器就地推进，不像 MapKeys() 那样先物化整个 []reflect.Value；
+		// 校验通过的 map dive 原本要为此付一次按条目数增长的分配
+		iter := field.MapRange()
+
+		// 复用键/值承载体：iter.Key() / iter.Value() 每次调用都经 reflect.copyVal
+		// → reflect.unsafe_New 分配一个新的值存储（map[string]string 即每条目两次
+		// 16B 字符串头分配，实测占本路径全部分配的 100%）。SetIterKey/SetIterValue
+		// 就地写入已有的可寻址值，故分配从「2×条目数」降为「每次 map dive 常数次」。
+		//
+		// 键承载体仅在存在 keys 规则时才需要：applyRulesFast 对空规则立即返回 true，
+		// 错误路径另有 iter.Key() 兜底，故无 keys 规则时连承载体都不必分配。
+		needKey := len(keyRules) > 0
+		var keyHolder reflect.Value
+		if needKey {
+			keyHolder = reflect.New(field.Type().Key()).Elem()
+		}
+		valHolder := reflect.New(field.Type().Elem()).Elem()
+
+		for iter.Next() {
+			if needKey {
+				keyHolder.SetIterKey(iter)
+			}
+			valHolder.SetIterValue(iter)
+			if (!needKey || v.applyRulesFast(ctx, top, parent, keyHolder, fieldName, structFieldName, keyRules)) &&
+				v.applyRulesFast(ctx, top, parent, valHolder, fieldName, structFieldName, valueRules) {
 				continue
 			}
+
+			// 错误路径取 iter 的独立副本，不可复用承载体：newFieldError 会持有该
+			// reflect.Value（Kind/Type/装箱均延迟到访问器求值），若传入承载体，
+			// 后续条目的 SetIter* 会就地覆写它，已生成的错误将报告错误的值。
+			key, value := iter.Key(), iter.Value()
 			keyText := validate.StringValue(key)
 			childNS := ns + "[" + keyText + "]"
 			childStructNS := structNs + "[" + keyText + "]"
@@ -532,6 +625,10 @@ func (v *Validate) applyDive(
 				v.applyRules(ctx, top, parent, key, childNS, childStructNS, fieldName, structFieldName, keyRules, errs)
 			}
 			v.applyRules(ctx, top, parent, value, childNS, childStructNS, fieldName, structFieldName, valueRules, errs)
+			// failFast：键或值出错即停，不再遍历剩余条目
+			if v.failFast && len(*errs) > 0 {
+				return
+			}
 		}
 	}
 }
@@ -583,13 +680,16 @@ func (v *Validate) applyRulesFast(
 						}
 					}
 				case reflect.Map:
-					for _, key := range derefed.MapKeys() {
-						if !v.applyRulesFast(ctx, top, parent, key, fieldName, structFieldName, keyRules) ||
+					// 同 applyDive：用 MapRange 迭代器替代 MapKeys() 的键切片物化，
+					// 这是"校验全通过"快路径，不应有按条目数增长的分配
+					iter := derefed.MapRange()
+					for iter.Next() {
+						if !v.applyRulesFast(ctx, top, parent, iter.Key(), fieldName, structFieldName, keyRules) ||
 							!v.applyRulesFast(
 								ctx,
 								top,
 								parent,
-								derefed.MapIndex(key),
+								iter.Value(),
 								fieldName,
 								structFieldName,
 								valueRules,
@@ -681,11 +781,16 @@ func (v *Validate) evalRule(
 	return result
 }
 
+// getCustomValidation 取自定义规则函数（校验热路径，一次无竞争原子加载）
+//
+// 表未初始化（从未注册过自定义规则）时返回 nil，调用方按"无此规则"处理——
+// 与原裸 map 零值查找语义一致。
 func (v *Validate) getCustomValidation(name string) FuncCtx {
-	v.mu.RLock()
-	fn := v.validations[name]
-	v.mu.RUnlock()
-	return fn
+	m := v.validations.Load()
+	if m == nil {
+		return nil
+	}
+	return (*m)[name]
 }
 
 // evalDispatchFn 规则分派函数签名
