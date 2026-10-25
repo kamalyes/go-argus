@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-06 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2026-05-29 16:54:16
+ * @LastEditTime: 2026-10-25 10:33:18
  * @FilePath: \go-argus\validator.go
  * @Description: Argus 根校验器，提供 struct tag 校验、变量校验、自定义规则和兼容入口
  *
@@ -1015,6 +1015,19 @@ func (v *Validate) compileStruct(t reflect.Type) *rule.StructPlan {
 				}
 			}
 		}
+		mayDive := mayDiveStructType(sf.Type, rules)
+
+		// 既无规则又不可下潜的字段不入计划：它在 validateStruct 单轮迭代里可证明为 no-op
+		// （applyRules 对空规则立即返回、MayDiveStruct 为 false 不下潜、FieldByIndex 结果无消费者），
+		// 而 proto/@inject_tag 生成的宽结构体中这类字段占绝大多数，逐字段 FieldByIndex
+		// 与命名空间计算使耗时正比于「总字段数」而非「带规则字段数」
+		//
+		// ⚠️ 判定必须是 len(rules)==0 && !mayDive，不可用 HasValidate：
+		// 无 tag 的嵌套结构体字段 HasValidate 为 false，但必须保留以供下潜校验
+		if len(rules) == 0 && !mayDive {
+			continue
+		}
+
 		fp := rule.FieldPlan{
 			Index:          sf.Index,
 			Name:           sf.Name,
@@ -1022,7 +1035,7 @@ func (v *Validate) compileStruct(t reflect.Type) *rule.StructPlan {
 			Typ:            sf.Type,
 			Rules:          rules,
 			HasValidate:    tag != "",
-			MayDiveStruct:  mayDiveStructType(sf.Type, rules),
+			MayDiveStruct:  mayDive,
 			NsPrefix:       utils.JoinNS(typeName, altName),
 			StructNsPrefix: utils.JoinNS(typeName, sf.Name),
 		}
