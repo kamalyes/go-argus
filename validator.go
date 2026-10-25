@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-06 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2026-10-25 10:33:18
+ * @LastEditTime: 2026-10-25 13:39:09
  * @FilePath: \go-argus\validator.go
  * @Description: Argus 根校验器，提供 struct tag 校验、变量校验、自定义规则和兼容入口
  *
@@ -816,10 +816,16 @@ func (v *Validate) evalCmpField(top, parent, field reflect.Value, plan *rule.Rul
 			return false
 		}
 	}
+	// 兜底推导只落局部变量，绝不回写 plan：plan 指向 structCache 共享的 StructPlan，
+	// 校验路径是并发只读路径，回写即对共享结构体的无同步写（竞争）。
+	// 正常情况下 PrepareRulePlan（rule/plan.go）已在编译期置好 CmpOp/HasCmpOp，
+	// 此分支仅当某规则进了 evalDispatchTable 却漏登记 constants.IsFieldCompareRule 时触发——
+	// 届时若回写便是真实 data race，故此处只读不写，编译期才是唯一正确的赋值位置。
+	cmpOp := plan.CmpOp
 	if !plan.HasCmpOp {
-		plan.CmpOp = rule.CmpOpForRule(plan.Name)
+		cmpOp = rule.CmpOpForRule(plan.Name)
 	}
-	return rule.CompareValueOp(derefed, other, plan.CmpOp)
+	return rule.CompareValueOp(derefed, other, cmpOp)
 }
 
 // evalCmpFieldLen 跨字段长度比较，参数格式: FieldName 或 op:FieldName（op 可选 eq/ne/gt/gte/lt/lte，默认 eq）
