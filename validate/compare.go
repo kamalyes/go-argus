@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-06 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2026-05-29 16:59:27
+ * @LastEditTime: 2026-10-26 11:02:28
  * @FilePath: \go-argus\validate\compare.go
  * @Description: 通用比较校验能力，提供数值、字符串、HTTP 状态码和 Header 比较
  *
@@ -14,7 +14,6 @@ package validate
 
 import (
 	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -88,7 +87,8 @@ func CompareStrings(actual, expect string, op constants.CompareOperator) Compare
 		result.Success = strings.TrimSpace(actual) != ""
 		result.Expect = "non-empty string"
 	case constants.OpRegex:
-		re, err := regexp.Compile(expect)
+		// 走带缓存的编译入口（见 format.go GetCompiledRegex），避免同模式反复编译
+		re, err := GetCompiledRegex(expect)
 		if err != nil {
 			result.Message = i18n.Msg(MsgCompareRegexCompileFailed, map[string]string{"error": err.Error()})
 			return result

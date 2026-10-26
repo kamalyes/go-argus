@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-06 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2026-05-17 02:55:52
+ * @LastEditTime: 2026-10-26 11:02:28
  * @FilePath: \go-argus\validate\format.go
  * @Description: 格式校验能力，提供 Email、IP、URL、UUID、Base64 和正则校验
  *
@@ -64,7 +64,9 @@ func ClearRegexCache() {
 // ValidateRegex 校验字节内容是否匹配正则表达式
 func ValidateRegex(body []byte, pattern string) CompareResult {
 	result := CompareResult{Actual: string(body), Expect: pattern}
-	re, err := regexp.Compile(pattern)
+	// 走带缓存的编译入口：原实现每次调用都 regexp.Compile 同一模式，
+	// 而 GetCompiledRegex 的缓存就在本文件上方，此前未被使用
+	re, err := GetCompiledRegex(pattern)
 	if err != nil {
 		result.Message = i18n.Msg(MsgFormatRegexCompileFailed, map[string]string{"error": err.Error()})
 		return result
