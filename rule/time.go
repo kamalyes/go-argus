@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-06 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2023-12-06 00:00:00
+ * @LastEditTime: 2026-10-26 09:11:35
  * @FilePath: \go-argus\rule\time.go
  * @Description: 时间规则模块，提供 time.Time、protobuf Timestamp 反射识别和 now 表达式解析
  *
@@ -27,17 +27,40 @@ func TimeValue(value reflect.Value, layout string) (time.Time, bool) {
 	if !value.IsValid() {
 		return time.Time{}, false
 	}
-	if value.CanInterface() {
-		switch v := value.Interface().(type) {
-		case time.Time:
-			return v, true
-		case string:
-			if layout == "" && !looksLikeTimeString(v) {
-				return time.Time{}, false
-			}
-			return parseTimeString(v, layout)
+	// 按 kind 分流，避免对不可能承载时间值的类型付装箱与反射探测代价。
+	//
+	// 原实现无条件走 value.Interface() 类型断言，再依次探测 callAsTime /
+	// callSecondsNanos / readSecondsNanos。而 CompareValueOp（rule/field.go）在
+	// NumericValue 之前先试 TimeValue，于是每次整数跨字段比较都要：
+	// 装箱一次（逃逸到堆）+ 两次 MethodByName 反射探测（各带 defer/recover 闭包），
+	// 全部注定失败——这是"校验通过"路径上仅剩的分配来源之一
+	switch value.Kind() {
+	case reflect.String:
+		// 字符串直接取值，无需 Interface() 装箱
+		s := value.String()
+		if layout == "" && !looksLikeTimeString(s) {
+			return time.Time{}, false
 		}
+		return parseTimeString(s, layout)
+
+	case reflect.Struct, reflect.Interface:
+		// time.Time 本身与 protobuf Timestamp 等载体均为结构体/接口，
+		// 仅在此分支付装箱代价，随后按原顺序走三个 fallback
+		if value.CanInterface() {
+			if t, ok := value.Interface().(time.Time); ok {
+				return t, true
+			}
+		}
+
+	default:
+		// 数值/布尔/切片/映射等不可能是时间值：
+		// readSecondsNanos 本就要求 Kind()==Struct，callAsTime/callSecondsNanos
+		// 依赖 AsTime()/Seconds+Nanos 载体（实践中均为结构体），故直接短路
+		// 理论差异：带 AsTime() 方法的具名非结构体类型不再被识别——
+		// 现实中无此形态（protobuf Timestamp 是结构体指针），换取的是所有数值比较路径零分配
+		return time.Time{}, false
 	}
+
 	if t, ok := callAsTime(value); ok {
 		return t, true
 	}
