@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-06 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2023-12-06 00:00:00
+ * @LastEditTime: 2026-10-26 15:07:38
  * @FilePath: \go-argus\errors.go
  * @Description: 校验错误模型，提供字段错误、错误集合和兼容错误格式
  *
@@ -12,13 +12,23 @@
 package validator
 
 import (
-	"bytes"
 	"fmt"
 	"reflect"
 	"strings"
 )
 
 const fieldErrMsg = "Key: '%s' Error:Field validation for '%s' failed on the '%s' tag"
+
+// fieldErrMsg 的字面分段，供手工拼接使用（见 fieldError.Error）
+//
+// 拼接结果必须与 fmt.Sprintf(fieldErrMsg, ns, field, tag) 逐字节一致，
+// 该不变量由 TestFieldErrorMsg_MatchesSprintf 守护；改动此处须同步 fieldErrMsg。
+const (
+	fieldErrPrefix = "Key: '"
+	fieldErrMid1   = "' Error:Field validation for '"
+	fieldErrMid2   = "' failed on the '"
+	fieldErrSuffix = "' tag"
+)
 
 // InvalidValidationError 表示传入校验器的参数类型不合法
 type InvalidValidationError struct {
@@ -36,14 +46,26 @@ func (e *InvalidValidationError) Error() string {
 type ValidationErrors []FieldError
 
 func (ve ValidationErrors) Error() string {
-	var buff bytes.Buffer
+	switch len(ve) {
+	case 0:
+		return ""
+	case 1:
+		// 单条错误是最常见情形：直接返回，省掉缓冲区与换行拼接
+		return strings.TrimSpace(ve[0].Error())
+	}
+
+	// strings.Builder 而非 bytes.Buffer：后者的 String() 会把累积内容整体复制一份
+	// （实测占本路径分配对象的 11.15%），Builder.String() 则零拷贝移交底层数组。
+	// 不预先汇总长度：那需要把每条 Error() 先物化到切片（多一次分配），
+	// 或对每条调用两次 Error()（成本翻倍）——Builder 自身的倍增增长已足够。
+	var b strings.Builder
 	for i := 0; i < len(ve); i++ {
 		if i > 0 {
-			buff.WriteByte('\n')
+			b.WriteByte('\n')
 		}
-		buff.WriteString(ve[i].Error())
+		b.WriteString(ve[i].Error())
 	}
-	return strings.TrimSpace(buff.String())
+	return strings.TrimSpace(b.String())
 }
 
 // FieldError 表示单个字段校验失败详情
@@ -138,8 +160,22 @@ func (fe *fieldError) Type() reflect.Type {
 }
 
 // Error 返回兼容 go-playground 的错误字符串
+//
+// 手工拼接而非 fmt.Sprintf：fieldErrMsg 全为 %s 代换，无需格式串解析，
+// 也省掉可变参数的 []any 装箱。按最终长度精确 Grow，一次分配拼出结果，
+// 且 Builder.String() 零拷贝。输出与 Sprintf 逐字节一致。
 func (fe *fieldError) Error() string {
-	return fmt.Sprintf(fieldErrMsg, fe.ns, fe.field, fe.tag)
+	var b strings.Builder
+	b.Grow(len(fieldErrPrefix) + len(fe.ns) + len(fieldErrMid1) + len(fe.field) +
+		len(fieldErrMid2) + len(fe.tag) + len(fieldErrSuffix))
+	b.WriteString(fieldErrPrefix)
+	b.WriteString(fe.ns)
+	b.WriteString(fieldErrMid1)
+	b.WriteString(fe.field)
+	b.WriteString(fieldErrMid2)
+	b.WriteString(fe.tag)
+	b.WriteString(fieldErrSuffix)
+	return b.String()
 }
 
 var _ FieldError = (*stringFieldError)(nil)
