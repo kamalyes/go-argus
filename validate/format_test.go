@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-06 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2023-12-06 00:00:00
+ * @LastEditTime: 2026-10-27 19:58:37
  * @FilePath: \go-argus\validate\format_test.go
  * @Description: format.go 测试，覆盖 Email、IP、URL、UUID、Base64 和正则校验
  *
@@ -11,6 +11,8 @@
 package validate
 
 import (
+	"math/rand"
+	"strings"
 	"testing"
 )
 
@@ -206,6 +208,66 @@ func TestIsUUID(t *testing.T) {
 	}
 	if IsUUID("invalid") {
 		t.Fatal("expected false")
+	}
+}
+
+// uuidByScan 是 IsUUID 改成「先验分隔符、再分段扫十六进制」之前的逐字符实现
+//
+// 保留它作为等价性参照：分段版把 32 个数据字符上的 4 路位置判定省掉了，
+// 该优化的唯一正确性依据就是两者判定完全一致
+func uuidByScan(uuid string) bool {
+	uuid = strings.TrimSpace(uuid)
+	if len(uuid) != 36 {
+		return false
+	}
+	for i := 0; i < len(uuid); i++ {
+		switch i {
+		case 8, 13, 18, 23:
+			if uuid[i] != '-' {
+				return false
+			}
+		default:
+			if !IsHexChar(uuid[i]) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// TestIsUUID_MatchesCharScan 守住分段版与逐字符版的逐例等价
+//
+// 覆盖：有效 UUID 的每一位 × 字母表的单字符变异（分隔符位与数据位的全部边界）、
+// 长度 30~41 的随机串，以及空串、空白、缺位、多位等退化输入
+func TestIsUUID_MatchesCharScan(t *testing.T) {
+	alphabet := []byte("0123456789abcdefABCDEF-gz_ .\t\n")
+	cases := []string{
+		"", " ", "\t", "550e8400-e29b-41d4-a716-446655440000",
+		" 550e8400-e29b-41d4-a716-446655440000 ",
+		"550e8400-e29b-41d4-a716-44665544000",
+		"550e8400-e29b-41d4-a716-4466554400000",
+		"550e8400e29b41d4a716446655440000",
+	}
+	base := []byte("550e8400-e29b-41d4-a716-446655440000")
+	for pos := range base {
+		for _, c := range alphabet {
+			mutated := append([]byte(nil), base...)
+			mutated[pos] = c
+			cases = append(cases, string(mutated))
+		}
+	}
+	rng := rand.New(rand.NewSource(1))
+	for n := 0; n < 200000; n++ {
+		b := make([]byte, 30+rng.Intn(12))
+		for i := range b {
+			b[i] = alphabet[rng.Intn(len(alphabet))]
+		}
+		cases = append(cases, string(b))
+	}
+	for _, s := range cases {
+		if got, want := IsUUID(s), uuidByScan(s); got != want {
+			t.Fatalf("IsUUID(%q) = %v，逐字符版 = %v", s, got, want)
+		}
 	}
 }
 

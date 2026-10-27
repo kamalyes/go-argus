@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-06 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2026-10-27 15:02:26
+ * @LastEditTime: 2026-10-27 19:58:37
  * @FilePath: \go-argus\validator_test.go
  * @Description: validator.go 测试，覆盖校验器核心逻辑、Struct/Var 校验和 evalRule 分支
  *
@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kamalyes/go-argus/rule"
 	"github.com/kamalyes/go-argus/utils"
 )
 
@@ -1077,7 +1078,9 @@ func TestExcludedWithoutAllAllAbsent(t *testing.T) {
 func TestApplyRulesEmpty(t *testing.T) {
 	v := New()
 	errs := make(ValidationErrors, 0)
-	v.applyRules(context.Background(), reflect.Value{}, reflect.Value{}, reflect.ValueOf("test"), "ns", "sns", "f", "sf", nil, &errs)
+	sc := evalScope{ctx: context.Background(), errs: &errs}
+	names := rule.FieldNames{NS: "ns", StructNS: "sns", Field: "f", StructField: "sf"}
+	v.applyRules(&sc, &names, "ns", "sns", reflect.ValueOf("test"), nil)
 	if len(errs) != 0 {
 		t.Fatal("expected no errors for empty rules")
 	}

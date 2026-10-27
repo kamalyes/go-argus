@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-06 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2026-10-26 11:02:28
+ * @LastEditTime: 2026-10-27 19:58:37
  * @FilePath: \go-argus\validate\format.go
  * @Description: 格式校验能力，提供 Email、IP、URL、UUID、Base64 和正则校验
  *
@@ -671,21 +671,30 @@ func IsIP(ip string) bool {
 }
 
 // IsUUID 判断字符串是否为有效 UUID
+//
+// 长度确定为 36 后分隔符位置即为常量，故先一次性比四个位置，再分五段扫十六进制。
+// 原实现每个字符都要走一遍 switch i 的 4 路位置判定，profile 里这一句
+// 独占 IsUUID 自身耗时的 41%（270ms/660ms），而它对 32 个数据字符全是空耗。
+//
+// 判定结果与逐字符版本完全一致，只是失败时先报分隔符还是先报非法字符的
+// 先后不同——本函数只返回 bool，该顺序不可观测
 func IsUUID(uuid string) bool {
 	uuid = strings.TrimSpace(uuid)
 	if len(uuid) != 36 {
 		return false
 	}
-	for i := 0; i < len(uuid); i++ {
-		switch i {
-		case 8, 13, 18, 23:
-			if uuid[i] != '-' {
-				return false
-			}
-		default:
-			if !IsHexChar(uuid[i]) {
-				return false
-			}
+	if uuid[8] != '-' || uuid[13] != '-' || uuid[18] != '-' || uuid[23] != '-' {
+		return false
+	}
+	return isHexRun(uuid[0:8]) && isHexRun(uuid[9:13]) && isHexRun(uuid[14:18]) &&
+		isHexRun(uuid[19:23]) && isHexRun(uuid[24:36])
+}
+
+// isHexRun 判断片段是否全为十六进制字符
+func isHexRun(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if !IsHexChar(s[i]) {
+			return false
 		}
 	}
 	return true

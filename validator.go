@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-06 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2026-10-25 17:35:19
+ * @LastEditTime: 2026-10-27 19:58:37
  * @FilePath: \go-argus\validator.go
  * @Description: Argus 根校验器，提供 struct tag 校验、变量校验、自定义规则和兼容入口
  *
@@ -179,8 +179,11 @@ func (v *Validate) StructCtx(ctx context.Context, s any) error {
 	}
 
 	errs := acquireErrors()
-	typeName := current.Type().Name()
-	v.validateStruct(ctx, current, current, typeName, typeName, errs)
+	// 类型名直接取编译计划里已存的 Name，不再每次校验调一次 reflect.Type.Name()
+	// ——后者内部要走 rtype.String() 再切掉包名前缀，profile 里占 260ms/9.07s（2.9%）
+	// 顺带把计划下传，避免 walkStruct 再查一次 structCache
+	plan := v.compileStruct(current.Type())
+	v.walkStruct(ctx, current, current, plan, plan.Name, plan.Name, errs)
 	if len(*errs) > 0 {
 		result := make(ValidationErrors, len(*errs))
 		copy(result, *errs)
@@ -224,7 +227,8 @@ func (v *Validate) VarCtx(ctx context.Context, field any, tag string) error {
 			rules := v.cachedVarRules(tag)
 			rv := reflect.ValueOf(field)
 			errs := acquireErrors()
-			v.applyRules(ctx, reflect.Value{}, rv, rv, "", "", "", "", rules, errs)
+			sc := evalScope{ctx: ctx, parent: rv, errs: errs}
+			v.applyRules(&sc, &emptyFieldNames, "", "", rv, rules)
 			if len(*errs) > 0 {
 				result := make(ValidationErrors, len(*errs))
 				copy(result, *errs)
@@ -252,7 +256,8 @@ func (v *Validate) VarCtx(ctx context.Context, field any, tag string) error {
 	rules := v.cachedVarRules(tag)
 	rv := reflect.ValueOf(field)
 	errs := acquireErrors()
-	v.applyRules(ctx, reflect.Value{}, rv, rv, "", "", "", "", rules, errs)
+	sc := evalScope{ctx: ctx, parent: rv, errs: errs}
+	v.applyRules(&sc, &emptyFieldNames, "", "", rv, rules)
 	if len(*errs) > 0 {
 		result := make(ValidationErrors, len(*errs))
 		copy(result, *errs)
@@ -364,7 +369,8 @@ func (v *Validate) stringRuleError(field string, r *rule.RulePlan, wrap bool) er
 func (v *Validate) varStringReflectPath(ctx context.Context, field string, rules []rule.RulePlan) error {
 	rv := reflect.ValueOf(field)
 	errs := acquireErrors()
-	v.applyRules(ctx, reflect.Value{}, rv, rv, "", "", "", "", rules, errs)
+	sc := evalScope{ctx: ctx, parent: rv, errs: errs}
+	v.applyRules(&sc, &emptyFieldNames, "", "", rv, rules)
 	if len(*errs) > 0 {
 		result := make(ValidationErrors, len(*errs))
 		copy(result, *errs)
@@ -427,6 +433,31 @@ func (v *Validate) cachedVarRules(tag string) []rule.RulePlan {
 	return rules
 }
 
+// evalScope 一次校验调用内跨字段、跨规则都不变的求值上下文
+//
+// 原先 applyRules 按值接收 ctx+top+parent+field+4 个命名空间字符串+rules+errs 共 24 字，
+// evalRule 接收 17 字；而 arm64 ABIInternal 只有 16 个整数入参寄存器，
+// 超出的部分每次调用都要由调用方落栈、被调方再取回。CPU profile 里
+// evalRule 的函数序言独占 740ms/9.07s（8.2%），applyRules 的序言另占 270ms。
+// 把 ctx/top/parent/errs 收进一个栈上结构体按指针传递后（再叠加 FieldNames 收口），
+// applyRules 降到 13 字、evalRule 降到 7 字，帧从 $352/$208 缩到 $224/$160
+//
+// 本结构体只读不写：求值路径只从中取值，不回写任何字段，
+// 故逃逸分析判定 leaking param content 而非 leaking param，
+// 指针本身留在栈上，热路径零分配不变
+type evalScope struct {
+	ctx    context.Context
+	top    reflect.Value
+	parent reflect.Value
+	errs   *ValidationErrors
+}
+
+// emptyFieldNames Var 系列入口的空命名空间四元组
+//
+// Var 校验没有结构体上下文，四个名字恒为空串；求值路径只读不写它，
+// 故共享一份包级零值即可，不必每次调用在栈上装配
+var emptyFieldNames rule.FieldNames
+
 // validateStruct 递归校验结构体字段
 func (v *Validate) validateStruct(
 	ctx context.Context,
@@ -438,21 +469,48 @@ func (v *Validate) validateStruct(
 	if !current.IsValid() || current.Kind() != reflect.Struct {
 		return
 	}
+	v.walkStruct(ctx, top, current, v.compileStruct(current.Type()), ns, structNs, errs)
+}
 
-	plan := v.compileStruct(current.Type())
-	for _, fp := range plan.Fields {
-		field := current.FieldByIndex(fp.Index)
-		fieldNS := fp.NsPrefix
-		fieldStructNS := fp.StructNsPrefix
-		if fieldNS == "" {
-			fieldNS = utils.JoinNS(ns, fp.AltName)
+// walkStruct 按已编译计划遍历结构体字段，要求 current 已是有效的 struct 值
+func (v *Validate) walkStruct(
+	ctx context.Context,
+	top, current reflect.Value,
+	plan *rule.StructPlan,
+	ns, structNs string,
+	errs *ValidationErrors,
+) {
+	// parent 对本结构体的全部字段恒为 current，故 scope 每层结构体只构造一次
+	sc := evalScope{ctx: ctx, top: top, parent: current, errs: errs}
+	// 按下标取指针而非 range 取值：FieldPlan 有 15 字，range 的隐式拷贝
+	// 在 profile 里占 270ms/9.07s（3%），而循环体只读该计划
+	for i := range plan.Fields {
+		fp := &plan.Fields[i]
+		// compileStruct 只枚举 t.NumField() 的直接字段，Index 恒为单元素，
+		// 直通 Field 省去 FieldByIndex 这一层非内联调用（profile 自身占 270ms）；
+		// 多级路径保留原调用，不假设计划一定来自 compileStruct
+		var field reflect.Value
+		if len(fp.Index) == 1 {
+			field = current.Field(fp.Index[0])
+		} else {
+			field = current.FieldByIndex(fp.Index)
 		}
-		if fieldStructNS == "" {
-			fieldStructNS = utils.JoinNS(structNs, fp.Name)
+		// 命名空间四元组通常在编译期已填好，直接取计划里的指针，每字段零装配；
+		// 仅匿名结构体等前缀为空的情形才就地按父命名空间现算一份局部副本
+		names := &fp.Names
+		if fp.NsPrefix == "" || fp.StructNsPrefix == "" {
+			local := fp.Names
+			if local.NS == "" {
+				local.NS = utils.JoinNS(ns, fp.AltName)
+			}
+			if local.StructNS == "" {
+				local.StructNS = utils.JoinNS(structNs, fp.Name)
+			}
+			names = &local
 		}
 
 		before := len(*errs)
-		v.applyRules(ctx, top, current, field, fieldNS, fieldStructNS, fp.AltName, fp.Name, fp.Rules, errs)
+		v.applyRules(&sc, names, names.NS, names.StructNS, field, fp.Rules)
 		if len(*errs) != before {
 			// failFast：首个错误即收口，不再遍历剩余字段
 			if v.failFast {
@@ -464,7 +522,7 @@ func (v *Validate) validateStruct(
 		if fp.MayDiveStruct {
 			nested := validate.DerefReflect(field)
 			if nested.IsValid() && nested.Kind() == reflect.Struct {
-				v.validateStruct(ctx, top, nested, fieldNS, fieldStructNS, errs)
+				v.validateStruct(ctx, top, nested, names.NS, names.StructNS, errs)
 				// failFast：嵌套结构体内部出错同样立即收口
 				if v.failFast && len(*errs) > 0 {
 					return
@@ -475,12 +533,16 @@ func (v *Validate) validateStruct(
 }
 
 // applyRules 按规则列表校验单个字段
+//
+// ns/structNs 覆盖 names 里的同名字段：dive 子元素要带 [i]/[key] 后缀，
+// 而 names 指向编译期计划（跨 goroutine 共享的只读数据）不可改写，
+// 单独传两个串也比另建一个 FieldNames 局部变量便宜（见 rule.FieldNames 注释）
 func (v *Validate) applyRules(
-	ctx context.Context,
-	top, parent, field reflect.Value,
-	ns, structNs, fieldName, structFieldName string,
+	sc *evalScope,
+	names *rule.FieldNames,
+	ns, structNs string,
+	field reflect.Value,
 	rules []rule.RulePlan,
-	errs *ValidationErrors,
 ) {
 	if len(rules) == 0 {
 		return
@@ -501,7 +563,7 @@ func (v *Validate) applyRules(
 				}
 				continue
 			case constants.RuleDive:
-				v.applyDive(ctx, top, parent, derefed, ns, structNs, fieldName, structFieldName, rules[i+1:], errs)
+				v.applyDive(sc, names, ns, structNs, derefed, rules[i+1:])
 				return
 			case constants.RuleStructOnly, constants.RuleNoStructLevel, constants.RuleEmpty:
 				continue
@@ -521,7 +583,7 @@ func (v *Validate) applyRules(
 					}
 				} else if action, found := evalTable[orRule.Name]; found {
 					if action.dispatch != nil {
-						if action.dispatch(v, top, parent, derefed, orRule) {
+						if action.dispatch(v, sc.top, sc.parent, derefed, orRule) {
 							ok = true
 							break
 						}
@@ -529,16 +591,16 @@ func (v *Validate) applyRules(
 						ok = true
 						break
 					}
-				} else if v.evalRule(ctx, top, parent, derefed, fieldName, structFieldName, orRule) {
+				} else if v.evalRule(sc, names, derefed, orRule) {
 					ok = true
 					break
 				}
 			}
 		} else {
-			ok = v.evalRule(ctx, top, parent, derefed, fieldName, structFieldName, r)
+			ok = v.evalRule(sc, names, derefed, r)
 		}
 		if !ok {
-			*errs = append(*errs, newFieldError(derefed, ns, structNs, fieldName, structFieldName, r))
+			*sc.errs = append(*sc.errs, newFieldError(derefed, names, ns, structNs, r))
 			return
 		}
 	}
@@ -546,11 +608,11 @@ func (v *Validate) applyRules(
 
 // applyDive 递归校验切片、数组和 map 元素
 func (v *Validate) applyDive(
-	ctx context.Context,
-	top, parent, field reflect.Value,
-	ns, structNs, fieldName, structFieldName string,
+	sc *evalScope,
+	names *rule.FieldNames,
+	ns, structNs string,
+	field reflect.Value,
 	rules []rule.RulePlan,
-	errs *ValidationErrors,
 ) {
 	field = validate.DerefReflect(field)
 	if !field.IsValid() {
@@ -563,25 +625,25 @@ func (v *Validate) applyDive(
 		var idxBuf []byte
 		for i := 0; i < field.Len(); i++ {
 			item := field.Index(i)
-			if v.applyRulesFast(ctx, top, parent, item, fieldName, structFieldName, valueRules) {
+			if v.applyRulesFast(sc, names, item, valueRules) {
 				continue
 			}
 			idxBuf = strconv.AppendInt(idxBuf[:0], int64(i), 10)
 			childNS := ns + "[" + string(idxBuf) + "]"
 			childStructNS := structNs + "[" + string(idxBuf) + "]"
 			if len(valueRules) == 1 && valueRules[0].Name == constants.RuleRequired {
-				*errs = append(
-					*errs,
-					newFieldError(item, childNS, childStructNS, fieldName, structFieldName, &valueRules[0]),
+				*sc.errs = append(
+					*sc.errs,
+					newFieldError(item, names, childNS, childStructNS, &valueRules[0]),
 				)
 				if v.failFast {
 					return
 				}
 				continue
 			}
-			v.applyRules(ctx, top, parent, item, childNS, childStructNS, fieldName, structFieldName, valueRules, errs)
+			v.applyRules(sc, names, childNS, childStructNS, item, valueRules)
 			// failFast：元素出错即停，不再遍历剩余元素
-			if v.failFast && len(*errs) > 0 {
+			if v.failFast && len(*sc.errs) > 0 {
 				return
 			}
 		}
@@ -609,8 +671,8 @@ func (v *Validate) applyDive(
 				keyHolder.SetIterKey(iter)
 			}
 			valHolder.SetIterValue(iter)
-			if (!needKey || v.applyRulesFast(ctx, top, parent, keyHolder, fieldName, structFieldName, keyRules)) &&
-				v.applyRulesFast(ctx, top, parent, valHolder, fieldName, structFieldName, valueRules) {
+			if (!needKey || v.applyRulesFast(sc, names, keyHolder, keyRules)) &&
+				v.applyRulesFast(sc, names, valHolder, valueRules) {
 				continue
 			}
 
@@ -622,11 +684,11 @@ func (v *Validate) applyDive(
 			childNS := ns + "[" + keyText + "]"
 			childStructNS := structNs + "[" + keyText + "]"
 			if len(keyRules) > 0 {
-				v.applyRules(ctx, top, parent, key, childNS, childStructNS, fieldName, structFieldName, keyRules, errs)
+				v.applyRules(sc, names, childNS, childStructNS, key, keyRules)
 			}
-			v.applyRules(ctx, top, parent, value, childNS, childStructNS, fieldName, structFieldName, valueRules, errs)
+			v.applyRules(sc, names, childNS, childStructNS, value, valueRules)
 			// failFast：键或值出错即停，不再遍历剩余条目
-			if v.failFast && len(*errs) > 0 {
+			if v.failFast && len(*sc.errs) > 0 {
 				return
 			}
 		}
@@ -647,9 +709,9 @@ func splitDiveRules(rules []rule.RulePlan) ([]rule.RulePlan, []rule.RulePlan) {
 
 // applyRulesFast 校验成功路径，不构造错误命名空间
 func (v *Validate) applyRulesFast(
-	ctx context.Context,
-	top, parent, field reflect.Value,
-	fieldName, structFieldName string,
+	sc *evalScope,
+	names *rule.FieldNames,
+	field reflect.Value,
 	rules []rule.RulePlan,
 ) bool {
 	if len(rules) == 0 {
@@ -675,7 +737,7 @@ func (v *Validate) applyRulesFast(
 				switch derefed.Kind() {
 				case reflect.Slice, reflect.Array:
 					for j := 0; j < derefed.Len(); j++ {
-						if !v.applyRulesFast(ctx, top, parent, derefed.Index(j), fieldName, structFieldName, valueRules) {
+						if !v.applyRulesFast(sc, names, derefed.Index(j), valueRules) {
 							return false
 						}
 					}
@@ -684,16 +746,8 @@ func (v *Validate) applyRulesFast(
 					// 这是"校验全通过"快路径，不应有按条目数增长的分配
 					iter := derefed.MapRange()
 					for iter.Next() {
-						if !v.applyRulesFast(ctx, top, parent, iter.Key(), fieldName, structFieldName, keyRules) ||
-							!v.applyRulesFast(
-								ctx,
-								top,
-								parent,
-								iter.Value(),
-								fieldName,
-								structFieldName,
-								valueRules,
-							) {
+						if !v.applyRulesFast(sc, names, iter.Key(), keyRules) ||
+							!v.applyRulesFast(sc, names, iter.Value(), valueRules) {
 							return false
 						}
 					}
@@ -719,7 +773,7 @@ func (v *Validate) applyRulesFast(
 					}
 				} else if action, found := evalTable[orRule.Name]; found {
 					if action.dispatch != nil {
-						if action.dispatch(v, top, parent, derefed, orRule) {
+						if action.dispatch(v, sc.top, sc.parent, derefed, orRule) {
 							ok = true
 							break
 						}
@@ -727,13 +781,13 @@ func (v *Validate) applyRulesFast(
 						ok = true
 						break
 					}
-				} else if v.evalRule(ctx, top, parent, derefed, fieldName, structFieldName, orRule) {
+				} else if v.evalRule(sc, names, derefed, orRule) {
 					ok = true
 					break
 				}
 			}
 		} else {
-			ok = v.evalRule(ctx, top, parent, derefed, fieldName, structFieldName, r)
+			ok = v.evalRule(sc, names, derefed, r)
 		}
 		if !ok {
 			return false
@@ -744,9 +798,9 @@ func (v *Validate) applyRulesFast(
 
 // evalRule 评估单条规则，类别与函数已在解析期预解析，仅 dispatch 与自定义规则需查表
 func (v *Validate) evalRule(
-	ctx context.Context,
-	top, parent, field reflect.Value,
-	fieldName, structFieldName string,
+	sc *evalScope,
+	names *rule.FieldNames,
+	field reflect.Value,
 	plan *rule.RulePlan,
 ) bool {
 	if plan.Kind&rule.KindScalarCompare != 0 {
@@ -757,7 +811,7 @@ func (v *Validate) evalRule(
 	}
 	if action, ok := evalTable[plan.Name]; ok {
 		if action.dispatch != nil {
-			return action.dispatch(v, top, parent, field, plan)
+			return action.dispatch(v, sc.top, sc.parent, field, plan)
 		}
 		return action.builtin(field, plan.Param, v.requiredStructEnabled)
 	}
@@ -769,14 +823,14 @@ func (v *Validate) evalRule(
 	}
 
 	fl := acquireFieldLevel()
-	fl.top = top
-	fl.parent = parent
+	fl.top = sc.top
+	fl.parent = sc.parent
 	fl.field = validate.DerefReflect(field)
-	fl.fieldName = fieldName
-	fl.structFieldName = structFieldName
+	fl.fieldName = names.Field
+	fl.structFieldName = names.StructField
 	fl.tag = plan.Name
 	fl.param = plan.Param
-	result := fn(ctx, fl)
+	result := fn(sc.ctx, fl)
 	releaseFieldLevel(fl)
 	return result
 }
@@ -1062,7 +1116,8 @@ var evalDispatchTable = map[string]evalDispatchFn{
 
 func newFieldError(
 	field reflect.Value,
-	ns, structNs, fieldName, structFieldName string,
+	names *rule.FieldNames,
+	ns, structNs string,
 	r *rule.RulePlan,
 ) FieldError {
 	// 惰性求值：构造仅存 deref 后的 reflect.Value，装箱与 Kind/Type 推迟到访问器
@@ -1073,8 +1128,8 @@ func newFieldError(
 		actualTag:   r.Name,
 		ns:          ns,
 		structNs:    structNs,
-		field:       fieldName,
-		structField: structFieldName,
+		field:       names.Field,
+		structField: names.StructField,
 		fieldVal:    current,
 		param:       r.Param,
 	}
@@ -1149,6 +1204,12 @@ func (v *Validate) compileStruct(t reflect.Type) *rule.StructPlan {
 			MayDiveStruct:  mayDive,
 			NsPrefix:       utils.JoinNS(typeName, altName),
 			StructNsPrefix: utils.JoinNS(typeName, sf.Name),
+		}
+		fp.Names = rule.FieldNames{
+			NS:          fp.NsPrefix,
+			StructNS:    fp.StructNsPrefix,
+			Field:       altName,
+			StructField: sf.Name,
 		}
 		plan.Fields = append(plan.Fields, fp)
 	}

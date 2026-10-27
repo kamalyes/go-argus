@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2026-05-19 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2026-05-19 00:00:00
+ * @LastEditTime: 2026-10-27 19:58:37
  * @FilePath: \go-argus\rule\plan.go
  * @Description: 规则计划解析，将 validate 标签预编译为运行计划
  *
@@ -49,6 +49,24 @@ type RulePlan struct {
 	Builtin    BuiltinRule    // BuiltinRules 预解析函数
 }
 
+// FieldNames 字段的命名空间与名称四元组，编译期一次填好，求值路径按指针直取
+//
+// 原先这四个串是摊开传的，applyRules 的入参恰好 24 字；arm64 ABIInternal 只有
+// 16 个整数入参寄存器，超出部分每次调用都要落栈再取回，而「全部通过」的热路径
+// 根本不读它们——只有错误构造、dive 子路径拼接和自定义规则上下文才需要。
+// 收进本结构体后 applyRules 降到 13 字、evalRule 降到 7 字，帧也相应变小
+//
+// 注：dive 子元素的命名空间仍由 applyRules/applyDive 以 ns/structNs 形参单独传，
+// 不另建一个 FieldNames 局部变量——applyRules 与 applyDive 互递归，
+// 局部变量取址后会流进这个强连通分量里的形参，逃逸分析收敛不了，
+// 会把它按出错元素逐个搬上堆（实测 dive 失败路径 6→7 次分配）
+type FieldNames struct {
+	NS          string // 展示命名空间，形如 Type.Field
+	StructNS    string // 结构体命名空间，形如 Type.GoField
+	Field       string // 展示名（json tag 或自定义）
+	StructField string // Go 字段名
+}
+
 // FieldPlan 表示结构体字段的校验计划
 type FieldPlan struct {
 	Index          []int  // 字段索引路径
@@ -60,6 +78,9 @@ type FieldPlan struct {
 	MayDiveStruct  bool       // 是否可能递归进入结构体字段
 	NsPrefix       string     // 命名空间前缀
 	StructNsPrefix string     // 结构体命名空间前缀
+	// Names 编译期预填的四元组，供求值路径按指针直取；
+	// 与上面四个字段同源，仅为省掉每字段一次装配而冗余存一份
+	Names FieldNames
 }
 
 // StructPlan 表示结构体的编译计划
