@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-06 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2026-05-17 18:22:15
+ * @LastEditTime: 2026-10-27 15:02:26
  * @FilePath: \go-argus\validator_test.go
  * @Description: validator.go 测试，覆盖校验器核心逻辑、Struct/Var 校验和 evalRule 分支
  *
@@ -14,6 +14,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -2073,3 +2074,172 @@ func TestNoneOfCIFastPath(t *testing.T) {
 		t.Fatal("expected noneofci to fail case-insensitively")
 	}
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// map dive 分配与正确性（原 zz_mapdive_probe_test.go，合并至此）
+//
+// 缺陷背景：iter.Key()/iter.Value() 每次调用都经 reflect.copyVal → unsafe_New
+// 新分配一份值存储，故 map dive 的分配量为 2N（N = 条目数）。改用可复用 holder
+// 配 SetIterKey/SetIterValue 后降为常量 1 次。
+//
+// 注意错误路径仍走 iter.Key()/Value()：newFieldError 会持有 reflect.Value，
+// 给它复用 holder 会被后续条目的 SetIter* 覆写——
+// TestProbeMapDive_ErrorReportsCorrectValue 即该风险的闸门。
+// ══════════════════════════════════════════════════════════════════════════════
+
+// mapOfSize 构造 n 条有效条目的 map
+func mapOfSize(n int) map[string]string {
+	m := make(map[string]string, n)
+	for i := 0; i < n; i++ {
+		k := fmt.Sprintf("k%03d", i)
+		m[k] = "v" + k
+	}
+	return m
+}
+
+// BenchmarkProbeMapDive_Scale 验证承载体复用的收益随条目数放大
+//
+// iter.Key()/Value() 的分配是 2×条目数；SetIterKey/SetIterValue 的分配是每次
+// dive 常数次，故条目越多差距越大。
+func BenchmarkProbeMapDive_Scale(b *testing.B) {
+	for _, n := range []int{3, 10, 100} {
+		m := mapOfSize(n)
+		v := New()
+		b.Run(fmt.Sprintf("entries=%d", n), func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				_ = v.Var(m, "required,dive,required")
+			}
+		})
+	}
+}
+
+// BenchmarkProbeMapDive_WithKeyRules 带 keys 规则时需两个承载体
+func BenchmarkProbeMapDive_WithKeyRules(b *testing.B) {
+	m := mapOfSize(10)
+	v := New()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_ = v.Var(m, "required,dive,keys,required,endkeys,required")
+	}
+}
+
+// TestProbeMapDive_ErrorReportsCorrectValue 错误路径必须报告出错条目自身的值
+//
+// 这是承载体复用的关键风险点：newFieldError 持有传入的 reflect.Value，
+// 若把被复用的承载体交给它，后续条目的 SetIter* 会就地覆写，错误将报告
+// 错误的值。故错误路径必须取 iter 的独立副本。
+//
+// 构造：10 条中仅一条为空值（违反 required），断言错误里的值确为空而非
+// 后续条目覆写进来的非空值。
+func TestProbeMapDive_ErrorReportsCorrectValue(t *testing.T) {
+	m := mapOfSize(10)
+	m["k004"] = "" // 唯一违规条目
+
+	v := New()
+	err := v.Var(m, "required,dive,required")
+	if err == nil {
+		t.Fatal("期望校验失败，实得 nil")
+	}
+
+	errs, ok := err.(ValidationErrors)
+	if !ok {
+		t.Fatalf("期望 ValidationErrors，实得 %T", err)
+	}
+	if len(errs) != 1 {
+		t.Fatalf("期望恰好 1 条错误，实得 %d 条: %v", len(errs), err)
+	}
+
+	fe := errs[0]
+	// 命名空间须指向违规键
+	if !strings.Contains(fe.Namespace(), "k004") {
+		t.Errorf("错误命名空间未指向违规键 k004: %q", fe.Namespace())
+	}
+	// 值须为空字符串——若承载体被复用并覆写，这里会读到其他条目的非空值
+	if got := fe.Value(); got != "" {
+		t.Errorf("错误持有的值被后续条目覆写：期望空字符串，实得 %#v", got)
+	}
+}
+
+// TestProbeMapDive_AllEntriesValidated 复用承载体不得漏校验条目
+//
+// 若 SetIterValue 未正确推进，可能重复校验同一条目而漏掉其余。
+// 构造多条违规，断言每条都被报出。
+func TestProbeMapDive_AllEntriesValidated(t *testing.T) {
+	m := map[string]string{
+		"a": "", "b": "", "c": "ok", "d": "", "e": "ok",
+	}
+	v := New()
+	err := v.Var(m, "required,dive,required")
+	if err == nil {
+		t.Fatal("期望校验失败，实得 nil")
+	}
+	errs := err.(ValidationErrors)
+	if len(errs) != 3 {
+		t.Fatalf("期望 3 条错误（a/b/d），实得 %d 条: %v", len(errs), err)
+	}
+	seen := map[string]bool{}
+	for _, fe := range errs {
+		for _, k := range []string{"a", "b", "d"} {
+			if strings.Contains(fe.Namespace(), "["+k+"]") {
+				seen[k] = true
+			}
+		}
+	}
+	for _, k := range []string{"a", "b", "d"} {
+		if !seen[k] {
+			t.Errorf("违规条目 %q 未被报出", k)
+		}
+	}
+}
+
+// TestProbeMapDive_KeyRulesStillApplied 带 keys 规则时键校验仍生效
+func TestProbeMapDive_KeyRulesStillApplied(t *testing.T) {
+	m := map[string]string{"": "v1", "ok": "v2"}
+	v := New()
+	err := v.Var(m, "required,dive,keys,required,endkeys,required")
+	if err == nil {
+		t.Fatal("期望空键触发 keys 规则失败，实得 nil")
+	}
+}
+
+// ── 两种 reflect map 迭代 API 的隔离对比 ──
+//
+// 证明承载体复用的收益来源：iter.Key()/Value() 每次调用经 reflect.copyVal
+// → reflect.unsafe_New 分配新值存储；SetIterKey/SetIterValue 就地写入。
+
+func benchIterCopyVal(b *testing.B, n int) {
+	m := mapOfSize(n)
+	rv := reflect.ValueOf(m)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		iter := rv.MapRange()
+		for iter.Next() {
+			k, v := iter.Key(), iter.Value()
+			_, _ = k.String(), v.String()
+		}
+	}
+}
+
+func benchIterSetIter(b *testing.B, n int) {
+	m := mapOfSize(n)
+	rv := reflect.ValueOf(m)
+	kh := reflect.New(rv.Type().Key()).Elem()
+	vh := reflect.New(rv.Type().Elem()).Elem()
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		iter := rv.MapRange()
+		for iter.Next() {
+			kh.SetIterKey(iter)
+			vh.SetIterValue(iter)
+			_, _ = kh.String(), vh.String()
+		}
+	}
+}
+
+func BenchmarkProbeIterAPI_CopyVal_3(b *testing.B)   { benchIterCopyVal(b, 3) }
+func BenchmarkProbeIterAPI_SetIter_3(b *testing.B)   { benchIterSetIter(b, 3) }
+func BenchmarkProbeIterAPI_CopyVal_100(b *testing.B) { benchIterCopyVal(b, 100) }
+func BenchmarkProbeIterAPI_SetIter_100(b *testing.B) { benchIterSetIter(b, 100) }
