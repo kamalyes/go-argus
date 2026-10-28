@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-06 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2026-10-28 15:58:31
+ * @LastEditTime: 2026-10-28 15:59:26
  * @FilePath: \go-argus\validator.go
  * @Description: Argus 根校验器，提供 struct tag 校验、变量校验、自定义规则和兼容入口
  *
@@ -781,6 +781,25 @@ func (v *Validate) applyRulesFast(
 						}
 					}
 				case reflect.Map:
+					// map[string]string 零反射快路径（同 applyDive）：值规则恰为单条
+					// required、键规则为空或单条 required 时直接 range 具体类型，
+					// 跳过承载体搬运与 applyRulesFast→evalRule→RuleRequired 的
+					// 三层分派。map 为指针整形值，Interface() 装箱零分配，承载体
+					// 的常数分配（1~2 allocs）也一并省去。本函数不构造错误，失败
+					// 即返回 false 交由调用方慢路径重建，无错误语义需对齐。
+					// Name 判等与 applyDive 一致："required" 在 BuiltinRules 唯一
+					// 映射 RuleRequired，or 表达式与别名的 Name 均不等于它。
+					if derefed.Type() == stringStringMapType && derefed.CanInterface() &&
+						len(valueRules) == 1 && valueRules[0].Name == constants.RuleRequired &&
+						(len(keyRules) == 0 || (len(keyRules) == 1 && keyRules[0].Name == constants.RuleRequired)) {
+						for k, s := range derefed.Interface().(map[string]string) {
+							if (len(keyRules) > 0 && validate.IsBlankString(k)) ||
+								validate.IsBlankString(s) {
+								return false
+							}
+						}
+						return true
+					}
 					// 同 applyDive：MapRange 迭代器就地推进，避免 MapKeys() 物化键切片；
 					// 键/值承载体复用——iter.Key()/iter.Value() 每次调用都经
 					// reflect.copyVal → unsafe_New 分配新值存储（每条目 2 次），

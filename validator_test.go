@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-06 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2026-10-28 15:58:31
+ * @LastEditTime: 2026-10-28 15:59:26
  * @FilePath: \go-argus\validator_test.go
  * @Description: validator.go 测试，覆盖校验器核心逻辑、Struct/Var 校验和 evalRule 分支
  *
@@ -2358,6 +2358,41 @@ func TestProbeNestedMapDive_WithKeyRules(t *testing.T) {
 		if !seen[ns] {
 			t.Errorf("期望错误命名空间 %q 未被报出，实得 %v", ns, seen)
 		}
+	}
+}
+
+// TestProbeNestedMapDive_StringMapFastPath 嵌套 dive 的 map[string]string 快路径
+//
+// 内层 keys 规则分支（len(keyRules)>0）与 nil 内层 map 的零迭代行为：
+// 快路径只产出 bool，错误由调用方慢路径重建——断言错误值与命名空间仍逐字段对齐。
+func TestProbeNestedMapDive_StringMapFastPath(t *testing.T) {
+	v := New()
+
+	// 内层键值同时违规：先键（" "）后值（""）各报一条
+	err := v.Var([]map[string]string{{" ": ""}}, "dive,dive,keys,required,endkeys,required")
+	if err == nil {
+		t.Fatal("期望键值同时违规报错，实得 nil")
+	}
+	errs, ok := err.(ValidationErrors)
+	if !ok {
+		t.Fatalf("期望 ValidationErrors，实得 %T", err)
+	}
+	if len(errs) != 2 {
+		t.Fatalf("期望 2 条错误（键+值），实得 %d 条: %v", len(errs), err)
+	}
+	if got := errs[0].Value(); got != " " {
+		t.Errorf("第 1 条应为键错误（值 %q），实得 %q", " ", got)
+	}
+	if got := errs[1].Value(); got != "" {
+		t.Errorf("第 2 条应为值错误（空串），实得 %q", got)
+	}
+	if ns := errs[0].Namespace(); ns != "[0][ ]" {
+		t.Errorf("命名空间应为 %q，实得 %q", "[0][ ]", ns)
+	}
+
+	// nil 内层 map：快路径零迭代通过，不 panic
+	if err := v.Var([]map[string]string{nil}, "dive,dive,required"); err != nil {
+		t.Fatalf("nil 内层 map 应零迭代通过，实得 %v", err)
 	}
 }
 
