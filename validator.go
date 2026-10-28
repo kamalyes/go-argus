@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-06 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2026-10-28 15:57:31
+ * @LastEditTime: 2026-10-28 15:58:31
  * @FilePath: \go-argus\validator.go
  * @Description: Argus 根校验器，提供 struct tag 校验、变量校验、自定义规则和兼容入口
  *
@@ -781,13 +781,37 @@ func (v *Validate) applyRulesFast(
 						}
 					}
 				case reflect.Map:
-					// 同 applyDive：用 MapRange 迭代器替代 MapKeys() 的键切片物化，
-					// 这是"校验全通过"快路径，不应有按条目数增长的分配
+					// 同 applyDive：MapRange 迭代器就地推进，避免 MapKeys() 物化键切片；
+					// 键/值承载体复用——iter.Key()/iter.Value() 每次调用都经
+					// reflect.copyVal → unsafe_New 分配新值存储（每条目 2 次），
+					// SetIterKey/SetIterValue 就地写入已有可寻址值，分配降为每次
+					// dive 常数次。本函数是纯成功路径：失败即返回 false，错误由
+					// 调用方经慢路径以 iter 的独立副本重建，承载体不会被错误对象
+					// 持有，可安全复用。承载体按需建：对空规则列表 applyRulesFast
+					// 不读取字段即返回 true，keys-only 或 values-only 的嵌套 dive
+					// 连对应的承载体都不必分配。
 					iter := derefed.MapRange()
+					needKey := len(keyRules) > 0
+					needVal := len(valueRules) > 0
+					var keyHolder, valHolder reflect.Value
+					if needKey {
+						keyHolder = reflect.New(derefed.Type().Key()).Elem()
+					}
+					if needVal {
+						valHolder = reflect.New(derefed.Type().Elem()).Elem()
+					}
 					for iter.Next() {
-						if !v.applyRulesFast(sc, names, iter.Key(), keyRules) ||
-							!v.applyRulesFast(sc, names, iter.Value(), valueRules) {
-							return false
+						if needKey {
+							keyHolder.SetIterKey(iter)
+							if !v.applyRulesFast(sc, names, keyHolder, keyRules) {
+								return false
+							}
+						}
+						if needVal {
+							valHolder.SetIterValue(iter)
+							if !v.applyRulesFast(sc, names, valHolder, valueRules) {
+								return false
+							}
 						}
 					}
 				}

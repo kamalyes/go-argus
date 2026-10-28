@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-06 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2026-10-28 15:57:31
+ * @LastEditTime: 2026-10-28 15:58:31
  * @FilePath: \go-argus\validator_test.go
  * @Description: validator.go 测试，覆盖校验器核心逻辑、Struct/Var 校验和 evalRule 分支
  *
@@ -2253,6 +2253,111 @@ func TestProbeMapDive_StringMapFastPath(t *testing.T) {
 	// nil map 裸 dive：零迭代、不报错、不 panic
 	if err := v.Var(map[string]string(nil), "dive,required"); err != nil {
 		t.Fatalf("nil map 裸 dive 应零迭代通过，实得 %v", err)
+	}
+}
+
+// ── 嵌套 dive：applyRulesFast 的 RuleDive map 分支 ──
+//
+// 首层 dive 由 applyDive 处理，其 slice/map 分支对每个元素调 applyRulesFast；
+// 当元素自身又是容器且剩余规则里还有 dive 时（如 []map[string]string 配
+// "dive,dive,required"），内层 dive 落入 applyRulesFast 的 RuleDive 分支。
+// 原实现 iter.Key()/iter.Value() 每条目 2 次 copyVal 分配，与该分支
+// 「校验全通过快路径不应有按条目数增长的分配」的定位相悖——
+// BenchmarkProbeNestedMapDive_Scale 验证修复后分配降为每次 dive 常数次。
+
+// BenchmarkProbeNestedMapDive_Scale 嵌套 map dive 的按条目分配随条目数放大
+func BenchmarkProbeNestedMapDive_Scale(b *testing.B) {
+	for _, n := range []int{3, 10, 100} {
+		ms := []map[string]string{mapOfSize(n)}
+		v := New()
+		b.Run(fmt.Sprintf("entries=%d", n), func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				_ = v.Var(ms, "dive,dive,required")
+			}
+		})
+	}
+}
+
+// BenchmarkProbeNestedMapDive_MapOfMaps 外层带 keys 规则的 map-of-map 嵌套 dive
+//
+// 外层 map dive 走 applyDive 的承载体路径，内层 dive 落入 applyRulesFast：
+// 原实现内层每条目 2 次分配（此处 2 个外层键 × 10 条内层 = 40 次/op）。
+func BenchmarkProbeNestedMapDive_MapOfMaps(b *testing.B) {
+	inner := mapOfSize(10)
+	m := map[string]map[string]string{"outer1": inner, "outer2": inner}
+	v := New()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_ = v.Var(m, "dive,keys,required,endkeys,dive,required")
+	}
+}
+
+// TestProbeNestedMapDive_AllEntriesValidated 嵌套承载体不得漏校验条目
+//
+// 构造两个内层 map 共 3 条违规（跨 map、跨条目），断言每条都被报出且值正确。
+// map 条目无序，故按命名空间集合断言而非顺序。
+func TestProbeNestedMapDive_AllEntriesValidated(t *testing.T) {
+	m1 := map[string]string{"a": "", "b": "ok", "c": ""}
+	m2 := map[string]string{"d": "ok", "e": ""}
+	v := New()
+	err := v.Var([]map[string]string{m1, m2}, "dive,dive,required")
+	if err == nil {
+		t.Fatal("期望校验失败，实得 nil")
+	}
+	errs, ok := err.(ValidationErrors)
+	if !ok {
+		t.Fatalf("期望 ValidationErrors，实得 %T", err)
+	}
+	if len(errs) != 3 {
+		t.Fatalf("期望 3 条错误（a/c/e），实得 %d 条: %v", len(errs), err)
+	}
+	seen := map[string]bool{}
+	for _, fe := range errs {
+		seen[fe.Namespace()] = true
+		if fe.Value() != "" {
+			t.Errorf("错误 %q 持有的值应为空串，实得 %#v", fe.Namespace(), fe.Value())
+		}
+	}
+	for _, ns := range []string{"[0][a]", "[0][c]", "[1][e]"} {
+		if !seen[ns] {
+			t.Errorf("违规条目 %q 未被报出，实得 %v", ns, seen)
+		}
+	}
+}
+
+// TestProbeNestedMapDive_WithKeyRules 外层 keys 规则 + 内层 dive 的组合
+//
+// 外层空键违反 required、内层值违反 required 各报一条；条目无序按集合断言。
+func TestProbeNestedMapDive_WithKeyRules(t *testing.T) {
+	m := map[string]map[string]string{
+		"ok":  {"inner1": "v1"},
+		"":    {"inner2": "v2"}, // 外层键违反 required
+		"bad": {"inner3": ""},   // 内层值违反 required
+	}
+	v := New()
+	err := v.Var(m, "dive,keys,required,endkeys,dive,required")
+	if err == nil {
+		t.Fatal("期望校验失败，实得 nil")
+	}
+	errs, ok := err.(ValidationErrors)
+	if !ok {
+		t.Fatalf("期望 ValidationErrors，实得 %T", err)
+	}
+	if len(errs) != 2 {
+		t.Fatalf("期望 2 条错误（外层空键 + inner3），实得 %d 条: %v", len(errs), err)
+	}
+	seen := map[string]bool{}
+	for _, fe := range errs {
+		seen[fe.Namespace()] = true
+		if fe.Value() != "" {
+			t.Errorf("错误 %q 持有的值应为空串，实得 %#v", fe.Namespace(), fe.Value())
+		}
+	}
+	for _, ns := range []string{"[]", "[bad][inner3]"} {
+		if !seen[ns] {
+			t.Errorf("期望错误命名空间 %q 未被报出，实得 %v", ns, seen)
+		}
 	}
 }
 
