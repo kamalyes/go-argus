@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-06 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2026-10-28 15:26:53
+ * @LastEditTime: 2026-10-28 15:57:31
  * @FilePath: \go-argus\validator.go
  * @Description: Argus 根校验器，提供 struct tag 校验、变量校验、自定义规则和兼容入口
  *
@@ -47,6 +47,9 @@ var fieldLevelPool = sync.Pool{
 		return &fieldLevel{}
 	},
 }
+
+// stringStringMapType map[string]string 的反射类型，map dive 零反射快路径的形状判定
+var stringStringMapType = reflect.TypeOf(map[string]string{})
 
 // acquireErrors 从对象池获取错误切片
 func acquireErrors() *ValidationErrors {
@@ -648,6 +651,42 @@ func (v *Validate) applyDive(
 			}
 		}
 	case reflect.Map:
+		// map[string]string 零反射快路径：值规则恰为单条 required、键规则为空或
+		// 单条 required 时直接 range 具体类型，跳过 MapIter 的 SetIterValue 逐条目
+		// 反射搬运（含 assignTo 类型核对，entries=100 profile 占 24%）与
+		// applyRulesFast→evalRule→RuleRequired 的三层分派（占 27%）。
+		// map 值为指针整形，Interface() 装箱零分配；承载体与 MapIter 的每次 dive
+		// 常数分配（1 alloc/16B）也一并省去。Name 判等与切片分支的 required 特化
+		// 一致："required" 在 BuiltinRules 唯一映射 RuleRequired，or 表达式与别名
+		// 的 Name 均不等于 "required"，自然落回通用路径。
+		if field.Type() == stringStringMapType && field.CanInterface() &&
+			len(valueRules) == 1 && valueRules[0].Name == constants.RuleRequired &&
+			(len(keyRules) == 0 || (len(keyRules) == 1 && keyRules[0].Name == constants.RuleRequired)) {
+			m := field.Interface().(map[string]string)
+			for k, s := range m {
+				valBad := validate.IsBlankString(s)
+				keyBad := len(keyRules) > 0 && validate.IsBlankString(k)
+				if !keyBad && !valBad {
+					continue
+				}
+				// 错误构造与通用路径逐字段对齐：childNS 用键原文；键失败后仍
+				// 评估值规则，同一条目可报两条，顺序先键后值
+				childNS := ns + "[" + k + "]"
+				childStructNS := structNs + "[" + k + "]"
+				if keyBad {
+					*sc.errs = append(*sc.errs,
+						newFieldError(reflect.ValueOf(k), names, childNS, childStructNS, &keyRules[0]))
+				}
+				if valBad {
+					*sc.errs = append(*sc.errs,
+						newFieldError(reflect.ValueOf(s), names, childNS, childStructNS, &valueRules[0]))
+				}
+				if v.failFast {
+					return
+				}
+			}
+			return
+		}
 		// MapRange 迭代器就地推进，不像 MapKeys() 那样先物化整个 []reflect.Value；
 		// 校验通过的 map dive 原本要为此付一次按条目数增长的分配
 		iter := field.MapRange()

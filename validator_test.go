@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-06 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2026-10-27 19:58:37
+ * @LastEditTime: 2026-10-28 15:57:31
  * @FilePath: \go-argus\validator_test.go
  * @Description: validator.go 测试，覆盖校验器核心逻辑、Struct/Var 校验和 evalRule 分支
  *
@@ -2203,6 +2203,56 @@ func TestProbeMapDive_KeyRulesStillApplied(t *testing.T) {
 	err := v.Var(m, "required,dive,keys,required,endkeys,required")
 	if err == nil {
 		t.Fatal("期望空键触发 keys 规则失败，实得 nil")
+	}
+}
+
+// TestProbeMapDive_StringMapFastPath map[string]string 零反射快路径的错误语义闸门
+//
+// applyDive 对 map[string]string 且键/值规则为「空或单条 required」的形态直接
+// range 具体类型，错误构造必须与通用路径逐字段对齐：键值同时违规按先键后值
+// 报两条；纯空白值与空串同为 required 违规；nil map 经快路径零迭代不报错。
+func TestProbeMapDive_StringMapFastPath(t *testing.T) {
+	v := New()
+
+	// 键值同时违规：同一条目报两条，先键（" "）后值（""）
+	err := v.Var(map[string]string{" ": ""}, "required,dive,keys,required,endkeys,required")
+	if err == nil {
+		t.Fatal("期望键值同时违规报错，实得 nil")
+	}
+	errs, ok := err.(ValidationErrors)
+	if !ok {
+		t.Fatalf("期望 ValidationErrors，实得 %T", err)
+	}
+	if len(errs) != 2 {
+		t.Fatalf("期望 2 条错误（键+值），实得 %d 条: %v", len(errs), err)
+	}
+	if got := errs[0].Value(); got != " " {
+		t.Errorf("第 1 条应为键错误（值 %q），实得 %q", " ", got)
+	}
+	if got := errs[1].Value(); got != "" {
+		t.Errorf("第 2 条应为值错误（空串），实得 %q", got)
+	}
+	if ns := errs[0].Namespace(); ns != "[ ]" {
+		t.Errorf("命名空间应为 %q，实得 %q", "[ ]", ns)
+	}
+
+	// 纯空白值与空串同为 required 违规
+	err = v.Var(map[string]string{"k": " \t "}, "required,dive,required")
+	if err == nil {
+		t.Fatal("纯空白值应触发 required 失败，实得 nil")
+	}
+	if fe := err.(ValidationErrors)[0]; fe.Value() != " \t " || !strings.Contains(fe.Namespace(), "[k]") {
+		t.Errorf("空白值错误不符：ns=%q value=%q", fe.Namespace(), fe.Value())
+	}
+
+	// 全部通过
+	if err := v.Var(map[string]string{"a": "1", "b": "2"}, "required,dive,required"); err != nil {
+		t.Fatalf("期望通过，实得 %v", err)
+	}
+
+	// nil map 裸 dive：零迭代、不报错、不 panic
+	if err := v.Var(map[string]string(nil), "dive,required"); err != nil {
+		t.Fatalf("nil map 裸 dive 应零迭代通过，实得 %v", err)
 	}
 }
 
