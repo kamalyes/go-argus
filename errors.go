@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-06 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2026-10-26 15:07:38
+ * @LastEditTime: 2026-10-28 15:26:53
  * @FilePath: \go-argus\errors.go
  * @Description: 校验错误模型，提供字段错误、错误集合和兼容错误格式
  *
@@ -90,7 +90,6 @@ var (
 
 type fieldError struct {
 	tag         string
-	actualTag   string
 	ns          string
 	structNs    string
 	field       string
@@ -106,8 +105,11 @@ func (fe *fieldError) Tag() string {
 }
 
 // ActualTag 返回实际失败的规则名，兼容别名规则场景
+//
+// 无独立字段：别名在编译期已解析为规范名，生产构造路径（newFieldError）
+// 恒有 actualTag == tag，省去每错误 16B 与一个 GC 指针扫描槽
 func (fe *fieldError) ActualTag() string {
-	return fe.actualTag
+	return fe.tag
 }
 
 // Namespace 返回字段展示路径

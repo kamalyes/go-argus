@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-06 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2026-10-27 19:58:37
+ * @LastEditTime: 2026-10-28 15:26:53
  * @FilePath: \go-argus\validator.go
  * @Description: Argus 根校验器，提供 struct tag 校验、变量校验、自定义规则和兼容入口
  *
@@ -1125,7 +1125,6 @@ func newFieldError(
 	current := validate.DerefReflect(field)
 	return &fieldError{
 		tag:         r.Name,
-		actualTag:   r.Name,
 		ns:          ns,
 		structNs:    structNs,
 		field:       names.Field,

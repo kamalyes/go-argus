@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-16 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2026-10-27 15:02:26
+ * @LastEditTime: 2026-10-28 15:26:53
  * @FilePath: \go-argus\errors_test.go
  * @Description: errors.go 测试，覆盖 InvalidValidationError、ValidationErrors 和 FieldError
  *
@@ -52,7 +52,6 @@ func TestValidationErrorsMultiple(t *testing.T) {
 func TestFieldErrorMethods(t *testing.T) {
 	fe := &fieldError{
 		tag:         "min",
-		actualTag:   "min",
 		ns:          "User.Name",
 		structNs:    "User.Name",
 		field:       "name",
