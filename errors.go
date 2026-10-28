@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-06 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2026-10-28 15:26:53
+ * @LastEditTime: 2026-10-28 15:52:08
  * @FilePath: \go-argus\errors.go
  * @Description: 校验错误模型，提供字段错误、错误集合和兼容错误格式
  *
@@ -30,6 +30,26 @@ const (
 	fieldErrSuffix = "' tag"
 )
 
+// appendFieldErrMsg 按 fieldErrMsg 格式把单条字段错误消息写入 b；
+// fieldError.Error 与 ValidationErrors.Error 的多条拼接共用，格式单一来源。
+// 拼接结果必须与 fmt.Sprintf(fieldErrMsg, ns, field, tag) 逐字节一致，
+// 该不变量由 TestFieldErrorMsg_MatchesSprintf 与 TestValidationErrorsMultiple 守护。
+func appendFieldErrMsg(b *strings.Builder, ns, field, tag string) {
+	b.WriteString(fieldErrPrefix)
+	b.WriteString(ns)
+	b.WriteString(fieldErrMid1)
+	b.WriteString(field)
+	b.WriteString(fieldErrMid2)
+	b.WriteString(tag)
+	b.WriteString(fieldErrSuffix)
+}
+
+// fieldErrMsgLen 是 appendFieldErrMsg 输出的精确长度，供 Grow 一次分配使用
+func fieldErrMsgLen(nsLen, fieldLen, tagLen int) int {
+	return len(fieldErrPrefix) + nsLen + len(fieldErrMid1) + fieldLen +
+		len(fieldErrMid2) + tagLen + len(fieldErrSuffix)
+}
+
 // InvalidValidationError 表示传入校验器的参数类型不合法
 type InvalidValidationError struct {
 	Type reflect.Type
@@ -56,14 +76,28 @@ func (ve ValidationErrors) Error() string {
 
 	// strings.Builder 而非 bytes.Buffer：后者的 String() 会把累积内容整体复制一份
 	// （实测占本路径分配对象的 11.15%），Builder.String() 则零拷贝移交底层数组。
-	// 不预先汇总长度：那需要把每条 Error() 先物化到切片（多一次分配），
-	// 或对每条调用两次 Error()（成本翻倍）——Builder 自身的倍增增长已足够。
+	// 总长可从字段部件直接求出（fieldErrMsgLen），无需把每条 Error() 先物化成
+	// 临时串再统计——那会按条数线性分配。具体类型走部件直写共享同一个 Builder，
+	// 非 fieldError 的实现回退 Error() 物化（罕见路径）。
+	total := len(ve) - 1 // 换行符
+	for i := 0; i < len(ve); i++ {
+		if fe, ok := ve[i].(*fieldError); ok {
+			total += fieldErrMsgLen(len(fe.ns), len(fe.field), len(fe.tag))
+		} else {
+			total += len(ve[i].Error())
+		}
+	}
 	var b strings.Builder
+	b.Grow(total)
 	for i := 0; i < len(ve); i++ {
 		if i > 0 {
 			b.WriteByte('\n')
 		}
-		b.WriteString(ve[i].Error())
+		if fe, ok := ve[i].(*fieldError); ok {
+			appendFieldErrMsg(&b, fe.ns, fe.field, fe.tag)
+		} else {
+			b.WriteString(ve[i].Error())
+		}
 	}
 	return strings.TrimSpace(b.String())
 }
@@ -166,17 +200,11 @@ func (fe *fieldError) Type() reflect.Type {
 // 手工拼接而非 fmt.Sprintf：fieldErrMsg 全为 %s 代换，无需格式串解析，
 // 也省掉可变参数的 []any 装箱。按最终长度精确 Grow，一次分配拼出结果，
 // 且 Builder.String() 零拷贝。输出与 Sprintf 逐字节一致。
+// 拼接本体收敛到 appendFieldErrMsg，与 ValidationErrors.Error 多条拼接共用。
 func (fe *fieldError) Error() string {
 	var b strings.Builder
-	b.Grow(len(fieldErrPrefix) + len(fe.ns) + len(fieldErrMid1) + len(fe.field) +
-		len(fieldErrMid2) + len(fe.tag) + len(fieldErrSuffix))
-	b.WriteString(fieldErrPrefix)
-	b.WriteString(fe.ns)
-	b.WriteString(fieldErrMid1)
-	b.WriteString(fe.field)
-	b.WriteString(fieldErrMid2)
-	b.WriteString(fe.tag)
-	b.WriteString(fieldErrSuffix)
+	b.Grow(fieldErrMsgLen(len(fe.ns), len(fe.field), len(fe.tag)))
+	appendFieldErrMsg(&b, fe.ns, fe.field, fe.tag)
 	return b.String()
 }
 

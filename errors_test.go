@@ -2,7 +2,7 @@
  * @Author: kamalyes 501893067@qq.com
  * @Date: 2023-12-16 00:00:00
  * @LastEditors: kamalyes 501893067@qq.com
- * @LastEditTime: 2026-10-28 15:26:53
+ * @LastEditTime: 2026-10-28 15:52:08
  * @FilePath: \go-argus\errors_test.go
  * @Description: errors.go 测试，覆盖 InvalidValidationError、ValidationErrors 和 FieldError
  *
@@ -43,9 +43,11 @@ func TestValidationErrorsMultiple(t *testing.T) {
 		&fieldError{tag: "required", ns: "Name", field: "Name"},
 		&fieldError{tag: "email", ns: "Email", field: "Email"},
 	}
-	s := ve.Error()
-	if s == "" {
-		t.Fatal("expected non-empty error string")
+	// 多条拼接路径与逐条 Sprintf 换行连接逐字节一致（守护部件直写的不变量）
+	want := fmt.Sprintf(fieldErrMsg, "Name", "Name", "required") + "\n" +
+		fmt.Sprintf(fieldErrMsg, "Email", "Email", "email")
+	if got := ve.Error(); got != want {
+		t.Fatalf("join mismatch:\n got: %q\nwant: %q", got, want)
 	}
 }
 
