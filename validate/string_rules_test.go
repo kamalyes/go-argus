@@ -14,7 +14,9 @@ package validate
 import (
 	"encoding/base32"
 	"math/rand"
+	"net"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -1423,6 +1425,74 @@ func TestDNSRFC1035LabelMatchesRegex(t *testing.T) {
 	for _, s := range cases {
 		if got, want := StringDNSRFC1035Label(s), ref(s); got != want {
 			t.Fatalf("StringDNSRFC1035Label(%q) = %v, 原实现 = %v", s, got, want)
+		}
+	}
+}
+
+// refCIDR 原实现：net.ParseCIDR + ip.To4() 判族
+func refCIDR(s string) bool {
+	s = TrimSpaceIfNeeded(s)
+	_, _, err := net.ParseCIDR(s)
+	return err == nil
+}
+
+func refCIDRv4(s string) bool {
+	s = TrimSpaceIfNeeded(s)
+	ip, _, err := net.ParseCIDR(s)
+	return err == nil && ip.To4() != nil
+}
+
+func refCIDRv6(s string) bool {
+	s = TrimSpaceIfNeeded(s)
+	ip, _, err := net.ParseCIDR(s)
+	return err == nil && ip.To4() == nil
+}
+
+// cidrCases 人工用例 + 随机语料，覆盖两套解析器已知的分歧点：
+// zone、IPv4-in-IPv6、前缀位数越界与前导零、十进制点分格式异常
+func cidrCases(t *testing.T) []string {
+	t.Helper()
+	cases := []string{
+		"", " ", "/", "1.2.3.4", "1.2.3.4/24", "1.2.3.0/24", "1.2.3.4/32",
+		"1.2.3.4/0", "1.2.3.4/33", "1.2.3.4/-1", "1.2.3.4/024", "1.2.3.4/ 24",
+		"0.0.0.0/0", "255.255.255.255/32", "010.1.1.1/24", "1.2.3/24",
+		"1.2.3.4.5/24", "1.2.3.4/", "/24",
+		"2001:db8::/32", "2001:db8::1/128", "2001:db8::1/129", "::/0", "::1/128",
+		"::ffff:1.2.3.4/120", "::ffff:1.2.3.4/24", "::ffff:1.2.3.4/128",
+		"fe80::1%eth0/64", "fe80::1/64", "fe80::/10",
+		"2001:db8::/032", "2001:db8::/-1", "2001:db8:::/32",
+		"  1.2.3.4/24  ", "\t2001:db8::/32\t",
+	}
+	r := rand.New(rand.NewSource(20261029))
+	const alphabet = "0123456789abcdef.:/%xZ "
+	for i := 0; i < 20000; i++ {
+		n := r.Intn(22)
+		var b strings.Builder
+		for j := 0; j < n; j++ {
+			b.WriteByte(alphabet[r.Intn(len(alphabet))])
+		}
+		cases = append(cases, b.String())
+	}
+	// 结构化随机：合法骨架 + 随机前缀位数，专打位数边界
+	for i := 0; i < 4000; i++ {
+		host := []string{"1.2.3.4", "2001:db8::1", "::ffff:1.2.3.4", "::", "fe80::1"}[r.Intn(5)]
+		cases = append(cases, host+"/"+strconv.Itoa(r.Intn(140)-2))
+	}
+	return cases
+}
+
+// TestCIDRMatchesNetParseCIDR 差分校验：三个 CIDR 规则必须与原实现逐例同结论
+func TestCIDRMatchesNetParseCIDR(t *testing.T) {
+	for _, s := range cidrCases(t) {
+		// StringCIDR / StringCIDRv4 有 IPv4 快路径，快路径命中时也必须与原实现一致
+		if got, want := StringCIDR(s), refCIDR(s); got != want {
+			t.Fatalf("StringCIDR(%q) = %v, net.ParseCIDR = %v", s, got, want)
+		}
+		if got, want := StringCIDRv4(s), refCIDRv4(s); got != want {
+			t.Fatalf("StringCIDRv4(%q) = %v, 原实现 = %v", s, got, want)
+		}
+		if got, want := StringCIDRv6(s), refCIDRv6(s); got != want {
+			t.Fatalf("StringCIDRv6(%q) = %v, 原实现 = %v", s, got, want)
 		}
 	}
 }

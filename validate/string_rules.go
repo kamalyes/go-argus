@@ -13,6 +13,7 @@ package validate
 
 import (
 	"net"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -431,13 +432,65 @@ func StringIPv6(s string) bool {
 	return ip != nil && ip.To4() == nil
 }
 
+// parsePrefix 解析 CIDR，返回 (是否合法, 是否属于 IPv4 族)
+//
+// 用 netip.ParsePrefix 而非 net.ParseCIDR：后者要为 net.IP 与 net.IPNet 分配
+// 字节切片，实测 2001:db8::/32 要 70.3ns / 96B / 4 allocs，而前者返回纯值类型，
+// 同一输入 21.4ns / 0B / 0 allocs（3.3x）校验只要结论，不要解析产物
+//
+// IPv4 族的判定对齐原先的 ip.To4() != nil：它对 IPv4 和 IPv4-in-IPv6
+// （::ffff:1.2.3.4）都返回非 nil，netip 侧对应 Is4() || Is4In6()
+// 两者都拒绝带 zone 的地址（fe80::1%eth0/64）
+func parsePrefix(s string) (ok, isV4 bool) {
+	p, err := netip.ParsePrefix(s)
+	if err != nil {
+		// netip 不接受前缀位数带前导零（"2001:db8::/032"），net.ParseCIDR 接受。
+		// go-argus 对齐 go-playground/validator 的宽松语义，故去零重试一次；
+		// 只在解析已经失败后才走这条路，正常输入不付代价。
+		// 该分歧由 TestCIDRMatchesNetParseCIDR 的差分用例抓出
+		norm, changed := stripPrefixBitsLeadingZeros(s)
+		if !changed {
+			return false, false
+		}
+		if p, err = netip.ParsePrefix(norm); err != nil {
+			return false, false
+		}
+	}
+	addr := p.Addr()
+	return true, addr.Is4() || addr.Is4In6()
+}
+
+// stripPrefixBitsLeadingZeros 去掉 "addr/bits" 中 bits 的前导零
+//
+// 不含 '/'、bits 为空、bits 无前导零、或 bits 含非数字时原样返回并报告未改动
+func stripPrefixBitsLeadingZeros(s string) (string, bool) {
+	i := strings.LastIndexByte(s, '/')
+	if i < 0 || i == len(s)-1 {
+		return s, false
+	}
+	bits := s[i+1:]
+	if bits[0] != '0' || len(bits) == 1 {
+		return s, false
+	}
+	j := 0
+	for j < len(bits)-1 && bits[j] == '0' {
+		j++
+	}
+	for k := j; k < len(bits); k++ {
+		if bits[k] < '0' || bits[k] > '9' {
+			return s, false
+		}
+	}
+	return s[:i+1] + bits[j:], true
+}
+
 func StringCIDR(s string) bool {
 	s = TrimSpaceIfNeeded(s)
 	if parseIPv4CIDRFast(s) {
 		return true
 	}
-	_, _, err := net.ParseCIDR(s)
-	return err == nil
+	ok, _ := parsePrefix(s)
+	return ok
 }
 
 func StringCIDRv4(s string) bool {
@@ -445,14 +498,14 @@ func StringCIDRv4(s string) bool {
 	if parseIPv4CIDRFast(s) {
 		return true
 	}
-	ip, _, err := net.ParseCIDR(s)
-	return err == nil && ip.To4() != nil
+	ok, isV4 := parsePrefix(s)
+	return ok && isV4
 }
 
 func StringCIDRv6(s string) bool {
 	s = TrimSpaceIfNeeded(s)
-	ip, _, err := net.ParseCIDR(s)
-	return err == nil && ip.To4() == nil
+	ok, isV4 := parsePrefix(s)
+	return ok && !isV4
 }
 
 func StringMAC(s string) bool {
