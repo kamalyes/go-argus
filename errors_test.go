@@ -15,7 +15,34 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/kamalyes/go-argus/rule"
 )
+
+// mkFieldError 测试用的 fieldError 构造器
+//
+// 生产路径（newFieldError）把 tag/param 与 field/structField 存成指向编译期
+// RulePlan / FieldNames 的指针，测试里没有真实计划，这里就地造两个等价的，
+// 让各用例仍按「值」描述期望，不必关心生产侧的指针布局
+func mkFieldError(ns, structNs, field, structField, tag, param string, val reflect.Value) *fieldError {
+	return &fieldError{
+		names:    &rule.FieldNames{NS: ns, StructNS: structNs, Field: field, StructField: structField},
+		plan:     &rule.RulePlan{Name: tag, Param: param},
+		ns:       ns,
+		structNs: structNs,
+		fieldVal: val,
+	}
+}
+
+// mkFE 只关心 ns/field/tag 的简写
+func mkFE(ns, field, tag string) *fieldError {
+	return mkFieldError(ns, ns, field, field, tag, "", reflect.Value{})
+}
+
+// mkFEParam 带规则参数的简写
+func mkFEParam(ns, field, tag, param string) *fieldError {
+	return mkFieldError(ns, ns, field, field, tag, param, reflect.Value{})
+}
 
 func TestInvalidValidationErrorNilType(t *testing.T) {
 	err := &InvalidValidationError{}
@@ -40,8 +67,8 @@ func TestValidationErrorsEmpty(t *testing.T) {
 
 func TestValidationErrorsMultiple(t *testing.T) {
 	ve := ValidationErrors{
-		&fieldError{tag: "required", ns: "Name", field: "Name"},
-		&fieldError{tag: "email", ns: "Email", field: "Email"},
+		mkFE("Name", "Name", "required"),
+		mkFE("Email", "Email", "email"),
 	}
 	// 多条拼接路径与逐条 Sprintf 换行连接逐字节一致（守护部件直写的不变量）
 	want := fmt.Sprintf(fieldErrMsg, "Name", "Name", "required") + "\n" +
@@ -52,15 +79,7 @@ func TestValidationErrorsMultiple(t *testing.T) {
 }
 
 func TestFieldErrorMethods(t *testing.T) {
-	fe := &fieldError{
-		tag:         "min",
-		ns:          "User.Name",
-		structNs:    "User.Name",
-		field:       "name",
-		structField: "Name",
-		fieldVal:    reflect.ValueOf("ab"),
-		param:       "3",
-	}
+	fe := mkFieldError("User.Name", "User.Name", "name", "Name", "min", "3", reflect.ValueOf("ab"))
 	if fe.Tag() != "min" {
 		t.Fatalf("expected tag min, got %s", fe.Tag())
 	}
@@ -99,12 +118,7 @@ func TestFieldErrorMethods(t *testing.T) {
 
 func TestFieldErrorNilValue(t *testing.T) {
 	// 零值 fieldVal 即 invalid，Value/Kind/Type 均返回零值
-	fe := &fieldError{
-		tag:         "required",
-		ns:          "Test.Field",
-		field:       "field",
-		structField: "Field",
-	}
+	fe := mkFieldError("Test.Field", "Test.Field", "field", "Field", "required", "", reflect.Value{})
 	if fe.Value() != nil {
 		t.Fatal("expected nil value")
 	}
@@ -140,7 +154,7 @@ func TestFieldErrorMsg_MatchesSprintf(t *testing.T) {
 	}
 	for _, c := range cases {
 		want := fmt.Sprintf(fieldErrMsg, c[0], c[1], c[2])
-		got := (&fieldError{ns: c[0], field: c[1], tag: c[2]}).Error()
+		got := mkFE(c[0], c[1], c[2]).Error()
 		if got != want {
 			t.Errorf("拼接与 Sprintf 不一致\n  ns=%q field=%q tag=%q\n  want=%q\n  got =%q",
 				c[0], c[1], c[2], want, got)
@@ -151,7 +165,7 @@ func TestFieldErrorMsg_MatchesSprintf(t *testing.T) {
 // TestValidationErrorsMsg_Multi 多条错误的换行拼接语义不变
 func TestValidationErrorsMsg_Multi(t *testing.T) {
 	mk := func(ns, f, tag string) FieldError {
-		return &fieldError{ns: ns, field: f, tag: tag}
+		return mkFE(ns, f, tag)
 	}
 	// 空集合
 	if got := (ValidationErrors{}).Error(); got != "" {
@@ -181,7 +195,7 @@ func TestValidationErrorsMsg_Multi(t *testing.T) {
 }
 
 func BenchmarkProbeFieldErrorMsg(b *testing.B) {
-	fe := &fieldError{ns: "ProbeLarge.F15", field: "F15", tag: "required"}
+	fe := mkFE("ProbeLarge.F15", "F15", "required")
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -193,7 +207,7 @@ func BenchmarkProbeValidationErrorsMsg(b *testing.B) {
 	for _, n := range []int{1, 3, 10} {
 		ve := make(ValidationErrors, n)
 		for i := range ve {
-			ve[i] = &fieldError{ns: "ProbeLarge.F15", field: "F15", tag: "required"}
+			ve[i] = mkFE("ProbeLarge.F15", "F15", "required")
 		}
 		b.Run(fmt.Sprintf("errors=%d", n), func(b *testing.B) {
 			b.ReportAllocs()

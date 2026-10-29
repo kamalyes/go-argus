@@ -181,19 +181,15 @@ func (v *Validate) StructCtx(ctx context.Context, s any) error {
 		return &InvalidValidationError{Type: reflect.TypeOf(s)}
 	}
 
-	errs := acquireErrors()
 	// 类型名直接取编译计划里已存的 Name，不再每次校验调一次 reflect.Type.Name()
 	// ——后者内部要走 rtype.String() 再切掉包名前缀，profile 里占 260ms/9.07s（2.9%）
 	// 顺带把计划下传，避免 walkStruct 再查一次 structCache
 	plan := v.compileStruct(current.Type())
-	v.walkStruct(ctx, current, current, plan, plan.Name, plan.Name, errs)
-	if len(*errs) > 0 {
-		result := make(ValidationErrors, len(*errs))
-		copy(result, *errs)
-		releaseErrors(errs)
-		return result
+	sc := evalScope{ctx: ctx, top: current, parent: current}
+	v.walkStruct(&sc, current, plan, plan.Name, plan.Name)
+	if errs := sc.takeErrs(); errs != nil {
+		return errs
 	}
-	releaseErrors(errs)
 	return nil
 }
 
@@ -229,16 +225,11 @@ func (v *Validate) VarCtx(ctx context.Context, field any, tag string) error {
 		if val == nil {
 			rules := v.cachedVarRules(tag)
 			rv := reflect.ValueOf(field)
-			errs := acquireErrors()
-			sc := evalScope{ctx: ctx, parent: rv, errs: errs}
+			sc := evalScope{ctx: ctx, parent: rv}
 			v.applyRules(&sc, &emptyFieldNames, "", "", rv, rules)
-			if len(*errs) > 0 {
-				result := make(ValidationErrors, len(*errs))
-				copy(result, *errs)
-				releaseErrors(errs)
-				return result
+			if errs := sc.takeErrs(); errs != nil {
+				return errs
 			}
-			releaseErrors(errs)
 			return nil
 		}
 		if tag == constants.RuleRequired {
@@ -258,16 +249,11 @@ func (v *Validate) VarCtx(ctx context.Context, field any, tag string) error {
 	}
 	rules := v.cachedVarRules(tag)
 	rv := reflect.ValueOf(field)
-	errs := acquireErrors()
-	sc := evalScope{ctx: ctx, parent: rv, errs: errs}
+	sc := evalScope{ctx: ctx, parent: rv}
 	v.applyRules(&sc, &emptyFieldNames, "", "", rv, rules)
-	if len(*errs) > 0 {
-		result := make(ValidationErrors, len(*errs))
-		copy(result, *errs)
-		releaseErrors(errs)
-		return result
+	if errs := sc.takeErrs(); errs != nil {
+		return errs
 	}
-	releaseErrors(errs)
 	return nil
 }
 
@@ -371,16 +357,11 @@ func (v *Validate) stringRuleError(field string, r *rule.RulePlan, wrap bool) er
 // varStringReflectPath 字符串回退到反射路径
 func (v *Validate) varStringReflectPath(ctx context.Context, field string, rules []rule.RulePlan) error {
 	rv := reflect.ValueOf(field)
-	errs := acquireErrors()
-	sc := evalScope{ctx: ctx, parent: rv, errs: errs}
+	sc := evalScope{ctx: ctx, parent: rv}
 	v.applyRules(&sc, &emptyFieldNames, "", "", rv, rules)
-	if len(*errs) > 0 {
-		result := make(ValidationErrors, len(*errs))
-		copy(result, *errs)
-		releaseErrors(errs)
-		return result
+	if errs := sc.takeErrs(); errs != nil {
+		return errs
 	}
-	releaseErrors(errs)
 	return nil
 }
 
@@ -452,7 +433,53 @@ type evalScope struct {
 	ctx    context.Context
 	top    reflect.Value
 	parent reflect.Value
-	errs   *ValidationErrors
+	// errs 惰性错误切片：nil 表示还没出错，也就还没从池里取
+	//
+	// 成功路径不需要它，而原先每次 Struct / Var 调用都无条件 acquireErrors()
+	// 实测 errsPool 的 Get+Put 往返 7.3~8.1ns，占 StructSimpleSuccess（57ns）的 14%，而绝大多数调用是通过的，这笔开销白付
+	//
+	// 槽必须长在 evalScope 里、且整次遍历只有一个 evalScope：试过单独拿一个收集器
+	// 结构体沿调用链下传，结果成功路径从 0 allocs 变成 1 alloc/8B ——
+	// applyRules / applyDive 是 `leaking param content: sc`（sc.parent 要流进池化的
+	// fieldLevel），凡是挂在 sc 上的指针都会被判定逃逸；而 sc 自身不逃逸，
+	// 所以把槽做成 evalScope 的字段就能留在栈上
+	errs *ValidationErrors
+}
+
+// addErr 追加一条错误，首次调用时才从池里取切片
+func (sc *evalScope) addErr(fe FieldError) {
+	if sc.errs == nil {
+		sc.errs = acquireErrors()
+	}
+	*sc.errs = append(*sc.errs, fe)
+}
+
+// errCount 返回已收集的错误条数
+func (sc *evalScope) errCount() int {
+	if sc.errs == nil {
+		return 0
+	}
+	return len(*sc.errs)
+}
+
+// takeErrs 取出结果副本并归还池中切片；无错误时返回 nil
+//
+// 必须复制而不能直接把池里的切片交给调用方：切片归还后会被下一次校验复用，
+// 调用方手里的那份内容会被悄悄改写
+func (sc *evalScope) takeErrs() ValidationErrors {
+	if sc.errs == nil {
+		return nil
+	}
+	errs := sc.errs
+	sc.errs = nil
+	if len(*errs) == 0 {
+		releaseErrors(errs)
+		return nil
+	}
+	result := make(ValidationErrors, len(*errs))
+	copy(result, *errs)
+	releaseErrors(errs)
+	return result
 }
 
 // emptyFieldNames Var 系列入口的空命名空间四元组
@@ -463,31 +490,33 @@ var emptyFieldNames rule.FieldNames
 
 // validateStruct 递归校验结构体字段
 func (v *Validate) validateStruct(
-	ctx context.Context,
-	top, current reflect.Value,
+	sc *evalScope,
+	current reflect.Value,
 	ns, structNs string,
-	errs *ValidationErrors,
 ) {
 	current = validate.DerefReflect(current)
 	if !current.IsValid() || current.Kind() != reflect.Struct {
 		return
 	}
-	v.walkStruct(ctx, top, current, v.compileStruct(current.Type()), ns, structNs, errs)
+	v.walkStruct(sc, current, v.compileStruct(current.Type()), ns, structNs)
 }
 
 // walkStruct 按已编译计划遍历结构体字段，要求 current 已是有效的 struct 值
+//
+// 整次遍历共用入口处那一个 evalScope（见 evalScope.errs 的说明），不再每层结构体
+// 新建一个代价是 sc.parent 要在每轮字段迭代开头重置：嵌套结构体的递归会把它改成
+// 子结构体，返回后外层剩余字段仍须看到自己这一层每字段一次写入，比每层一次结构体构造还便宜
 func (v *Validate) walkStruct(
-	ctx context.Context,
-	top, current reflect.Value,
+	sc *evalScope,
+	current reflect.Value,
 	plan *rule.StructPlan,
 	ns, structNs string,
-	errs *ValidationErrors,
 ) {
-	// parent 对本结构体的全部字段恒为 current，故 scope 每层结构体只构造一次
-	sc := evalScope{ctx: ctx, top: top, parent: current, errs: errs}
 	// 按下标取指针而非 range 取值：FieldPlan 有 15 字，range 的隐式拷贝
 	// 在 profile 里占 270ms/9.07s（3%），而循环体只读该计划
 	for i := range plan.Fields {
+		// parent 对本结构体的全部字段恒为 current；嵌套递归会改写它，故每轮重置
+		sc.parent = current
 		fp := &plan.Fields[i]
 		// compileStruct 只枚举 t.NumField() 的直接字段，Index 恒为单元素，
 		// 直通 Field 省去 FieldByIndex 这一层非内联调用（profile 自身占 270ms）；
@@ -512,9 +541,9 @@ func (v *Validate) walkStruct(
 			names = &local
 		}
 
-		before := len(*errs)
-		v.applyRules(&sc, names, names.NS, names.StructNS, field, fp.Rules)
-		if len(*errs) != before {
+		before := sc.errCount()
+		v.applyRules(sc, names, names.NS, names.StructNS, field, fp.Rules)
+		if sc.errCount() != before {
 			// failFast：首个错误即收口，不再遍历剩余字段
 			if v.failFast {
 				return
@@ -525,9 +554,9 @@ func (v *Validate) walkStruct(
 		if fp.MayDiveStruct {
 			nested := validate.DerefReflect(field)
 			if nested.IsValid() && nested.Kind() == reflect.Struct {
-				v.validateStruct(ctx, top, nested, names.NS, names.StructNS, errs)
+				v.validateStruct(sc, nested, names.NS, names.StructNS)
 				// failFast：嵌套结构体内部出错同样立即收口
-				if v.failFast && len(*errs) > 0 {
+				if v.failFast && sc.errCount() > 0 {
 					return
 				}
 			}
@@ -603,7 +632,7 @@ func (v *Validate) applyRules(
 			ok = v.evalRule(sc, names, derefed, r)
 		}
 		if !ok {
-			*sc.errs = append(*sc.errs, newFieldError(derefed, names, ns, structNs, r))
+			sc.addErr(newFieldError(derefed, names, ns, structNs, r))
 			return
 		}
 	}
@@ -635,10 +664,7 @@ func (v *Validate) applyDive(
 			childNS := ns + "[" + string(idxBuf) + "]"
 			childStructNS := structNs + "[" + string(idxBuf) + "]"
 			if len(valueRules) == 1 && valueRules[0].Name == constants.RuleRequired {
-				*sc.errs = append(
-					*sc.errs,
-					newFieldError(item, names, childNS, childStructNS, &valueRules[0]),
-				)
+				sc.addErr(newFieldError(item, names, childNS, childStructNS, &valueRules[0]))
 				if v.failFast {
 					return
 				}
@@ -646,7 +672,7 @@ func (v *Validate) applyDive(
 			}
 			v.applyRules(sc, names, childNS, childStructNS, item, valueRules)
 			// failFast：元素出错即停，不再遍历剩余元素
-			if v.failFast && len(*sc.errs) > 0 {
+			if v.failFast && sc.errCount() > 0 {
 				return
 			}
 		}
@@ -674,12 +700,10 @@ func (v *Validate) applyDive(
 				childNS := ns + "[" + k + "]"
 				childStructNS := structNs + "[" + k + "]"
 				if keyBad {
-					*sc.errs = append(*sc.errs,
-						newFieldError(reflect.ValueOf(k), names, childNS, childStructNS, &keyRules[0]))
+					sc.addErr(newFieldError(reflect.ValueOf(k), names, childNS, childStructNS, &keyRules[0]))
 				}
 				if valBad {
-					*sc.errs = append(*sc.errs,
-						newFieldError(reflect.ValueOf(s), names, childNS, childStructNS, &valueRules[0]))
+					sc.addErr(newFieldError(reflect.ValueOf(s), names, childNS, childStructNS, &valueRules[0]))
 				}
 				if v.failFast {
 					return
@@ -727,7 +751,7 @@ func (v *Validate) applyDive(
 			}
 			v.applyRules(sc, names, childNS, childStructNS, value, valueRules)
 			// failFast：键或值出错即停，不再遍历剩余条目
-			if v.failFast && len(*sc.errs) > 0 {
+			if v.failFast && sc.errCount() > 0 {
 				return
 			}
 		}
@@ -1206,13 +1230,11 @@ func newFieldError(
 	// 失败路径每错误省去一次 Interface 装箱分配与两次反射调用
 	current := validate.DerefReflect(field)
 	return &fieldError{
-		tag:         r.Name,
-		ns:          ns,
-		structNs:    structNs,
-		field:       names.Field,
-		structField: names.StructField,
-		fieldVal:    current,
-		param:       r.Param,
+		names:    names,
+		plan:     r,
+		ns:       ns,
+		structNs: structNs,
+		fieldVal: current,
 	}
 }
 

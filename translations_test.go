@@ -198,12 +198,7 @@ func TestSafeMessageValueNonNil(t *testing.T) {
 
 func TestRenderTranslationWithTemplate(t *testing.T) {
 	RegisterTranslation("test", "test_tag", "{field} failed {tag} with param {param}")
-	fe := &fieldError{
-		tag:   "test_tag",
-		ns:    "Test.Field",
-		field: "myField",
-		param: "5",
-	}
+	fe := mkFEParam("Test.Field", "myField", "test_tag", "5")
 	result := renderTranslation("test", fe)
 	if result != "myField failed test_tag with param 5" {
 		t.Fatalf("unexpected translation: %s", result)
@@ -212,11 +207,7 @@ func TestRenderTranslationWithTemplate(t *testing.T) {
 
 func TestRenderTranslationFallbackDefault(t *testing.T) {
 	RegisterTranslation("fallback_test", "default", "{field} validation failed")
-	fe := &fieldError{
-		tag:   "unknown_tag",
-		ns:    "Test.Field",
-		field: "myField",
-	}
+	fe := mkFE("Test.Field", "myField", "unknown_tag")
 	result := renderTranslation("fallback_test", fe)
 	if result != "myField validation failed" {
 		t.Fatalf("unexpected fallback: %s", result)
@@ -224,11 +215,7 @@ func TestRenderTranslationFallbackDefault(t *testing.T) {
 }
 
 func TestRenderTranslationNoTemplate(t *testing.T) {
-	fe := &fieldError{
-		tag:   "missing_tag",
-		ns:    "Test.Field",
-		field: "myField",
-	}
+	fe := mkFE("Test.Field", "myField", "missing_tag")
 	result := renderTranslation("nonexistent_locale", fe)
 	if result == "" {
 		t.Fatal("expected non-empty fallback to fe.Error()")

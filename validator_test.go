@@ -1077,12 +1077,15 @@ func TestExcludedWithoutAllAllAbsent(t *testing.T) {
 
 func TestApplyRulesEmpty(t *testing.T) {
 	v := New()
-	errs := make(ValidationErrors, 0)
-	sc := evalScope{ctx: context.Background(), errs: &errs}
+	sc := evalScope{ctx: context.Background()}
 	names := rule.FieldNames{NS: "ns", StructNS: "sns", Field: "f", StructField: "sf"}
 	v.applyRules(&sc, &names, "ns", "sns", reflect.ValueOf("test"), nil)
-	if len(errs) != 0 {
+	if sc.errCount() != 0 {
 		t.Fatal("expected no errors for empty rules")
+	}
+	// 规则为空时不应触碰对象池
+	if sc.errs != nil {
+		t.Fatal("空规则不应从池里取错误切片")
 	}
 }
 

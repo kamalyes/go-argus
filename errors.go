@@ -15,6 +15,8 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+
+	"github.com/kamalyes/go-argus/rule"
 )
 
 const fieldErrMsg = "Key: '%s' Error:Field validation for '%s' failed on the '%s' tag"
@@ -82,7 +84,7 @@ func (ve ValidationErrors) Error() string {
 	total := len(ve) - 1 // 换行符
 	for i := 0; i < len(ve); i++ {
 		if fe, ok := ve[i].(*fieldError); ok {
-			total += fieldErrMsgLen(len(fe.ns), len(fe.field), len(fe.tag))
+			total += fieldErrMsgLen(len(fe.ns), len(fe.fieldName()), len(fe.tagName()))
 		} else {
 			total += len(ve[i].Error())
 		}
@@ -94,7 +96,7 @@ func (ve ValidationErrors) Error() string {
 			b.WriteByte('\n')
 		}
 		if fe, ok := ve[i].(*fieldError); ok {
-			appendFieldErrMsg(&b, fe.ns, fe.field, fe.tag)
+			appendFieldErrMsg(&b, fe.ns, fe.fieldName(), fe.tagName())
 		} else {
 			b.WriteString(ve[i].Error())
 		}
@@ -122,20 +124,49 @@ var (
 	_ error      = (*fieldError)(nil)
 )
 
+// fieldError 是 FieldError 的生产实现
+//
+// tag/param 与 field/structField 不自存，改为各持一个指向编译期数据的指针：
+// RulePlan 来自 StructPlan.Fields[i].Rules（结构体计划）或 cachedVarRules
+// （Var 规则缓存），FieldNames 来自 FieldPlan.Names，两者在编译后只读且跨
+// goroutine 共享，寿命长于任何错误对象，故按指针引用是安全的。
+//
+// 这么做是因为失败路径的成本不在校验逻辑上：StructComplexFailure 的 profile
+// 里库代码只占 applyRules 8.2% + newFieldError 5.9%，其余是 mallocgc、
+// writeHeapBitsSmall、typePointers.next、madvise 这些分配器与 GC 工作。
+// 四个串摊开存要 64 字节、4 个指针字，换成两个指针后结构体从 136 字节
+// （144B 规格）降到 88 字节（96B 规格），每个错误少 48 字节、少 2 个待扫描指针字。
+//
+// ns/structNs 必须自存：dive 子元素的命名空间带 [i]/[key] 后缀，由运行期拼出，
+// 不在编译期数据里（见 applyDive）。
 type fieldError struct {
-	tag         string
-	ns          string
-	structNs    string
-	field       string
-	structField string
-	fieldVal    reflect.Value // 惰性求值源，Value/Kind/Type 访问时才解引用
-	value       any           // Value() 首次访问装箱缓存
-	param       string
+	names    *rule.FieldNames // 编译期常量，提供 field / structField
+	plan     *rule.RulePlan   // 编译期常量，提供 tag / param
+	ns       string           // 展示命名空间，dive 会覆盖
+	structNs string           // 结构体命名空间，dive 会覆盖
+	fieldVal reflect.Value    // 惰性求值源，Value/Kind/Type 访问时才解引用
+	value    any              // Value() 首次访问装箱缓存
+}
+
+// tagName 取规则名；plan 为 nil（零值构造）时返回空串，不 panic
+func (fe *fieldError) tagName() string {
+	if fe.plan == nil {
+		return ""
+	}
+	return fe.plan.Name
+}
+
+// fieldName 取展示名；names 为 nil（零值构造）时返回空串，不 panic
+func (fe *fieldError) fieldName() string {
+	if fe.names == nil {
+		return ""
+	}
+	return fe.names.Field
 }
 
 // Tag 返回失败的规则名
 func (fe *fieldError) Tag() string {
-	return fe.tag
+	return fe.tagName()
 }
 
 // ActualTag 返回实际失败的规则名，兼容别名规则场景
@@ -143,7 +174,7 @@ func (fe *fieldError) Tag() string {
 // 无独立字段：别名在编译期已解析为规范名，生产构造路径（newFieldError）
 // 恒有 actualTag == tag，省去每错误 16B 与一个 GC 指针扫描槽
 func (fe *fieldError) ActualTag() string {
-	return fe.tag
+	return fe.tagName()
 }
 
 // Namespace 返回字段展示路径
@@ -158,12 +189,15 @@ func (fe *fieldError) StructNamespace() string {
 
 // Field 返回字段展示名
 func (fe *fieldError) Field() string {
-	return fe.field
+	return fe.fieldName()
 }
 
 // StructField 返回结构体字段名
 func (fe *fieldError) StructField() string {
-	return fe.structField
+	if fe.names == nil {
+		return ""
+	}
+	return fe.names.StructField
 }
 
 // Value 返回字段原始值，首次访问时从 reflect.Value 装箱并缓存
@@ -176,7 +210,10 @@ func (fe *fieldError) Value() any {
 
 // Param 返回规则参数
 func (fe *fieldError) Param() string {
-	return fe.param
+	if fe.plan == nil {
+		return ""
+	}
+	return fe.plan.Param
 }
 
 // Kind 返回字段反射 Kind，无效值返回 reflect.Invalid
@@ -203,8 +240,8 @@ func (fe *fieldError) Type() reflect.Type {
 // 拼接本体收敛到 appendFieldErrMsg，与 ValidationErrors.Error 多条拼接共用。
 func (fe *fieldError) Error() string {
 	var b strings.Builder
-	b.Grow(fieldErrMsgLen(len(fe.ns), len(fe.field), len(fe.tag)))
-	appendFieldErrMsg(&b, fe.ns, fe.field, fe.tag)
+	b.Grow(fieldErrMsgLen(len(fe.ns), len(fe.fieldName()), len(fe.tagName())))
+	appendFieldErrMsg(&b, fe.ns, fe.fieldName(), fe.tagName())
 	return b.String()
 }
 
