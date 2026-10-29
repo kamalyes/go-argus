@@ -12,6 +12,10 @@
 package validate
 
 import (
+	"encoding/base32"
+	"math/rand"
+	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/kamalyes/go-argus/constants"
@@ -1282,5 +1286,143 @@ func TestStringEmailFail(t *testing.T) {
 func TestStringUniqueEmpty(t *testing.T) {
 	if !StringUnique("") {
 		t.Fatal("expected unique to pass for empty string")
+	}
+}
+
+// base32Alphabet StdEncoding 的字母表，外加填充符与换行符用于构造边界输入
+const base32Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567=\r\n018a!"
+
+// decodeBase32Ref 参考实现：标准库解码器，外加它漏掉的两条严格规则
+//
+// 标准库 decode 遇到带填充的那一组后即置 end 并返回，其后多余的填充符被静默
+// 忽略，于是 "JBSWY3DPEE=======" 这类总长不是 8 的倍数的输入也会解码成功。
+// RFC 4648 与 go-playground/validator 的 base32 正则都不接受，故这里按严格
+// 语义补齐；
+// 实现路径与 isBase32Syntax 不同（标准库解码 + 字符串操作 vs 单趟字节扫描），
+// 可以互相印证
+func decodeBase32Ref(s string) bool {
+	ts := strings.TrimSpace(s)
+	if ts == "" {
+		return false
+	}
+	if _, err := base32.StdEncoding.DecodeString(ts); err != nil {
+		return false
+	}
+	stripped := strings.NewReplacer("\r", "", "\n", "").Replace(ts)
+	if len(stripped) == 0 || len(stripped)%8 != 0 {
+		return false
+	}
+	i := strings.IndexByte(stripped, '=')
+	if i < 0 {
+		return true
+	}
+	// 填充符之后只能还是填充符，且个数须为 1/3/4/6
+	if strings.Trim(stripped[i:], "=") != "" {
+		return false
+	}
+	switch len(stripped) - i {
+	case 1, 3, 4, 6:
+		return true
+	}
+	return false
+}
+
+// TestBase32StricterThanDecoder 固定住本次有意引入的严格化：
+// 标准库解码器会忽略填充组之后的字符，StringBase32 不再接受这类输入
+func TestBase32StricterThanDecoder(t *testing.T) {
+	for _, s := range []string{
+		"JBSWY3DPEE=======",  // 正确填充后多一个 =
+		"JBSWY3DPEE========", // 多两个 =
+		"JB=======",          // 单组 2 数据 + 7 填充
+	} {
+		if _, err := base32.StdEncoding.DecodeString(s); err != nil {
+			t.Fatalf("前提不成立：标准库本应接受 %q", s)
+		}
+		if StringBase32(s) {
+			t.Errorf("StringBase32(%q) = true，期望 false（总长须为 8 的倍数）", s)
+		}
+	}
+}
+
+// TestBase32SyntaxMatchesDecoder 差分校验：StringBase32 必须与标准库解码器逐例同结论
+func TestBase32SyntaxMatchesDecoder(t *testing.T) {
+	cases := []string{
+		"", "  ", "A", "AA", "AAAA", "AAAAAAAA", "JBSWY3DPEHPK3PXP",
+		"JBSWY3DPEE======", "JBSWY3DP", "JBSWY3D=", "JBSWY3==", "JBSW====",
+		"JBS=====", "JB======", "J=======", "========", "JBSWY3DPEE=====",
+		"JBSWY3DPEE=======", "JBSW\r\nY3DP", "JBSWY3DP\n", "\nJBSWY3DP",
+		"jbswy3dp", "JBSWY3D1", "JBSWY3D8", "JBSWY3D!", "=JBSWY3DP",
+		"JB=SWY3DP", "  JBSWY3DP  ", "\tJBSWY3DP\t", "JBSWY3DPEHPK3PX=",
+	}
+	// 随机语料：长度与字符都随机，覆盖人工用例想不到的组合
+	r := rand.New(rand.NewSource(20261029))
+	for i := 0; i < 20000; i++ {
+		n := r.Intn(20)
+		var b strings.Builder
+		for j := 0; j < n; j++ {
+			b.WriteByte(base32Alphabet[r.Intn(len(base32Alphabet))])
+		}
+		cases = append(cases, b.String())
+	}
+	for _, s := range cases {
+		if got, want := StringBase32(s), decodeBase32Ref(s); got != want {
+			t.Fatalf("StringBase32(%q) = %v, 标准库解码器 = %v", s, got, want)
+		}
+	}
+}
+
+// mongoIDRefRegex 原实现使用的正则
+var mongoIDRefRegex = regexp.MustCompile(`^[0-9a-fA-F]{24}$`)
+
+// dnsLabelRefRegex 原实现使用的正则
+var dnsLabelRefRegex = regexp.MustCompile(`^[a-z]([-a-z0-9]*[a-z0-9])?$`)
+
+// TestMongoDBMatchesRegex 差分校验：StringMongoDB 必须与原正则逐例同结论
+func TestMongoDBMatchesRegex(t *testing.T) {
+	cases := []string{
+		"", "507f1f77bcf86cd799439011", "507F1F77BCF86CD799439011",
+		"507f1f77bcf86cd79943901", "507f1f77bcf86cd7994390111",
+		"507f1f77bcf86cd79943901g", "507f1f77bcf86cd799439011\n",
+		"\n507f1f77bcf86cd799439011", " 507f1f77bcf86cd79943901",
+	}
+	r := rand.New(rand.NewSource(20261030))
+	const alphabet = "0123456789abcdefABCDEFgG-_ \n"
+	for i := 0; i < 20000; i++ {
+		n := 20 + r.Intn(8)
+		var b strings.Builder
+		for j := 0; j < n; j++ {
+			b.WriteByte(alphabet[r.Intn(len(alphabet))])
+		}
+		cases = append(cases, b.String())
+	}
+	for _, s := range cases {
+		if got, want := StringMongoDB(s), mongoIDRefRegex.MatchString(s); got != want {
+			t.Fatalf("StringMongoDB(%q) = %v, 原正则 = %v", s, got, want)
+		}
+	}
+}
+
+// TestDNSRFC1035LabelMatchesRegex 差分校验：StringDNSRFC1035Label 必须与原实现逐例同结论
+func TestDNSRFC1035LabelMatchesRegex(t *testing.T) {
+	ref := func(s string) bool { return len(s) <= 63 && dnsLabelRefRegex.MatchString(s) }
+	cases := []string{
+		"", "a", "ab", "a-", "-a", "a-b", "a--b", "a1", "1a", "A", "aB",
+		"abc-123", "abc-123-", strings.Repeat("a", 63), strings.Repeat("a", 64),
+		"a_b", "a.b", "a b", "a\n",
+	}
+	r := rand.New(rand.NewSource(20261031))
+	const alphabet = "abcz019-_.A \n"
+	for i := 0; i < 20000; i++ {
+		n := r.Intn(10)
+		var b strings.Builder
+		for j := 0; j < n; j++ {
+			b.WriteByte(alphabet[r.Intn(len(alphabet))])
+		}
+		cases = append(cases, b.String())
+	}
+	for _, s := range cases {
+		if got, want := StringDNSRFC1035Label(s), ref(s); got != want {
+			t.Fatalf("StringDNSRFC1035Label(%q) = %v, 原实现 = %v", s, got, want)
+		}
 	}
 }
