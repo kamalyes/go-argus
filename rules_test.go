@@ -1920,10 +1920,10 @@ func TestRuleISBN13(t *testing.T) {
 
 func TestRuleISSN(t *testing.T) {
 	v := New()
-	if err := v.Var("0317847X", "issn"); err != nil {
+	if err := v.Var("03178471", "issn"); err != nil {
 		t.Fatal("expected issn to pass for valid ISSN")
 	}
-	if err := v.Var("0317-847X", "issn"); err != nil {
+	if err := v.Var("0317-8471", "issn"); err != nil {
 		t.Fatal("expected issn to pass with dash")
 	}
 	if err := v.Var("03178470", "issn"); err == nil {

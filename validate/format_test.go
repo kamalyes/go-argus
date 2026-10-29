@@ -12,6 +12,7 @@ package validate
 
 import (
 	"math/rand"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -353,7 +354,7 @@ func TestIsISBN13(t *testing.T) {
 }
 
 func TestValidateISSN(t *testing.T) {
-	r := ValidateISSN("0317847X")
+	r := ValidateISSN("03178471")
 	if !r.Success {
 		t.Fatal("expected valid ISSN")
 	}
@@ -364,7 +365,7 @@ func TestValidateISSN(t *testing.T) {
 }
 
 func TestIsISSN(t *testing.T) {
-	if !IsISSN("0317847X") {
+	if !IsISSN("03178471") {
 		t.Fatal("expected true")
 	}
 	if IsISSN("03178470") {
@@ -493,5 +494,123 @@ func TestIsBtcAddr(t *testing.T) {
 	}
 	if IsBtcAddr("not-a-btc-address") {
 		t.Fatal("expected false")
+	}
+}
+
+// refISSN 按 ISO 3297 独立实现一遍：7 位主体加权 8..2，
+// 校验位（X 记作 10）满足 (加权和 + 校验值) % 11 == 0
+func refISSN(s string) bool {
+	var ds []byte
+	for i := 0; i < len(s); i++ {
+		if c := s[i]; c != '-' && c != ' ' {
+			ds = append(ds, c)
+		}
+	}
+	if len(ds) != 8 {
+		return false
+	}
+	sum := 0
+	for i := 0; i < 7; i++ {
+		if ds[i] < '0' || ds[i] > '9' {
+			return false
+		}
+		sum += int(ds[i]-'0') * (8 - i)
+	}
+	last := ds[7]
+	var check int
+	switch {
+	case last == 'X' || last == 'x':
+		check = 10
+	case last >= '0' && last <= '9':
+		check = int(last - '0')
+	default:
+		return false
+	}
+	return (sum+check)%11 == 0
+}
+
+// refISBN13 按 ISO 2108 独立实现：13 位交替加权 1/3，总和 % 10 == 0
+func refISBN13(s string) bool {
+	var ds []byte
+	for i := 0; i < len(s); i++ {
+		if c := s[i]; c != '-' && c != ' ' {
+			ds = append(ds, c)
+		}
+	}
+	if len(ds) != 13 {
+		return false
+	}
+	sum := 0
+	for i := 0; i < 13; i++ {
+		if ds[i] < '0' || ds[i] > '9' {
+			return false
+		}
+		w := 1
+		if i%2 == 1 {
+			w = 3
+		}
+		sum += int(ds[i]-'0') * w
+	}
+	return sum%10 == 0
+}
+
+// TestISSNMatchesSpec ISSN 必须与规范实现逐例同结论
+func TestISSNMatchesSpec(t *testing.T) {
+	cases := []string{
+		// 真实合法 ISSN（校验位分别落在 1 / 0 / 5 / X 上）
+		"0317-8471", "2049-3630", "0378-5955", "1050-124X",
+		"03178471", "20493630",
+		// 非法
+		"0317-847X", "0317-8470", "0317-8472", "1050-1240", "1050-1241",
+		"", "0317-847", "0317-84711", "0317-847Y", "abcd-efgh",
+	}
+	r := rand.New(rand.NewSource(20261101))
+	for i := 0; i < 20000; i++ {
+		n := 6 + r.Intn(5)
+		var b strings.Builder
+		for j := 0; j < n; j++ {
+			b.WriteByte("0123456789Xx- "[r.Intn(14)])
+		}
+		cases = append(cases, b.String())
+	}
+	// 结构化随机：7 位随机主体 × 全部 11 种校验位，逐一对照
+	for i := 0; i < 2000; i++ {
+		body := ""
+		for j := 0; j < 7; j++ {
+			body += strconv.Itoa(r.Intn(10))
+		}
+		for _, c := range []string{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "X"} {
+			cases = append(cases, body[:4]+"-"+body[4:]+c)
+		}
+	}
+	for _, s := range cases {
+		if got, want := IsISSN(s), refISSN(s); got != want {
+			t.Fatalf("IsISSN(%q) = %v, 规范实现 = %v", s, got, want)
+		}
+	}
+}
+
+// TestISBN13MatchesSpec ISBN-13 必须与规范实现逐例同结论
+func TestISBN13MatchesSpec(t *testing.T) {
+	cases := []string{
+		"978-0-306-40615-7", "9780306406157", "978-3-16-148410-0",
+		"978-0-471-95869-0", "9780306406150", "9780306406155",
+		"", "97803064061", "97803064061577", "978030640615X",
+	}
+	r := rand.New(rand.NewSource(20261102))
+	// 结构化随机：12 位随机主体 × 全部 10 种校验位，逐一对照
+	for i := 0; i < 4000; i++ {
+		body := ""
+		for j := 0; j < 12; j++ {
+			body += strconv.Itoa(r.Intn(10))
+		}
+		for d := 0; d < 10; d++ {
+			cases = append(cases, body+strconv.Itoa(d))
+		}
+	}
+	for _, s := range cases {
+		if got, want := IsISBN13(s), refISBN13(s); got != want {
+			t.Fatalf("IsISBN13(%q) = %v, 规范实现 = %v", s, got, want)
+		}
 	}
 }

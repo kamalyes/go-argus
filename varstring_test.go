@@ -402,7 +402,7 @@ func TestVarStringISBN13(t *testing.T) {
 
 func TestVarStringISSN(t *testing.T) {
 	v := New()
-	if err := v.VarString("0317847X", "issn"); err != nil {
+	if err := v.VarString("03178471", "issn"); err != nil {
 		t.Fatal("expected issn to pass")
 	}
 	if err := v.VarString("03178470", "issn"); err == nil {

@@ -513,7 +513,7 @@ func TestStringRuleISBN13(t *testing.T) {
 }
 
 func TestStringRuleISSN(t *testing.T) {
-	if !StringRuleMap["issn"]("0317-847X", "") {
+	if !StringRuleMap["issn"]("0317-8471", "") {
 		t.Fatal("expected issn to pass")
 	}
 }

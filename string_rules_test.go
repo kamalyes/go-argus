@@ -1044,10 +1044,10 @@ func TestStringISBN13(t *testing.T) {
 }
 
 func TestStringISSN(t *testing.T) {
-	if !stringISSN("0317847X", "") {
+	if !stringISSN("03178471", "") {
 		t.Fatal("expected issn to pass for valid ISSN")
 	}
-	if !stringISSN("0317-847X", "") {
+	if !stringISSN("0317-8471", "") {
 		t.Fatal("expected issn to pass with dash")
 	}
 	if stringISSN("03178470", "") {
@@ -1380,7 +1380,7 @@ func TestStringISBN13EdgeCases(t *testing.T) {
 }
 
 func TestStringISSNEdgeCases2(t *testing.T) {
-	if stringISSN("03178471", "") {
+	if stringISSN("0317847X", "") {
 		t.Fatal("expected issn to fail for wrong check digit")
 	}
 	if stringISSN("031X8471", "") {

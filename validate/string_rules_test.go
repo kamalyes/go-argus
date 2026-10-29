@@ -1188,7 +1188,7 @@ func TestStringNoParamAdaptersDirect(t *testing.T) {
 		value string
 		fn    func(string) bool
 	}{
-		"issn":     {"0317-847X", StringISSN},
+		"issn":     {"0317-8471", StringISSN},
 		"bic":      {"CHASUS33", StringBIC},
 		"cron":     {"0 0 * * *", StringCron},
 		"datauri":  {"data:text/plain;base64,SGVsbG8=", StringDataURI},

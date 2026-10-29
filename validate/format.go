@@ -917,12 +917,21 @@ func isISBN13(s string) bool {
 	if digits != 13 {
 		return false
 	}
-	return sum%10 == 0 || (10-sum%10)%10 == int(s[len(s)-1]-'0')
+	// ISBN-13 的不变式是「交替 1/3 加权和 ≡ 0 (mod 10)」，校验位本身已计入 sum，
+	// 所以这一个条件就够了。
+	//
+	// 原先还 or 了一个 (10-sum%10)%10 == 末位字符：sum 已含校验位，该式没有依据，
+	// 且会放过「加权和末位为 5 且校验位为 5」的全部非法输入，
+	// 例如 2221651675345（加权和 95）。它还假设末位一定是数字，
+	// 遇到 "978030640615-" 这类以分隔符收尾的串会拿 '-' 去做减法。
+	// 差分用例见 TestISBN13MatchesSpec
+	return sum%10 == 0
 }
 
 func isISSN(s string) bool {
 	digits := 0
 	sum := 0
+	check := -1
 	for i := 0; i < len(s); i++ {
 		c := s[i]
 		if c == '-' || c == ' ' {
@@ -933,20 +942,35 @@ func isISSN(s string) bool {
 			return false
 		}
 		if digits == 8 {
-			if c == 'X' || c == 'x' {
-				return digits == 8 && sum%11 == 10
-			}
-			if c < '0' || c > '9' {
+			// 校验位：X 代表 10
+			switch {
+			case c == 'X' || c == 'x':
+				check = 10
+			case c >= '0' && c <= '9':
+				check = int(c - '0')
+			default:
 				return false
 			}
-			return digits == 8 && sum%11 == int(c-'0')
+			// 不能在此直接返回：原实现读到第 8 位就收口，第 9 位及以后压根没看，
+			// 于是 "0317-84711" 这类超长输入被判为合法。继续走完全串，由循环顶部的
+			// digits > 8 拦下
+			continue
 		}
 		if c < '0' || c > '9' {
 			return false
 		}
 		sum += int(c-'0') * (9 - digits)
 	}
-	return false
+	if digits != 8 {
+		return false
+	}
+	// ISSN 的不变式是「加权和 + 校验值 ≡ 0 (mod 11)」
+	//
+	// 原先写的是 sum%11 == check，只有 sum%11 == 0（校验位恰为 0）时才碰巧成立：
+	// 0317-8471 加权和 120，120%11 = 10，校验位应为 11-10 = 1，合法，却被判错；
+	// 而 0317-847X（校验值 10）130%11 = 9，非法，反被判对。
+	// 该分歧由 go-playground/validator 的结论对照发现，差分用例见 TestISSNMatchesSpec
+	return (sum+check)%11 == 0
 }
 
 func isCron(expr string) bool {

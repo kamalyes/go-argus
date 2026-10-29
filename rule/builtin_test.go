@@ -679,7 +679,7 @@ func TestBuiltinISBN13(t *testing.T) {
 }
 
 func TestBuiltinISSN(t *testing.T) {
-	if !callBuiltin("issn", reflect.ValueOf("0317-847X"), "") {
+	if !callBuiltin("issn", reflect.ValueOf("0317-8471"), "") {
 		t.Fatal("expected issn to pass")
 	}
 }
