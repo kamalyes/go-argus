@@ -19,7 +19,7 @@ jobs:
       should-merge: ${{ steps.verdict.outputs.should-merge }}
     steps:
       - name: 📥 Fetch Repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
