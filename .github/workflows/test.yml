@@ -1,50 +1,43 @@
+name: Test
+
+# 实际流程全在 kamalyes/deploy-pipeline 的 go-library-test.yml 里，所有 Go 库共用一份
+# 改那一份就等于改所有库
+#
+# 这里**不配矩阵**：共用流水线从本仓库 go.mod 的 go 指令算出地板，上限取 Go 官方当前
+# 发布的最新两个小版本，于是 Go 发新版之后矩阵自己跟上
+# 低于地板的版本会被工具链切换静默顶上去，流水线的 Verify Toolchain Honesty 闸门会判红
+#
+# [EN] The pipeline lives in go-library-test.yml in kamalyes/deploy-pipeline, shared by every
+# Go library here. The matrix is not configured: its floor comes from this module's go
+# directive and its ceiling from the two most recent Go releases
+
 on:
   push:
     branches:
       - master
-    paths:
-      - "**"
-      - "!docs/**"
-      - "!**.md"
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
   pull_request:
-    paths:
-      - "**"
-      - "!docs/**"
-      - "!**.md"
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
 
-name: Test
 jobs:
-  Build:
-    strategy:
-      matrix:
-        go-version: [1.21.x, 1.22.x, 1.23.x]
-        platform: [ubuntu-latest, windows-latest, macos-latest, macos-14]
-    runs-on: ${{ matrix.platform }}
-    steps:
-      - name: Fetch Repository
-        uses: actions/checkout@v5
-
-      - name: Install Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ matrix.go-version }}
-
-      - name: Install gotestsum
-        run: go install gotest.tools/gotestsum@v1.12.2
-
-      - name: Test
-        run: gotestsum -f testname -- ./... -race -count=1 -shuffle=on
-        continue-on-error: true
-
-      - name: Test with Coverage
-        run: gotestsum -f testname -- ./... -race -count=1 -coverprofile=coverage.txt -covermode=atomic -shuffle=on
-        continue-on-error: true
-
-      - name: Upload coverage reports to Codecov
-        if: ${{ matrix.platform == 'ubuntu-latest' && matrix.go-version == '1.23.x' }}
-        uses: codecov/codecov-action@v4.5.0
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          file: ./coverage.txt
-          flags: unittests
-          slug: kamalyes/go-argus
+  test:
+    uses: kamalyes/deploy-pipeline/.github/workflows/go-library-test.yml@master
+    with:
+      platforms: '["ubuntu-latest", "windows-latest", "macos-latest", "macos-15"]'
+      # Go 1.21 在现代 macOS 上跑不了测试：它产出的 Mach-O 不带 LC_UUID 这条 load command，
+      # 新版 dyld 直接拒绝加载，测试二进制一启动就 signal: abort trap
+      # 本地在 macOS 上用 GOTOOLCHAIN=go1.21.13 复现了同样的 dyld 报错，与代码无关
+      # 本仓库 go.mod 的地板是 1.21，所以这个组合由矩阵剔掉，而不是抬高地板
+      # [EN] Go 1.21 cannot run tests on current macOS: it emits Mach-O binaries without an
+      # LC_UUID load command and current dyld refuses to load them, so the test binary aborts
+      # on startup. Reproduced locally with GOTOOLCHAIN=go1.21.13; unrelated to the code. The
+      # module floor stays at 1.21 and the impossible combination is excluded instead
+      exclude: '[{"go-version":"1.21.x","platform":"macos-latest"},{"go-version":"1.21.x","platform":"macos-15"}]'
+    secrets:
+      # 显式映射而非 secrets: inherit —— inherit 跨账号调用时拿不到值
+      # [EN] Mapped explicitly rather than with secrets: inherit, which yields nothing across accounts
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
