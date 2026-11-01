@@ -6,13 +6,14 @@ on:
 # 这里不能用 PAT：dependabot 触发的 pull_request 事件拿到的是 **Dependabot secrets**，
 # 不是 Actions secrets，所以 secrets.GH_GPA_TOKEN 解析成空串，wait-on-check-action 拿着
 # 空 token 去调 check-runs 接口，直接 401 Bad credentials（实测日志里 REPO_TOKEN 后面是空的）
-# GITHUB_TOKEN 不受这条规则影响，配上下面的 permissions 就够读 check-run、批准并合并
+# GITHUB_TOKEN 不受这条规则影响，配上下面的 permissions 就够读 check-run 并合并
+# 但它不能批准 PR，这是 GitHub 的硬限制，所以下面的步骤不走 approve
 #
 # [EN] A PAT cannot work here: a pull_request event raised by dependabot receives Dependabot
 # secrets rather than Actions secrets, so secrets.GH_GPA_TOKEN resolves to an empty string and
 # wait-on-check-action calls the check-runs endpoint with no credential, which answers 401.
-# GITHUB_TOKEN is not subject to that rule and the permissions below cover reading check runs,
-# approving and merging
+# GITHUB_TOKEN is not subject to that rule and the permissions below cover reading check runs
+# and merging, though GitHub forbids it from approving, so no approve step below
 permissions:
   contents: write
   pull-requests: write
@@ -58,11 +59,30 @@ jobs:
       # 只自动合 minor 与 patch：major 升级按定义允许不兼容改动，必须人看
       # [EN] Only minor and patch merge on their own: a major bump is allowed to break
       # compatibility by definition and needs a person to look at it
-      - name: Enable auto-merge for Dependabot PRs
+      # 这里既不 approve 也不开 auto-merge，直接合：
+      #
+      # GITHUB_TOKEN 被 GitHub 明确禁止批准 PR，gh pr review --approve 会报
+      #   GraphQL: GitHub Actions is not permitted to approve pull requests
+      # 而 dependabot 的 pull_request 事件只拿得到 Dependabot secrets，
+      # App token 与 PAT 在这里都解析成空串，换任何别的凭证都没用
+      #
+      # gh pr merge --auto 也不行：本仓库没开 allow_auto_merge，
+      # --auto 会报 auto-merge is not allowed for this repository
+      #
+      # 直接合是安全的：master 没有分支保护，没有必需评审也没有必需 check，
+      # 质量闸门由上面的 wait_for_checks 把住 —— 矩阵 job 全绿才会走到这一步
+      #
+      # [EN] Neither approving nor enabling auto-merge, merging directly:
+      # GitHub forbids GITHUB_TOKEN from approving pull requests, and a dependabot
+      # pull_request event only receives Dependabot secrets, so an App token or PAT
+      # resolves to an empty string here -- no other credential helps
+      # gh pr merge --auto is out too, because allow_auto_merge is off for this repository
+      # Merging directly is safe: master has no branch protection, and the quality gate
+      # is the wait_for_checks job above, which only passes once the matrix jobs are green
+      - name: Merge Dependabot PR
         if: ${{ steps.metadata.outputs.update-type == 'version-update:semver-minor' || steps.metadata.outputs.update-type == 'version-update:semver-patch' }}
         run: |
-          gh pr review --approve "$PR_URL"
-          gh pr merge --auto --merge "$PR_URL"
+          gh pr merge --merge --delete-branch "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
