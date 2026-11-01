@@ -1,25 +1,48 @@
 name: Dependabot auto-merge
+
 on:
   pull_request
 
+# 这里不能用 PAT：dependabot 触发的 pull_request 事件拿到的是 **Dependabot secrets**，
+# 不是 Actions secrets，所以 secrets.GH_GPA_TOKEN 解析成空串，wait-on-check-action 拿着
+# 空 token 去调 check-runs 接口，直接 401 Bad credentials（实测日志里 REPO_TOKEN 后面是空的）
+# GITHUB_TOKEN 不受这条规则影响，配上下面的 permissions 就够读 check-run、批准并合并
+#
+# [EN] A PAT cannot work here: a pull_request event raised by dependabot receives Dependabot
+# secrets rather than Actions secrets, so secrets.GH_GPA_TOKEN resolves to an empty string and
+# wait-on-check-action calls the check-runs endpoint with no credential, which answers 401.
+# GITHUB_TOKEN is not subject to that rule and the permissions below cover reading check runs,
+# approving and merging
 permissions:
   contents: write
   pull-requests: write
+  checks: read
 
 jobs:
   wait_for_checks:
     runs-on: ubuntu-latest
     if: ${{ github.actor == 'dependabot[bot]' }}
     steps:
-       - name: Wait for check is finished
-         uses: lewagon/wait-on-check-action@v1.3.4
-         id: wait_for_checks
-         with:
-             ref: ${{ github.event.pull_request.head.sha || github.sha }}
-             running-workflow-name: wait_for_checks
-             check-regexp: Tests
-             repo-token: ${{ secrets.GH_GPA_TOKEN }}
-             wait-interval: 10
+      # check-regexp 要对得上**真实的 check-run 名字**：共用流水线的矩阵 job 叫
+      # `test / Go 1.26.x / ubuntu-latest` 这种，没有任何一个叫 Tests
+      # 写错不会报错，只会一直等不到匹配项直到超时，看起来像「测试很慢」而不是「正则写错」
+      # 这里只匹配矩阵 job，不含 `test / ⚙️ Resolve Config`：后者只是解析配置，不是质量闸门
+      #
+      # [EN] check-regexp has to match the real check-run names: the shared pipeline names its
+      # matrix jobs `test / Go 1.26.x / ubuntu-latest`, and nothing is called Tests. A wrong
+      # pattern raises no error, it simply never matches and times out, which reads as slow
+      # tests rather than a bad pattern. Only the matrix jobs are matched, leaving out the
+      # config-resolution job, which is not a quality gate
+      - name: Wait for check is finished
+        uses: lewagon/wait-on-check-action@v1.4.1
+        id: wait_for_checks
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          running-workflow-name: wait_for_checks
+          check-regexp: '^test / Go '
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 10
+
   dependabot:
     needs: [wait_for_checks]
     name: Dependabot auto-merge
@@ -28,14 +51,18 @@ jobs:
     steps:
       - name: Dependabot metadata
         id: metadata
-        uses: dependabot/fetch-metadata@v2.2.0
+        uses: dependabot/fetch-metadata@v2.4.0
         with:
-          github-token: "${{ secrets.GH_GPA_TOKEN }}"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # 只自动合 minor 与 patch：major 升级按定义允许不兼容改动，必须人看
+      # [EN] Only minor and patch merge on their own: a major bump is allowed to break
+      # compatibility by definition and needs a person to look at it
       - name: Enable auto-merge for Dependabot PRs
-        if: ${{steps.metadata.outputs.update-type == 'version-update:semver-minor' || steps.metadata.outputs.update-type == 'version-update:semver-patch'}}
+        if: ${{ steps.metadata.outputs.update-type == 'version-update:semver-minor' || steps.metadata.outputs.update-type == 'version-update:semver-patch' }}
         run: |
-            gh pr review --approve "$PR_URL"
-            gh pr merge --auto --merge "$PR_URL"
+          gh pr review --approve "$PR_URL"
+          gh pr merge --auto --merge "$PR_URL"
         env:
-          PR_URL: ${{github.event.pull_request.html_url}}
-          GITHUB_TOKEN: ${{ secrets.GH_GPA_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
