@@ -43,6 +43,7 @@ type RulePlan struct {
 	HasCmpOp   bool
 	FieldIndex []int
 	Number     float64
+	Code       int64 // 业务错误码，0 表示未声明（见 code.go）
 	HasNumber  bool
 	Kind       RuleKind       // 类别位掩码
 	StrFn      StringRuleFunc // StringRuleMap 预解析函数
@@ -89,14 +90,33 @@ type StructPlan struct {
 	Fields []FieldPlan // 字段计划列表
 }
 
-// ParseRules 将 validate 标签解析为规则计划列表
+// ParseRules 将 validate 标签解析为规则计划列表，并应用标签内联的 code=
 func ParseRules(tag string) []RulePlan {
+	rules, spec := ParseRulesWithCodes(tag)
+	ApplyCodeSpec(rules, spec)
+	return rules
+}
+
+// ParseRulesWithCodes 解析 validate 标签，剥离内联 code= 项并单独返回其错误码规格
+//
+// code= 不是校验规则，必须在解析期剥离而不能留给求值路径：evalRule 对未知规则名
+// 一律返回 false（既非内建、非分派表、也非自定义规则），留着它会让每个带码的
+// 字段恒定失败
+//
+// 规格单独返回而非就地应用，是为了让调用方先与 code 标签合并再一次性落盘，
+// 从而保证「code 标签覆盖内联码」的优先级（见 CodeSpec.Merge）
+func ParseRulesWithCodes(tag string) ([]RulePlan, CodeSpec) {
 	parsed := ParseTag(tag)
 	rules := make([]RulePlan, 0, len(parsed))
+	var spec CodeSpec
 	for _, item := range parsed {
+		if item.Name == constants.RuleCode {
+			spec.setEntry(item.Param)
+			continue
+		}
 		rules = append(rules, ParseRulePlan(item))
 	}
-	return rules
+	return rules, spec
 }
 
 // ParseRulePlan 将单条规则解析为运行计划，支持或规则展开

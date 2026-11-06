@@ -21,6 +21,8 @@ const (
 	RuleOmitZero  = "omitzero"  // 零值省略
 	RuleOmitNil   = "omitnil"   // nil 省略
 
+	RuleCode = "code" // 业务错误码声明，非校验规则，解析期剥离
+
 	RuleDive          = "dive"          // 递归进入切片/映射
 	RuleKeys          = "keys"          // 映射键规则开始
 	RuleEndKeys       = "endkeys"       // 映射键规则结束

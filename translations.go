@@ -30,6 +30,7 @@ type ValidationMessage struct {
 	ActualTag       string `json:"actual_tag"`
 	Param           string `json:"param,omitempty"`
 	Value           any    `json:"value,omitempty"`
+	Code            int64  `json:"code,omitempty"`
 	Message         string `json:"message"`
 }
 
@@ -105,6 +106,7 @@ func translateFieldError(fe FieldError, locale string) ValidationMessage {
 		ActualTag:       fe.ActualTag(),
 		Param:           fe.Param(),
 		Value:           safeMessageValue(fe.Value()),
+		Code:            fe.Code(),
 	}
 	msg.Message = renderTranslation(locale, fe)
 	return msg

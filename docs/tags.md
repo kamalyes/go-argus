@@ -16,6 +16,7 @@ type User struct {
 - 带参数的规则使用 `rule=param` 格式
 - 逗号可用 `\` 转义以避免被当作规则分隔符，但反斜杠本身会保留在参数值中（例如 `contains=a\,b` 的参数为 `a\,b`，而非 `a,b`）。对于需要内部逗号分隔参数的规则（如 `range`），请使用 `|` 作为替代分隔符：`range=Start|End`
 - 单个字段的规则校验失败时，立即停止该字段的后续规则校验并返回错误；其他字段的校验不受影响
+- `code` 是标签里的保留名，用于声明业务错误码而非校验规则，详见文末 [业务错误码 `code`](#业务错误码-code)
 
 ***
 
@@ -1982,3 +1983,96 @@ type Outer struct {
 
 > 指针类型会先解引用再判断，`*string(nil)` 为零值，`*string("")` 为非零值
 
+
+***
+
+## 业务错误码 `code`
+
+校验失败时除了给人看的消息，往往还要给出一个机器可判的业务错误码（HTTP/RPC 响应体里的 `code` 字段、客户端分支判断、告警分类）。Argus 支持把码直接声明在注解上，不必为每个字段手写 `if` 链
+
+### 声明位置一：独立 `code` 标签
+
+推荐写法，`validate` 标签保持与 `go-playground/validator` 完全兼容
+
+| 写法 | 含义 |
+| --- | --- |
+| `code:"110026"` | 字段级默认码，该字段任一规则失败都取这个码 |
+| `code:"required=110007,min=110008"` | 按规则细分，键为规则名 |
+| `code:"100002,min=110008"` | 裸数字项为默认码，其余项覆盖单条规则 |
+
+```go
+type Claims struct {
+    OrgID       string `json:"org_id" validate:"required" code:"110026"`
+    WorkspaceID string `json:"workspace_id" validate:"required" code:"110027"`
+    Password    string `json:"password" validate:"required,min=8,max=16" code:"required=110007,min=110008,max=110009"`
+}
+```
+
+标签名可用 `v.SetCodeTagName("errcode")` 改掉，默认 `code`
+
+### 声明位置二：`validate` 标签内联 `code=`
+
+`Var` / `VarString` 没有结构体标签可读，码只能内联在表达式里
+
+```go
+v.VarString(orgID, "required,code=110026")           // 字段级默认码
+v.VarString(pass, "min=8,code=min=110008")           // 按规则细分，参数形如 rule=code
+```
+
+`code=` 是声明而不是规则，解析期即被剥离、不参与求值。因此 `code` 是 `validate` 标签里的保留名，自定义规则不能叫 `code`；写错的码（`code=abc`）同样被剥离，不会退化成一条恒假的未知规则
+
+### 规则级兜底注册
+
+「所有 `required` 失败都算参数无效」这类全局约定不必逐字段重复写
+
+```go
+v := validator.New()
+_ = v.RegisterRuleCode("required", 100002)
+_ = v.RegisterRuleCodes(map[string]int64{"min": 100002, "email": 110037})
+```
+
+- 规则名为空或码为 `0` 的项被跳过；两个入口在参数整体为空时返回 `*InvalidValidationError`
+- 码在编译期烘进规则计划，注册会清空结构体计划缓存与 Var 规则缓存，属启动期行为，不要在请求路径上调用
+
+### 优先级
+
+同一条规则有多处声明时，从高到低：
+
+1. `code` 标签的按规则项 —— `code:"min=110008"`
+2. `validate` 内联的按规则项 —— `code=min=110008`
+3. `code` 标签的默认项 —— `code:"110026"`
+4. `validate` 内联的默认项 —— `code=110026`
+5. `RegisterRuleCode` / `RegisterRuleCodes` 的规则级兜底
+6. 以上都没有则为 `0`，表示未声明码
+
+规则是「按规则项永远比默认项具体，同级比较时 `code` 标签覆盖 `validate` 内联」
+
+### 取码
+
+```go
+// 认 ValidationErrors、裸 FieldError，以及被 fmt.Errorf("%w") 包过的两者
+if c, ok := validator.CodeOf(err); ok {
+    return mycode.Code(c) // c 为 int64，转成项目自己的码类型
+}
+```
+
+| 入口 | 返回 | 说明 |
+| --- | --- | --- |
+| `validator.CodeOf(err)` | `(int64, bool)` | `ok` 为 `false` 表示该错误没有声明码 |
+| `ValidationErrors.Code()` | `int64` | 首个带码错误的码，无则 `0` |
+| `FieldError.Code()` | `int64` | 单条错误的码，无则 `0` |
+| `ValidationMessage.Code` | `int64` | `TranslateValidationErrors` 输出项的 `json:"code,omitempty"`，未声明码时不出现在 JSON 里 |
+
+`ValidationErrors.Code()` 取首个而非全部：一次响应只能带一个码，而字段按声明顺序遍历、单字段内规则按声明顺序短路，所以「首个」就是最先失败的那条，与 `WithFailFast()` 下的唯一错误一致
+
+### 代价
+
+码存在编译期的规则计划里，`fieldError` 只持一个计划指针，所以结构体校验失败路径的分配次数与字节数与不带码完全相同（Apple M4 实测两者均为 4 allocs / 248 B，111~165 ns/op）。`VarString` 用的 `stringFieldError` 多存一个 `int64`，由 48 字节规格升到 64 字节规格，分配次数不变（1 alloc，约 29 ns/op）。成功路径不构造错误，完全不受影响
+
+### 注意
+
+- 码必须是十进制整数，`0`、非数字（`abc`）、小数（`1.5`）与空项被静默忽略：标签是声明，解析期没有返回错误的出口，不能让一个写错的码把整个结构体的校验搞挂
+- 控制规则（`omitempty` / `omitzero` / `omitnil` / `dive` / `structonly` 等）不带码，它们不产生错误
+- `dive` 之后的元素规则属于同一字段，继承该字段的码
+- or 规则（`rgb|rgba`）的错误以整条表达式为规则名，按规则细分时键要写成 `rgb|rgba=110002`，或直接用字段级默认码
+- 只写 `code` 标签而没有 `validate` 标签的字段不产生任何校验，也就取不到码

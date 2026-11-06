@@ -966,3 +966,96 @@ type OptionalFields struct {
 | `omitzero`  | 与 `omitempty` 行为一致            | 可选数值字段   |
 | `omitnil`   | 字段为 `nil`（仅指针/接口/slice/map）   | 可选指针结构体  |
 
+
+## 31. 业务错误码注解（替代手写 if 链）
+
+校验失败要映射成业务码时，常见写法是逐字段手写判断，字段一多就是一屏 `if`：
+
+```go
+// 改造前：校验逻辑与错误码都散在 if 链里
+func ValidateClaims(claims Claims) error {
+    if strings.TrimSpace(claims.OrgID) == "" {
+        return xerr.New(code.AccountTokenOrgMissing)
+    }
+    if strings.TrimSpace(claims.WorkspaceID) == "" {
+        return xerr.New(code.AccountTokenWorkspaceMissing)
+    }
+    if strings.TrimSpace(claims.TeamID) == "" {
+        return xerr.New(code.AccountTokenTeamMissing)
+    }
+    if strings.TrimSpace(claims.AccountID) == "" {
+        return xerr.New(code.AccountTokenAccountMissing)
+    }
+    if strings.TrimSpace(claims.SessionID) == "" || claims.SessionContextVersion <= 0 {
+        return xerr.New(code.AccountInvalidToken)
+    }
+    return nil
+}
+```
+
+用 `code` 标签把码声明在字段上，校验与取码各一行：
+
+```go
+type Claims struct {
+    OrgID                 string `json:"org_id" validate:"required" code:"110026"`       // AccountTokenOrgMissing
+    WorkspaceID           string `json:"workspace_id" validate:"required" code:"110027"` // AccountTokenWorkspaceMissing
+    TeamID                string `json:"team_id" validate:"required" code:"110028"`      // AccountTokenTeamMissing
+    AccountID             string `json:"account_id" validate:"required" code:"110029"`   // AccountTokenAccountMissing
+    SessionID             string `json:"session_id" validate:"required" code:"110003"`   // AccountInvalidToken
+    SessionContextVersion int    `json:"session_context_version" validate:"gt=0" code:"110003"`
+}
+
+var claimsValidator = validator.New()
+
+func ValidateClaims(claims Claims) error {
+    err := claimsValidator.Struct(claims)
+    if err == nil {
+        return nil
+    }
+    if c, ok := validator.CodeOf(err); ok {
+        return xerr.New(code.Code(c)) // c 为 int64，转成项目自己的码类型
+    }
+    return xerr.New(code.CommonInvalidParams)
+}
+```
+
+`required` 对字符串的零值判断会把纯空白（空格、`\t`、`\n`、`\r`）一并算作空，与改造前的 `strings.TrimSpace(x) == ""` 等价，不必额外加规则。这一点与 `go-playground/validator` 不同，后者只判 `len(s) == 0`
+
+**同字段多规则各给一个码**：键写规则名
+
+```go
+type ChangePassword struct {
+    // 110007 PasswordRequired / 110008 PasswordTooShort / 110009 PasswordTooLong
+    Password string `json:"password" validate:"required,min=8,max=64" code:"required=110007,min=110008,max=110009"`
+}
+```
+
+**全局兜底**：没显式声明码的规则统一归到一个码，启动时注册一次
+
+```go
+v := validator.New()
+_ = v.RegisterRuleCodes(map[string]int64{
+    "required": 100002, // CommonInvalidParams
+    "min":      100002,
+    "max":      100002,
+})
+// 字段上的 code 标签优先于兜底码
+```
+
+**单变量校验**：`Var` / `VarString` 没有结构体标签，码内联在表达式里
+
+```go
+if err := v.VarString(orgID, "required,code=110026"); err != nil {
+    c, _ := validator.CodeOf(err)
+    return xerr.New(code.Code(c))
+}
+```
+
+**响应体直接带码**：`TranslateValidationErrors` 的输出项含 `code` 字段
+
+```go
+msgs := validator.TranslateValidationErrors(err, "zh")
+// [{"field":"org_id","tag":"required","code":110026,"message":"org_id 为必填字段"}]
+```
+
+完整语法、优先级与注意事项见 [docs/tags.md 业务错误码 `code`](tags.md#业务错误码-code)

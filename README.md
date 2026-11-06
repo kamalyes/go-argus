@@ -27,6 +27,7 @@
 - 🔒 **Concurrency safe** — Validator instances are reusable, struct compilation results auto-cached
 - 🛠️ **Custom rules** — `RegisterValidation` for custom validation functions, context propagation supported
 - 📊 **Array-style error output** — `TranslateValidationErrors` outputs serializable JSON errors
+- 🔢 **Business error codes by annotation** — the `code` tag maps a validation failure straight to a business error code, `CodeOf` reads it in one line, with zero extra allocations on the struct failure path
 - 🌐 **Gateway utilities** — IP allowlist/blocklist (CIDR/wildcard), HTTP status codes, headers, content types, JSON Path validation
 - 📎 **Format validation** — email, IP, UUID, base64, URL, URI (including mailto/tel), protocol, WebSocket, semver, ISBN-10/13, ISSN, BIC/SWIFT, cron, Data URI, BCP 47 language tags, Ethereum/Bitcoin addresses, image formats (PNG/JPEG/GIF/WebP/BMP/TIFF/ICO/AVIF/HEIC/SVG via magic numbers)
 - 📦 **Generic enum validator** — `NewEnumValidator[T]` type-safe enum value validation
@@ -175,6 +176,34 @@ Argus seamlessly replaces the default validator of mainstream web frameworks. Ex
 | chi & others | manual `v.Struct` in handler |
 
 Complete integration examples (runnable example code, curl demos, and unified error responses): **[docs/frameworks.md](docs/frameworks.md)**
+
+---
+
+## 🔢 Business Error Codes by Annotation
+
+No hand-written `if` chain per field when a validation failure has to become a business code — declare the code on the annotation:
+
+```go
+type Claims struct {
+    OrgID       string `json:"org_id" validate:"required" code:"110026"`
+    WorkspaceID string `json:"workspace_id" validate:"required" code:"110027"`
+    // One code per rule on the same field, keyed by rule name
+    Password    string `json:"password" validate:"required,min=8,max=64" code:"required=110007,min=110008,max=110009"`
+}
+
+err := v.Struct(claims)
+if c, ok := validator.CodeOf(err); ok {
+    return xerr.New(mycode.Code(c)) // c is int64, convert to your own code type
+}
+```
+
+- `Var` / `VarString` have no struct tag to read, so the code goes inline: `v.VarString(orgID, "required,code=110026")`
+- Global fallback: `v.RegisterRuleCode("required", 100002)`, always overridden by a field's `code` tag
+- Precedence: `code` tag per-rule > inline per-rule > `code` tag default > inline default > rule-level fallback
+- `ValidationMessage` from `TranslateValidationErrors` carries a `code` field (`json:"code,omitempty"`), ready to drop into a response body
+- Codes live in the compile-time rule plan and the error object only holds a pointer to it, so the struct failure path allocates exactly as much as without codes (measured on Apple M4: 4 allocs / 248 B either way)
+
+Full syntax, precedence and caveats: **[docs/tags.md](docs/tags.md#业务错误码-code)**
 
 ---
 

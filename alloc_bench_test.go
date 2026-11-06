@@ -141,6 +141,41 @@ func BenchmarkStructSimpleFailure(b *testing.B) {
 	}
 }
 
+// BenchmarkStructSimpleFailureWithCode 与 BenchmarkStructSimpleFailure 对照
+//
+// 码写在编译期的 RulePlan 里、错误只持计划指针，所以两者的分配数与分配字节
+// 应当完全相同；取码（CodeOf）也不额外分配
+func BenchmarkStructSimpleFailureWithCode(b *testing.B) {
+	v := New()
+	type Foo struct {
+		StringValue string `validate:"min=5,max=10" code:"min=110008,max=110009"`
+		IntValue    int    `validate:"min=5,max=10" code:"110002"`
+	}
+	invalidFoo := &Foo{StringValue: "Fo", IntValue: 3}
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		_, _ = CodeOf(v.Struct(invalidFoo))
+	}
+}
+
+// BenchmarkVarStringFailure 零反射快速路径的失败基线
+func BenchmarkVarStringFailure(b *testing.B) {
+	v := New()
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		_ = v.VarString("not-an-email", "email")
+	}
+}
+
+// BenchmarkVarStringFailureWithCode 与上一条对照：带码 + 取码
+func BenchmarkVarStringFailureWithCode(b *testing.B) {
+	v := New()
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		_, _ = CodeOf(v.VarString("not-an-email", "email,code=110037"))
+	}
+}
+
 func BenchmarkStructComplexSuccess(b *testing.B) {
 	v := New()
 	tSuccess := &benchTestString{

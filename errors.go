@@ -12,6 +12,7 @@
 package validator
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -104,6 +105,58 @@ func (ve ValidationErrors) Error() string {
 	return strings.TrimSpace(b.String())
 }
 
+// Code 返回首个带业务错误码的字段错误的码；都没声明码时返回 0
+//
+// 取首个而非全部：错误码的用途是把一次校验失败映射成一个对外响应，
+// 响应只能带一个码。单字段多规则时规则按声明顺序短路，字段遍历也按声明
+// 顺序，所以「首个」即「最先失败的那条」，与 WithFailFast 下的唯一错误一致
+func (ve ValidationErrors) Code() int64 {
+	for i := 0; i < len(ve); i++ {
+		if c := ve[i].Code(); c != 0 {
+			return c
+		}
+	}
+	return 0
+}
+
+// CodeOf 从任意 error 中取出业务错误码
+//
+// 同时认 ValidationErrors 与裸 FieldError：VarStringCtx 的零分配路径直接
+// 返回 *stringFieldError 而不包一层切片，调用方不该为此分两种写法
+//
+// 先做类型断言再回退 errors.As：校验入口返回的就是这两种具体类型，而
+// errors.As 的 target 必须取址传 any，&ve 逃逸会让失败路径多一次 24B
+// 的切片头分配（实测带码失败 5 allocs/272B，断言优先后回到 4 allocs/248B，
+// 与不带码完全一致）。errors.As 只留给调用方自己包装过的错误
+func CodeOf(err error) (int64, bool) {
+	if err == nil {
+		return 0, false
+	}
+	switch e := err.(type) {
+	case ValidationErrors:
+		return nonZeroCode(e.Code())
+	case FieldError:
+		return nonZeroCode(e.Code())
+	}
+	var ve ValidationErrors
+	if errors.As(err, &ve) {
+		return nonZeroCode(ve.Code())
+	}
+	var fe FieldError
+	if errors.As(err, &fe) {
+		return nonZeroCode(fe.Code())
+	}
+	return 0, false
+}
+
+// nonZeroCode 把 0 归一成「未声明码」
+func nonZeroCode(code int64) (int64, bool) {
+	if code == 0 {
+		return 0, false
+	}
+	return code, true
+}
+
 // FieldError 表示单个字段校验失败详情
 type FieldError interface {
 	Tag() string
@@ -116,6 +169,7 @@ type FieldError interface {
 	Param() string
 	Kind() reflect.Kind
 	Type() reflect.Type
+	Code() int64
 	Error() string
 }
 
@@ -232,6 +286,14 @@ func (fe *fieldError) Type() reflect.Type {
 	return fe.fieldVal.Type()
 }
 
+// Code 返回规则声明的业务错误码；plan 为 nil（零值构造）或未声明码时返回 0
+func (fe *fieldError) Code() int64 {
+	if fe.plan == nil {
+		return 0
+	}
+	return fe.plan.Code
+}
+
 // Error 返回兼容 go-playground 的错误字符串
 //
 // 手工拼接而非 fmt.Sprintf：fieldErrMsg 全为 %s 代换，无需格式串解析，
@@ -251,6 +313,7 @@ type stringFieldError struct {
 	tag   string
 	param string
 	value string
+	code  int64 // 业务错误码，来自规则计划或规则级兜底注册
 }
 
 func (e *stringFieldError) Tag() string             { return e.tag }
@@ -263,6 +326,7 @@ func (e *stringFieldError) Value() any              { return e.value }
 func (e *stringFieldError) Param() string           { return e.param }
 func (e *stringFieldError) Kind() reflect.Kind      { return reflect.String }
 func (e *stringFieldError) Type() reflect.Type      { return reflect.TypeOf("") }
+func (e *stringFieldError) Code() int64             { return e.code }
 func (e *stringFieldError) Error() string {
 	return fmt.Sprintf(fieldErrMsg, "", "", e.tag)
 }

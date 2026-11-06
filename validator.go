@@ -30,6 +30,9 @@ import (
 // defaultTagName 默认校验标签名
 const defaultTagName = "validate"
 
+// defaultCodeTagName 默认业务错误码标签名
+const defaultCodeTagName = "code"
+
 // bgCtx 默认后台上下文
 var bgCtx = context.Background()
 
@@ -85,6 +88,7 @@ type TagNameFunc func(field reflect.StructField) string
 // Validate 是可复用且并发安全的校验器实例
 type Validate struct {
 	tagName                string
+	codeTagName            string
 	requiredStructEnabled  bool
 	privateFieldValidation bool
 	failFast               bool
@@ -100,6 +104,9 @@ type Validate struct {
 	// 改为写时复制后读路径退化为一次无竞争原子加载；注册是启动期行为，克隆成本无关紧要。
 	// 与同结构体内 varSlots 的 atomic.Pointer 用法保持一致。
 	validations atomic.Pointer[map[string]FuncCtx]
+	// ruleCodes 规则级兜底错误码表，写时复制；nil 表示从未注册过，
+	// 编译期与失败路径都按一次原子加载 + 判空直接跳过
+	ruleCodes   atomic.Pointer[map[string]int64]
 	structCache sync.Map
 	varCache    sync.Map
 	// varSlots Var/VarString 规则的分槽旁路缓存（见 varSlotCount）
@@ -109,7 +116,8 @@ type Validate struct {
 // New 创建校验器实例
 func New(options ...Option) *Validate {
 	v := &Validate{
-		tagName: defaultTagName,
+		tagName:     defaultTagName,
+		codeTagName: defaultCodeTagName,
 	}
 	for _, opt := range options {
 		if opt != nil {
@@ -126,6 +134,88 @@ func (v *Validate) SetTagName(name string) {
 	}
 	v.tagName = name
 	v.structCache = sync.Map{}
+}
+
+// SetCodeTagName 设置业务错误码标签名，默认使用 code
+func (v *Validate) SetCodeTagName(name string) {
+	if strings.TrimSpace(name) == "" {
+		return
+	}
+	v.codeTagName = name
+	v.structCache = sync.Map{}
+}
+
+// RegisterRuleCode 注册规则级兜底错误码，仅在标签未给出码时生效
+//
+// 用于「所有 required 失败都算参数无效」这类全局约定，避免每个字段重复写同一个码；
+// 字段上的 code 标签与 validate 内联 code= 永远优先于它
+func (v *Validate) RegisterRuleCode(tag string, code int64) error {
+	tag = strings.TrimSpace(tag)
+	if tag == "" || code == 0 {
+		return &InvalidValidationError{}
+	}
+	return v.RegisterRuleCodes(map[string]int64{tag: code})
+}
+
+// RegisterRuleCodes 批量注册规则级兜底错误码
+//
+// 写时复制整表后发布，与 validations 的注册路径一致；码为 0 或规则名为空的项跳过
+func (v *Validate) RegisterRuleCodes(codes map[string]int64) error {
+	if len(codes) == 0 {
+		return &InvalidValidationError{}
+	}
+	v.regMu.Lock()
+	defer v.regMu.Unlock()
+
+	var next map[string]int64
+	if cur := v.ruleCodes.Load(); cur != nil {
+		next = make(map[string]int64, len(*cur)+len(codes))
+		for name, c := range *cur {
+			next[name] = c
+		}
+	} else {
+		next = make(map[string]int64, len(codes))
+	}
+	for name, c := range codes {
+		name = strings.TrimSpace(name)
+		if name == "" || c == 0 {
+			continue
+		}
+		next[name] = c
+	}
+	v.ruleCodes.Store(&next)
+
+	// 兜底码在编译期就烘进了 RulePlan.Code，已缓存的计划拿不到新注册的码，
+	// 必须整体失效。注册是启动期行为，与 SetTagName 的处理方式一致
+	v.structCache = sync.Map{}
+	v.varCache = sync.Map{}
+	for i := range v.varSlots {
+		v.varSlots[i].Store(nil)
+	}
+	return nil
+}
+
+// ruleCode 取规则级兜底码，未注册过任何码时一次判空返回
+func (v *Validate) ruleCode(name string) int64 {
+	m := v.ruleCodes.Load()
+	if m == nil {
+		return 0
+	}
+	return (*m)[name]
+}
+
+// applyRuleCodeFallback 为标签未给码的规则填入规则级兜底码
+func (v *Validate) applyRuleCodeFallback(rules []rule.RulePlan) {
+	m := v.ruleCodes.Load()
+	if m == nil {
+		return
+	}
+	for i := range rules {
+		if rules[i].Code != 0 || rules[i].Kind&rule.KindControl != 0 {
+			continue
+		}
+		rules[i].Code = (*m)[rules[i].Name]
+	}
 }
 
 // RegisterTagNameFunc 注册字段展示名解析函数
@@ -211,13 +301,22 @@ func (v *Validate) VarCtx(ctx context.Context, field any, tag string) error {
 			if validate.StringRequired(val) {
 				return nil
 			}
-			return ValidationErrors{&stringFieldError{tag: constants.RuleRequired, value: val}}
+			return ValidationErrors{&stringFieldError{
+				tag:   constants.RuleRequired,
+				value: val,
+				code:  v.ruleCode(constants.RuleRequired),
+			}}
 		}
 		if name, param, ok := strings.Cut(tag, "="); ok && name == "endswith" {
 			if strings.HasSuffix(val, param) {
 				return nil
 			}
-			return ValidationErrors{&stringFieldError{tag: name, param: param, value: val}}
+			return ValidationErrors{&stringFieldError{
+				tag:   name,
+				param: param,
+				value: val,
+				code:  v.ruleCode(name),
+			}}
 		}
 		rules := v.cachedVarRules(tag)
 		return v.varStringRules(ctx, val, rules, true)
@@ -236,13 +335,22 @@ func (v *Validate) VarCtx(ctx context.Context, field any, tag string) error {
 			if validate.StringRequired(*val) {
 				return nil
 			}
-			return ValidationErrors{&stringFieldError{tag: constants.RuleRequired, value: *val}}
+			return ValidationErrors{&stringFieldError{
+				tag:   constants.RuleRequired,
+				value: *val,
+				code:  v.ruleCode(constants.RuleRequired),
+			}}
 		}
 		if name, param, ok := strings.Cut(tag, "="); ok && name == "endswith" {
 			if strings.HasSuffix(*val, param) {
 				return nil
 			}
-			return ValidationErrors{&stringFieldError{tag: name, param: param, value: *val}}
+			return ValidationErrors{&stringFieldError{
+				tag:   name,
+				param: param,
+				value: *val,
+				code:  v.ruleCode(name),
+			}}
 		}
 		rules := v.cachedVarRules(tag)
 		return v.varStringRules(ctx, *val, rules, true)
@@ -263,7 +371,11 @@ func (v *Validate) VarStringCtx(ctx context.Context, field, tag string) error {
 		if validate.StringRequired(field) {
 			return nil
 		}
-		return &stringFieldError{tag: constants.RuleRequired, value: field}
+		return &stringFieldError{
+			tag:   constants.RuleRequired,
+			value: field,
+			code:  v.ruleCode(constants.RuleRequired),
+		}
 	}
 	return v.varStringRules(ctx, field, v.cachedVarRules(tag), false)
 }
@@ -347,7 +459,7 @@ func evalStringRule(field string, r *rule.RulePlan) (bool, bool) {
 
 // stringRuleError 构造字符串规则校验失败错误
 func (v *Validate) stringRuleError(field string, r *rule.RulePlan, wrap bool) error {
-	fe := &stringFieldError{tag: r.Name, param: r.Param, value: field}
+	fe := &stringFieldError{tag: r.Name, param: r.Param, value: field, code: r.Code}
 	if wrap {
 		return ValidationErrors{fe}
 	}
@@ -410,6 +522,8 @@ func (v *Validate) cachedVarRules(tag string) []rule.RulePlan {
 		rules = cached.([]rule.RulePlan)
 	} else {
 		parsed := rule.ParseRules(tag)
+		// Var/VarString 没有结构体标签可读，码只能来自 validate 内联 code= 与规则级兜底
+		v.applyRuleCodeFallback(parsed)
 		actual, _ := v.varCache.LoadOrStore(tag, parsed)
 		rules = actual.([]rule.RulePlan)
 	}
@@ -1269,7 +1383,10 @@ func (v *Validate) compileStruct(t reflect.Type) *rule.StructPlan {
 		}
 
 		altName := v.resolveFieldName(sf)
-		rules := rule.ParseRules(tag)
+		rules, codeSpec := rule.ParseRulesWithCodes(tag)
+		// code 标签覆盖 validate 内联码，合并后一次性落盘，再补规则级兜底
+		rule.ApplyCodeSpec(rules, codeSpec.Merge(rule.ParseCodeSpec(sf.Tag.Get(v.codeTagName))))
+		v.applyRuleCodeFallback(rules)
 		for i := range rules {
 			if constants.IsLocalFieldCompareRule(rules[i].Name) {
 				if index, ok := rule.FieldIndexByPath(t, rules[i].Param); ok {

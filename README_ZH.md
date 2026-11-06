@@ -27,6 +27,7 @@
 - 🔒 **并发安全** — 校验器实例可复用，struct 编译结果自动缓存
 - 🛠️ **自定义规则** — 支持 `RegisterValidation` 注册自定义校验函数，支持 context 透传
 - 📊 **数组化错误输出** — `TranslateValidationErrors` 直接输出可序列化的 JSON 错误
+- 🔢 **业务错误码注解** — `code` 标签把校验失败直接映射成业务错误码，`CodeOf` 一行取码，结构体失败路径零额外分配
 - 🌐 **网关工具** — IP 黑白名单（CIDR/通配符）、HTTP 状态码、Header、Content-Type、JSON Path 校验
 - 📎 **格式校验** — email、IP、UUID、base64、URL、URI（含 mailto/tel）、协议、WebSocket、semver、ISBN-10/13、ISSN、BIC/SWIFT、cron、Data URI、BCP 47 语言标签、以太坊/比特币地址、图片格式（PNG/JPEG/GIF/WebP/BMP/TIFF/ICO/AVIF/HEIC/SVG 魔数嗅探）
 - 📦 **泛型枚举校验器** — `NewEnumValidator[T]` 类型安全的枚举值校验
@@ -175,6 +176,34 @@ Argus 可无缝替换主流 Web 框架的默认校验器，`ShouldBindJSON`、`h
 | chi 等轻量路由 | handler 内手动 `v.Struct` |
 
 完整接入示例（含可运行的 example 代码、curl 演示与统一错误响应）：**[docs/frameworks.md](docs/frameworks.md)**
+
+---
+
+## 🔢 业务错误码注解
+
+校验失败要映射成业务码时，不必为每个字段手写 `if` 链，码直接声明在注解上：
+
+```go
+type Claims struct {
+    OrgID       string `json:"org_id" validate:"required" code:"110026"`
+    WorkspaceID string `json:"workspace_id" validate:"required" code:"110027"`
+    // 同字段多规则各给一个码，键为规则名
+    Password    string `json:"password" validate:"required,min=8,max=64" code:"required=110007,min=110008,max=110009"`
+}
+
+err := v.Struct(claims)
+if c, ok := validator.CodeOf(err); ok {
+    return xerr.New(mycode.Code(c)) // c 为 int64，转成项目自己的码类型
+}
+```
+
+- `Var` / `VarString` 没有结构体标签可读，码内联在表达式里：`v.VarString(orgID, "required,code=110026")`
+- 全局兜底：`v.RegisterRuleCode("required", 100002)`，字段上的 `code` 标签优先于它
+- 优先级：`code` 标签按规则项 > 内联按规则项 > `code` 标签默认项 > 内联默认项 > 规则级兜底
+- `TranslateValidationErrors` 输出的 `ValidationMessage` 带 `code` 字段（`json:"code,omitempty"`），可直接塞进响应体
+- 码存在编译期的规则计划里、错误对象只持计划指针，所以结构体失败路径的分配数与字节数与不带码完全一致（Apple M4 实测两者均为 4 allocs / 248 B）
+
+完整语法、优先级与注意事项：**[docs/tags.md 业务错误码](docs/tags.md#业务错误码-code)**
 
 ---
 

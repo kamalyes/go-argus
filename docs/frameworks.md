@@ -779,6 +779,47 @@ if ve, ok := err.(validator.ValidationErrors); ok {
 
 ***
 
+### 6.3 用业务错误码填响应的 code 字段
+
+上面各框架示例里的 `ErrorResponse.Code` 都是写死的 HTTP 400。真实项目通常要求返回细分的业务码（客户端据此分支，而不是靠解析文案）。把码声明在字段注解上，响应组装处一行取出：
+
+```go
+type LoginReq struct {
+    Email    string `json:"email" validate:"required,email" code:"required=110014,email=110037"`
+    Password string `json:"password" validate:"required,min=8" code:"required=110007,min=110008"`
+}
+
+// writeValidationError 统一错误响应，优先使用注解声明的业务码
+func writeValidationError(c *gin.Context, err error, lang string) {
+    code := 100002 // CommonInvalidParams 兜底
+    if bizCode, ok := validator.CodeOf(err); ok {
+        code = int(bizCode)
+    }
+    c.JSON(http.StatusBadRequest, ErrorResponse{
+        Code:    code,
+        Message: "参数校验失败",
+        Errors:  validator.TranslateValidationErrors(err, lang),
+    })
+}
+```
+
+`CodeOf` 取的是最先失败的那条错误的码（字段按声明顺序遍历，单字段内规则按声明顺序短路），与响应「一个请求一个码」的语义一致。逐条错误的码也在 `TranslateValidationErrors` 的输出里：
+
+```json
+{
+  "code": 110037,
+  "message": "参数校验失败",
+  "errors": [
+    {"field": "email", "tag": "email", "code": 110037, "message": "email 必须是有效的 Email"},
+    {"field": "password", "tag": "min", "code": 110008, "message": "password 不能小于 8"}
+  ]
+}
+```
+
+未声明码的字段不会出现 `code` 字段（`json:"code,omitempty"`），存量接口的响应体保持不变。完整语法见 [docs/tags.md 业务错误码](tags.md#业务错误码-code)
+
+***
+
 ## 7. 常见问题
 
 | 问题 | 说明 |
